@@ -350,9 +350,12 @@ def create_object_type(layout, context):
     elif vray_sub and cat == "CAMERAS":
         g.operator("max.vray_camera", text="VRayPhysicalCamera")
     elif cat == "GEOMETRY":
-        for k, (label, icon, _, _) in prims.PRIMITIVES.items():
+        kinds = (prims.extended_primitives.DISPLAY_ORDER if wm.max_create_sub == "EXTENDED"
+                 else prims.PRIMITIVES)
+        for k in kinds:
             if (k in prims.extended_primitives.PRIMITIVES) != (wm.max_create_sub == "EXTENDED"):
                 continue
+            label = prims.PRIMITIVES[k][0]
             g.operator("max.create", text=label, depress=(create.MAX_OT_create.active_kind == k)).kind = k
     elif cat == "SHAPES":
         for k, label, icon in create.SHAPES:

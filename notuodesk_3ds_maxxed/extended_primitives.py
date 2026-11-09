@@ -6,6 +6,7 @@ Dimensions with zero Max constructor defaults start at one Blender unit.
 """
 
 import math
+import struct
 
 import bmesh
 import bpy
@@ -24,6 +25,9 @@ PRIMITIVES = {
     "L_EXT": ("L-Ext", "MESH_CUBE", "RECT", True),
     "C_EXT": ("C-Ext", "MESH_CUBE", "RECT", True),
 }
+
+DISPLAY_ORDER = ("HEDRA", "TORUS_KNOT", "CHAMFERBOX", "CHAMFERCYL", "OILTANK",
+                 "CAPSULE", "SPINDLE", "L_EXT", "GENGON", "C_EXT", "PRISM")
 
 # Property, Max label, unit. Keyboard Entry can reuse this table.
 def field(prop, label, unit="NONE"):
@@ -157,6 +161,21 @@ def constrain(p):
         p.fillet = min(p.fillet,.999*r,.499*h)
     elif kind == "GENGON":
         p.fillet = min(p.fillet,.998*r*math.cos(math.pi/max(p.sides,3)))
+    elif kind == "PRISM":
+        names = ("side1", "side2", "side3")
+        for name in names:
+            setattr(p, name, max(getattr(p, name), 1e-4))
+        longest = max(names, key=lambda name: getattr(p, name))
+        a, b = (getattr(p, name) for name in names if name != longest)
+        # Leave a nonzero triangle area, with the correction visible in Parameters.
+        limit = a+b-min(a, b)*.001
+        # Blender stores float32. Rounding must not cross the triangle inequality.
+        packed = struct.pack("f", limit)
+        limit = struct.unpack("f", packed)[0]
+        if limit >= a+b:
+            bits = struct.unpack("I", packed)[0]
+            limit = struct.unpack("f", struct.pack("I", bits-1))[0]
+        setattr(p, longest, min(getattr(p, longest), limit))
     elif kind in {"OILTANK","SPINDLE"}:
         cap = max(p.cap_height,r*.025 if kind == "OILTANK" else min(.1,h*.499))
         cap = min(cap,r*.99) if kind == "OILTANK" else cap
@@ -384,10 +403,9 @@ def build_bmesh(kind, p):
         points = _round_polygon(points,p.fillet,p.fillet_segs,p.side_segs)
         _extrude(bm,points,h,hs)
     elif kind == "PRISM":
-        a, b = max(p.side1,1e-4), max(p.side2,1e-4)
-        c = min(max(p.side3,abs(a-b)+1e-4),a+b-1e-4)
+        a, b, c = p.side1, p.side2, p.side3
         x = (a*a+c*c-b*b)/(2*a)
-        y = math.sqrt(max(c*c-x*x,1e-8))
+        y = math.sqrt(max(c*c-x*x,0))
         _extrude(bm,[(-a/2,0),(a/2,0),(x-a/2,y)],h,hs,
                  (p.side1_segs,p.side2_segs,p.side3_segs))
     elif kind in {"L_EXT","C_EXT"}:
@@ -437,7 +455,19 @@ def mapping(ob):
 
 def draw(layout, ob):
     col = layout.column(align=True)
-    col.use_property_split = True
+    col.use_property_split = False
     col.use_property_decorate = False
     for prop, label, unit in FIELDS[ob.max_prim.kind]:
-        col.prop(ob.max_prim,prop,text=label)
+        row = col.row(align=True)
+        row.scale_y = 0.85
+        if prop in {"smooth", "generate_mapping"}:
+            row.prop(ob.max_prim, prop, text=label)
+            continue
+        split = row.split(factor=0.48, align=True)
+        caption = split.row(align=True)
+        caption.alignment = "RIGHT"
+        caption.label(text=label + ":")
+        field = split.row(align=True)
+        field.alignment = "LEFT"
+        field.ui_units_x = 5.0
+        field.prop(ob.max_prim, prop, text="")

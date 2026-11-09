@@ -27,6 +27,34 @@ def run():
     kinds = {"HEDRA", "CHAMFERBOX", "OILTANK", "SPINDLE", "GENGON", "PRISM",
              "TORUS_KNOT", "CHAMFERCYL", "CAPSULE", "L_EXT", "C_EXT"}
     assert set(ext.PRIMITIVES) == kinds
+    # Impossible triangles must not leave displayed lengths unlike the mesh.
+    ob = bpy.data.objects.new("PrismLimits", bpy.data.meshes.new("PrismLimits"))
+    bpy.context.collection.objects.link(ob)
+
+    def check_prism():
+        p = ob.max_prim
+        lengths = sorted((p.side1, p.side2, p.side3))
+        assert lengths[0] > 0 and lengths[2] < lengths[0]+lengths[1], ("stored triangle", lengths)
+        base = [v.co for v in ob.data.vertices if abs(v.co.z) < 1e-8]
+        assert len(base) == 3
+        actual = sorted((base[i]-base[(i+1) % 3]).length for i in range(3))
+        assert all(math.isclose(a, b, rel_tol=1e-5, abs_tol=1e-8)
+                   for a, b in zip(actual, lengths)), ("Prism displayed/mesh sides", lengths, actual)
+        check_mesh(ob)
+
+    for sides in ((1, 1, 25), (25, 1, 1), (1, 25, 1), (1, 2, 1),
+                  (0, 0, 0), (0, 1, 1), (3, 4, 5)):
+        prims.set_params(ob, "PRISM", **dict(zip(("side1", "side2", "side3"), sides)))
+        check_prism()
+        if sides == (3, 4, 5):
+            assert (ob.max_prim.side1, ob.max_prim.side2, ob.max_prim.side3) == sides
+    for prop in ("side1", "side2", "side3"):
+        prims.set_params(ob, "PRISM", side1=3, side2=4, side3=5)
+        setattr(ob.max_prim, prop, 100)
+        check_prism()
+        setattr(ob.max_prim, prop, 0)
+        check_prism()
+    print("PASS Prism stored/mesh sides: invalid triangles, zero lengths, valid scalene, live edits", flush=True)
     for kind in ext.PRIMITIVES:
         ob = bpy.data.objects.new(kind, bpy.data.meshes.new(kind))
         bpy.context.collection.objects.link(ob)

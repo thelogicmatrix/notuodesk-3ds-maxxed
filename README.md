@@ -71,6 +71,8 @@ Drag the footprint, release, then click to set height. ChamferBox, ChamferCyl an
 
 The objects keep their parameters in **Create > Parameters** and **Modify > Parameters**, including segment counts, Smooth and Generate Mapping Coords. Editing or collapsing an object makes it an Editable Poly, as with Standard Primitives. OilTank, Spindle and Capsule have Overall/Centers height options. Torus Knot has Knot/Circle base curves, winding numbers, warp, eccentricity, twist and lumps.
 
+Object Type follows Max's button order. Parameters use compact labelled fields. Prism limits impossible side lengths to a valid triangle and shows the corrected lengths in Parameters.
+
 Parameter names and segment defaults follow [Autodesk's Extended Primitives reference](https://help.autodesk.com/cloudhelp/2015/ENU/3DSMax/files/GUID-BF868DCF-12E3-431C-A73B-C16C0FD67C98.htm). Types whose Max constructor starts with zero dimensions start at one Blender unit here. ChamferBox, Capsule, Hedra and Prism keep their documented nonzero dimensions. Click-drag creation replaces these dimensions with the size you draw.
 
 ## Opening 3ds Max files
