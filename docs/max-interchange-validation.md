@@ -58,19 +58,27 @@ The comparison matches objects by name, matrices element by element, mesh vertic
 ## Exporter regression tests
 
 ```text
-Ran 11 tests in 0.368s
+Ran 15 tests in 0.452s
 OK
 VERIFIED baked animation endpoints across FBX unit conversion
 VERIFIED media embedded byte-for-byte and material name preserved
 VERIFIED missing texture relink: existing image node and renamed copy, no fuzzy substitution
+VERIFIED public relink operator repairs image-only FBX material without max_bitmap
 VERIFIED hierarchy scales once and overlapping smoothing masks become sharp edges
 VERIFIED shared System Units and centimeter Blender scene scale
 VERIFIED selected export: names, hierarchy, offset pivot, camera and light
-VERIFIED subdivision: editable control mesh or applied geometry, source unchanged
+VERIFIED subdivision: editable or applied evaluated vertices match within 2e-5, source unchanged
+VERIFIED TurboSmooth then Shell: both export operators bake matching evaluated vertices within 2e-5
+VERIFIED disabled trailing Shell does not prevent editable subdivision
+VERIFIED unselected unsafe stack does not force selected subdivision to bake
 VERIFIED unit metadata and transform roundtrip: all 6 system units
 ```
 
 The tests inspect FBX `UnitScaleFactor`, Z-up metadata, settings for geometry/modifiers/selection/media/animation, source mesh preservation, and restoration of Blender units after an injected exporter failure. Expected exception output appears in that failure test. All tests pass.
+
+The fix-round tests first reproduced both review findings. The image-only material made `bpy.ops.max.relink_textures` return `CANCELLED`. TurboSmooth followed by Shell failed the evaluated vertex comparison despite matching face counts. Geometry checks now compare world-space vertex positions in both directions within 0.00002 Blender units, independently of FBX vertex order, plus vertex and face counts. Both subdivision choices, the Shell stack through both export operators, a mixed export with another editable mesh, disabled trailing modifiers, and an excluded unsafe stack pass. Source meshes and modifiers stay unchanged. The public relink operator finds the matching PNG without `max_bitmap`, updates the existing image path, and loads its pixels.
+
+Fix-round evidence is in `sb-max-interchange/outputs/fix-round-red.log`, `fix-round-final.log`, `fix-round-reference/` and `fix-round-max-scenes.json`. The reference FBX comparison was rerun with the same results above. The repeated scene audit passed all 17 existing sandbox copies with finite transforms and uniform hierarchy unit conversion.
 
 Blender 5.0.1's bundled FBX light importer assigns `lamp.cycles.cast_shadow`, a removed property. The camera/light test disables Cycles only inside the isolated test around re-import, then restores it. The shipped wrapper does not disable Cycles or patch Blender. Exporting lights works, but importing a file containing lights with Cycles enabled remains a Blender limitation.
 
@@ -93,7 +101,7 @@ Full JSON and logs are in the sandbox's `outputs` directory. `max-scenes.json` i
 
 Autodesk documents a default system unit of one inch. FBX writes the selected System Units into `UnitScaleFactor`, with geometry converted separately. The exporter restores Blender's scene units afterward. It uses Y-forward and Z-up, which is the identity axis conversion for Blender. Import reads FBX axis metadata and applies no extra manual rotation. FBX animation import uses a zero frame offset.
 
-Apply to Mesh is the default subdivision choice. Keep Editable writes the last Catmull-Clark modifier as FBX Smoothness, preview/render levels and supported crease data. Both modes pass a Blender round trip. Autodesk documents exporting a control mesh plus TurboSmooth attributes, but a Max import of Blender's attributes was not run. Other modifier settings, Max plug-in materials, constraints, rigs and procedural texture graphs do not have general parity. Curves use Blender FBX's mesh conversion.
+Apply to Mesh is the default subdivision choice. Keep Editable writes the last Catmull-Clark modifier as FBX Smoothness, preview/render levels and supported crease data only when it is the final enabled modifier. Enabled means visible in either the viewport or render, matching the native FBX exporter. If any exported mesh has another enabled modifier after that subdivision, the wrapper applies subdivision for the entire export and reports a warning. Blender's subdivision export switch is global, so other exported meshes also bake in that case. Disabled trailing modifiers do not prevent editable export. The dialog explains the fallback. Both modes pass evaluated-geometry comparisons in a Blender round trip. Autodesk documents exporting a control mesh plus TurboSmooth attributes, but a Max import of Blender's attributes was not run. Other modifier settings, Max plug-in materials, constraints, rigs and procedural texture graphs do not have general parity. Curves use Blender FBX's mesh conversion.
 
 Blender 5.0.1 supports face smoothing-group bitflags. On versions without that exporter enum, the add-on falls back to face smoothing plus explicit normals. Blender 4.2 was not run, and reconstructed Max group numbers are not guaranteed. Export Selected includes selected objects only, so parent links survive between exported objects. An unselected ancestor is not added automatically.
 

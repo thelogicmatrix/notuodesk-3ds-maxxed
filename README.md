@@ -74,7 +74,7 @@ Press **M**, or choose **Rendering › Material Editor**. It opens as a narrow f
 - **System Units:** pick the unit the file was made in. The default is Inches, 3ds Max's US default. The reader ignores units, so without this setting scenes come in at the wrong scale.
 - **Materials:** names are cleaned up (`04 - Default` instead of `04___Default_C:\Users\…\pipe_bowl`), and the materials can be edited in **Modify › Material** using V-Ray parameter names.
 - **Hierarchy and smoothing:** unit conversion scales the imported hierarchy once. With reader 1.9.2, matching source face masks become smooth faces and sharp edges. Original masks stay in the mesh's `max_smoothing_group` face attribute. Unsupported source nodes produce a warning.
-- **Textures:** bitmaps are searched for next to the `.max` file and in its subfolders, in any image format. Missing files are listed like Max's *Missing External Files*. Point **File › External Data › Relink 3ds Max Textures…** at the folder where they are. It also matches renamed copies like `Name (1).png`. To pick a file for one material directly, use **Modify › Material › Load Bitmap…**.
+- **Textures:** bitmaps are searched for next to the `.max` file and in its subfolders, in any image format. Missing files are listed like Max's *Missing External Files*. Point **File › External Data › Relink 3ds Max Textures…** at the folder where they are. It also repairs missing image files in FBX materials and matches renamed copies like `Name (1).png`. To pick a file for one material directly, use **Modify › Material › Load Bitmap…**.
 
 **What the reader supports:** meshes (Editable Poly/Mesh), primitives, UVs, Standard / Physical / V-Ray / Corona materials, and helpers. It handles uncompressed files from any version, and compressed files up to 3ds Max 2023. **Not supported:** animation, complete modifier results (the base mesh can differ from the evaluated scene), splines, lights, cameras and rigs.
 
@@ -85,7 +85,7 @@ Press **M**, or choose **Rendering › Material Editor**. It opens as a narrow f
 Choose **File › Export › 3ds Max Scene (FBX)...**. **Export Selected (3ds Max FBX)...** is in File, File › Export and Customize.
 
 - **System Units:** shares the last `.max` import setting, initially Inches. FBX import remembers units from the file. Export writes the chosen units into FBX without changing the scene's scale. Both directions use Z-up coordinates, with FBX import reading the file's axis metadata.
-- **TurboSmooth / Subdivision:** **Apply to Mesh** exports the evaluated shape. **Keep Editable** exports the last Catmull-Clark modifier as FBX subdivision attributes, with viewport and render levels. Earlier modifiers are evaluated. The source mesh and modifier stack stay editable in Blender.
+- **TurboSmooth / Subdivision:** **Apply to Mesh** exports the evaluated shape. **Keep Editable** exports Catmull-Clark subdivision attributes, with viewport and render levels, only when that modifier is the final enabled modifier. Earlier modifiers are evaluated. If subdivision precedes another enabled modifier on any exported mesh, subdivision is applied for the entire export with a warning. This preserves modifier order, including TurboSmooth followed by Shell. The source mesh and modifier stack stay editable in Blender.
 - **Embed Media:** packs image files used by supported FBX materials into the FBX. Names, object origins, exported parent links, cameras and lights use Blender's native FBX exporter. **Animation** bakes the scene frame range.
 - **Smoothing:** exports face smoothing groups where Blender supports them, or face smoothing and explicit normals on older versions. FBX material names stay unchanged.
 
@@ -166,7 +166,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 ## Known differences from 3ds Max
 
 - `.max` import is partial. The reader does not import lights, cameras, splines, animation or complete modifier stacks. Source units still need to be chosen. Smoothing recovery uses reader 1.9.2's parsed face data and requires matching topology. Missing textures need the original bitmap files.
-- FBX stores subdivision attributes, not a complete Max modifier stack. **Keep Editable** supports the last Catmull-Clark modifier only. Reconstruction as TurboSmooth in Max is unverified. Use **Apply to Mesh** for the exported shape. Blender 5.0.1's bundled FBX light importer also fails with Cycles enabled because it references a removed light property. Export still writes lights.
+- FBX stores subdivision attributes, not a complete Max modifier stack. **Keep Editable** requires the last Catmull-Clark modifier to be the final enabled modifier. An incompatible stack makes subdivision apply for the entire export because Blender has one subdivision switch per export. Reconstruction as TurboSmooth in Max is unverified. Use **Apply to Mesh** for the exported shape. Blender 5.0.1's bundled FBX light importer also fails with Cycles enabled because it references a removed light property. Export still writes lights.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.

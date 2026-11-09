@@ -11,6 +11,7 @@ from unittest.mock import patch
 import addon_utils
 import bpy
 from mathutils import Matrix
+from mathutils.kdtree import KDTree
 
 addon_utils.enable("notuodesk_3ds_maxxed", default_set=True)
 
@@ -97,6 +98,26 @@ class InterchangeTests(unittest.TestCase):
         self.assertEqual(pathlib.Path(node.image.filepath), path)
         self.assertIsNone(max_import._find_image({"diffused": "wrong.png"}, "Diffuse"))
         print("VERIFIED missing texture relink: existing image node and renamed copy, no fuzzy substitution", flush=True)
+
+    def test_relink_operator_image_only_material(self):
+        for material in list(bpy.data.materials):
+            bpy.data.materials.remove(material, do_unlink=True)
+        mat = bpy.data.materials.new("FBX Paint")
+        mat.use_nodes = True
+        image = bpy.data.images.new("FBX Diffuse", 2, 2)
+        path = pathlib.Path(self.tmp.name) / "FBX Diffuse.png"
+        image.filepath_raw = str(path)
+        image.file_format = "PNG"
+        image.save()
+        image.source = "FILE"
+        image.filepath = "Z:/missing/FBX Diffuse.png"
+        node = mat.node_tree.nodes.new("ShaderNodeTexImage")
+        node.image = image
+        self.assertNotIn("max_bitmap", mat)
+        self.assertEqual(bpy.ops.max.relink_textures(directory=self.tmp.name), {"FINISHED"})
+        self.assertEqual(pathlib.Path(node.image.filepath), path)
+        self.assertEqual(len(node.image.pixels), 16)
+        print("VERIFIED public relink operator repairs image-only FBX material without max_bitmap", flush=True)
 
     def test_reader_material_name_and_bitmap_suffix(self):
         from notuodesk_3ds_maxxed import max_reader
@@ -245,6 +266,7 @@ class InterchangeTests(unittest.TestCase):
             ob = self.cube()
             mod = ob.modifiers.new("TurboSmooth", "SUBSURF")
             mod.levels = mod.render_levels = 1
+            before = self.evaluated_geometry(ob)
             path = str(pathlib.Path(self.tmp.name) / (choice + ".fbx"))
             self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision=choice, animation=False), {"FINISHED"})
             self.assertEqual(len(ob.data.polygons), 6)
@@ -254,8 +276,100 @@ class InterchangeTests(unittest.TestCase):
             imported = bpy.context.scene.objects["Box001"]
             self.assertEqual(len(imported.data.polygons), faces)
             self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), mods)
+            self.assert_geometry_matches(before, imported)
             bpy.data.objects.remove(imported, do_unlink=True)
-        print("VERIFIED subdivision: editable control mesh or applied geometry, source unchanged", flush=True)
+        print("VERIFIED subdivision: editable or applied evaluated vertices match within 2e-5, source unchanged", flush=True)
+
+    def evaluated_geometry(self, ob):
+        bpy.context.view_layer.update()
+        evaluated = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        mesh = evaluated.to_mesh()
+        try:
+            return [evaluated.matrix_world @ v.co for v in mesh.vertices], len(mesh.polygons)
+        finally:
+            evaluated.to_mesh_clear()
+
+    def assert_geometry_matches(self, before, ob):
+        vertices, faces = self.evaluated_geometry(ob)
+        self.assertEqual(faces, before[1])
+        self.assertEqual(len(vertices), len(before[0]))
+        # FBX may reorder vertices. Compare positions in both directions instead of indices.
+        for source, target in ((before[0], vertices), (vertices, before[0])):
+            tree = KDTree(len(target))
+            for i, vertex in enumerate(target):
+                tree.insert(vertex, i)
+            tree.balance()
+            self.assertLess(max(tree.find(vertex)[2] for vertex in source), 2e-5)
+
+    def test_subdivision_followed_by_shell_bakes_shape(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            with self.subTest(export=export.idname()):
+                ob = self.cube()
+                sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
+                sub.levels = sub.render_levels = 2
+                shell = ob.modifiers.new("Shell", "SOLIDIFY")
+                shell.thickness = 0.4
+                before = self.evaluated_geometry(ob)
+                safe = self.cube("Editable001")
+                safe_sub = safe.modifiers.new("TurboSmooth", "SUBSURF")
+                safe_sub.levels = safe_sub.render_levels = 1
+                safe_before = self.evaluated_geometry(safe)
+                ob.select_set(True)
+                path = str(pathlib.Path(self.tmp.name) / "shell.fbx")
+                self.assertEqual(export(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+                self.assertEqual([m.type for m in ob.modifiers], ["SUBSURF", "SOLIDIFY"])
+                self.assertEqual(sub.levels, 2)
+                self.assertAlmostEqual(shell.thickness, 0.4)
+                self.assert_geometry_matches(before, ob)
+                self.assertEqual(safe_sub.levels, 1)
+                self.assert_geometry_matches(safe_before, safe)
+                bpy.data.objects.remove(ob, do_unlink=True)
+                bpy.data.objects.remove(safe, do_unlink=True)
+                bpy.ops.max.import_max_fbx(filepath=path, animation=False)
+                imported = bpy.context.scene.objects["Box001"]
+                self.assert_geometry_matches(before, imported)
+                self.assertFalse(any(m.type == "SUBSURF" for m in imported.modifiers))
+                bpy.data.objects.remove(imported, do_unlink=True)
+                imported_safe = bpy.context.scene.objects["Editable001"]
+                self.assert_geometry_matches(safe_before, imported_safe)
+                self.assertFalse(any(m.type == "SUBSURF" for m in imported_safe.modifiers))
+                bpy.data.objects.remove(imported_safe, do_unlink=True)
+        print("VERIFIED TurboSmooth then Shell: both export operators bake matching evaluated vertices within 2e-5", flush=True)
+
+    def test_subdivision_with_disabled_trailing_modifier_stays_editable(self):
+        ob = self.cube()
+        sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
+        sub.levels = sub.render_levels = 1
+        shell = ob.modifiers.new("Shell", "SOLIDIFY")
+        shell.show_viewport = shell.show_render = False
+        before = self.evaluated_geometry(ob)
+        path = str(pathlib.Path(self.tmp.name) / "disabled-shell.fbx")
+        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+        self.assertFalse(shell.show_viewport or shell.show_render)
+        bpy.data.objects.remove(ob, do_unlink=True)
+        bpy.ops.max.import_max_fbx(filepath=path, animation=False)
+        imported = bpy.context.scene.objects["Box001"]
+        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 1)
+        self.assert_geometry_matches(before, imported)
+        print("VERIFIED disabled trailing Shell does not prevent editable subdivision", flush=True)
+
+    def test_selected_subdivision_ignores_unselected_unsafe_stack(self):
+        unsafe = self.cube("Excluded")
+        unsafe.modifiers.new("TurboSmooth", "SUBSURF")
+        unsafe.modifiers.new("Shell", "SOLIDIFY")
+        ob = self.cube()
+        sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
+        sub.levels = sub.render_levels = 1
+        before = self.evaluated_geometry(ob)
+        self.assertFalse(unsafe.select_get())
+        path = str(pathlib.Path(self.tmp.name) / "selected-subdivision.fbx")
+        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+        bpy.data.objects.remove(ob, do_unlink=True)
+        bpy.ops.max.import_max_fbx(filepath=path, animation=False)
+        imported = bpy.context.scene.objects["Box001"]
+        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 1)
+        self.assert_geometry_matches(before, imported)
+        print("VERIFIED unselected unsafe stack does not force selected subdivision to bake", flush=True)
 
     def test_failed_export_restores_units(self):
         self.cube()

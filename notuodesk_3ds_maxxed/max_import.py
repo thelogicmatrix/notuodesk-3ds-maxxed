@@ -92,27 +92,31 @@ def _find_image(index, stem):
                  if re.sub(r" \(\d+\)$", "", key) == original), None)
 
 
+def _missing_images(mat):
+    if mat.use_nodes:
+        for node in mat.node_tree.nodes:
+            if node.type != "TEX_IMAGE" or not node.image or node.image.packed_file:
+                continue
+            image = node.image
+            if image.filepath and not os.path.isfile(bpy.path.abspath(image.filepath, library=image.library)):
+                yield image
+
+
 def relink_textures(materials, folders):
     """Wire missing bitmaps into the materials' base color. Returns (linked, missing)."""
     from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
     index = _index_images(folders)
     linked, missing = [], []
     for mat in materials:
-        if mat.use_nodes:
-            for node in mat.node_tree.nodes:
-                if node.type != "TEX_IMAGE" or not node.image or node.image.packed_file:
-                    continue
-                image = node.image
-                if not image.filepath or os.path.isfile(bpy.path.abspath(image.filepath, library=image.library)):
-                    continue
-                stem = os.path.splitext(image.filepath.replace("\\", "/").rsplit("/", 1)[-1])[0]
-                path = _find_image(index, stem)
-                if path:
-                    image.filepath = path
-                    image.reload()
-                    linked.append(stem)
-                else:
-                    missing.append(stem)
+        for image in _missing_images(mat):
+            stem = os.path.splitext(image.filepath.replace("\\", "/").rsplit("/", 1)[-1])[0]
+            path = _find_image(index, stem)
+            if path:
+                image.filepath = path
+                image.reload()
+                linked.append(stem)
+            else:
+                missing.append(stem)
         stem = mat.get("max_bitmap")
         if not stem or _material_has_image(mat):
             continue
@@ -403,9 +407,9 @@ class MAX_OT_relink_textures(Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        mats = [m for m in bpy.data.materials if m.get("max_bitmap")]
+        mats = [m for m in bpy.data.materials if m.get("max_bitmap") or any(_missing_images(m))]
         if not mats:
-            self.report({"INFO"}, "No 3ds Max materials with bitmaps in this file")
+            self.report({"INFO"}, "No missing image files or 3ds Max bitmap references in this file")
             return {"CANCELLED"}
         linked, missing = relink_textures(mats, [self.directory])
         msg = f"Relinked {len(linked)} texture(s)"

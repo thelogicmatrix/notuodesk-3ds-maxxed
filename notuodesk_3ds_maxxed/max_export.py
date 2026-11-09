@@ -44,7 +44,8 @@ class _MaxExportBase(ExportHelper):
                         description="Match System Unit Setup in 3ds Max. FBX carries this unit scale")
     subdivision: EnumProperty(name="TurboSmooth / Subdivision", items=(
         ("APPLY", "Apply to Mesh", "Export evaluated geometry for a matching shape"),
-        ("KEEP", "Keep Editable", "Export the last Catmull-Clark modifier as FBX subdivision attributes")),
+        ("KEEP", "Keep Editable", "Keep final enabled Catmull-Clark modifiers editable. "
+         "If subdivision precedes another enabled modifier, apply subdivision for the entire export")),
         default="APPLY")
     embed_media: BoolProperty(name="Embed Media", default=False,
                              description="Embed image files used by supported FBX materials")
@@ -56,7 +57,8 @@ class _MaxExportBase(ExportHelper):
         for prop in ("units", "subdivision", "embed_media", "animation"):
             lay.prop(self, prop)
         if self.subdivision == "KEEP":
-            lay.label(text="Last Catmull-Clark modifier only", icon="INFO")
+            lay.label(text="Editable only as final enabled modifier", icon="INFO")
+            lay.label(text="Otherwise apply for the entire export")
 
     def invoke(self, context, event):
         if not self.properties.is_property_set("units"):
@@ -77,6 +79,20 @@ class _MaxExportBase(ExportHelper):
         old_system, old_scale = scene_units.system, scene_units.scale_length
         meters = old_scale if old_system != "NONE" else 1.0
         settings = fbx_settings(selected, self.subdivision, self.embed_media, self.animation)
+        if settings["use_subsurf"]:
+            unsafe = []
+            for ob in context.selected_objects if selected else context.scene.objects:
+                if ob.type != "MESH":
+                    continue
+                enabled = [m for m in ob.modifiers if m.show_render or m.show_viewport]
+                subsurf = [m for m in enabled if m.type == "SUBSURF" and m.subdivision_type == "CATMULL_CLARK"]
+                if subsurf and subsurf[-1] != enabled[-1]:
+                    unsafe.append(ob.name)
+            if unsafe:
+                # Native FBX has one subdivision switch for the entire export.
+                settings["use_subsurf"] = False
+                self.report({"WARNING"}, "Applied subdivision for the entire export to preserve modifier order. "
+                            f"Subdivision is not the final enabled modifier on: {', '.join(unsafe)}")
         try:
             # Native FBX writes System Units into UnitScaleFactor, separately from geometry.
             scene_units.system = "METRIC"
