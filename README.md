@@ -157,6 +157,23 @@ Choose **File › Export › 3ds Max Scene (FBX)...**. **Export Selected (3ds Ma
 - **Smoothing:** exports face smoothing groups where Blender supports them, or face smoothing and explicit normals on older versions. FBX material names stay unchanged.
 
 Tested in Blender 5.0.1 with 17 copied `.max` scenes and a Max-exported FBX. The FBX round trip preserved names, transforms, scale, normals and smoothing. There is no Max-side validation yet. See [the interchange validation report](docs/max-interchange-validation.md) for the per-scene results and commands.
+## Loft
+
+Select a spline, then choose **Create > Geometry > Compound Objects > Loft**.
+Use **Get Shape** with a selected path, or **Get Path** with a selected shape.
+Click the other spline in a viewport. Right-click or Esc cancels picking.
+Only single Poly or Bezier splines can be picked.
+
+- **Instance** is the default. Point edits, source scale and spline modifier changes update the Loft. Path and profile deformers keep their stack order.
+- **Copy** uses independent, hidden copies. **Move** hides the sources in the viewport and render.
+- **Skin Parameters** has separate start/end caps, Shape Steps, Path Steps, Adaptive Path Steps, Contour, Banking and Flip Normals. Steps add points between the source vertices.
+- **Surface Parameters** has Smooth Length and Smooth Width. Either one turns on smooth shading.
+- **Path Parameters > Path %** sets the level for the next Get Shape. One profile fills the whole path. Get Shape replaces it. Adaptive Path Steps adds a division at that level.
+- **Deformations** has linear start/end Scale percentages and Twist in degrees.
+
+The Loft is a mesh with a Geometry Nodes modifier. Hidden spline copies evaluate the source modifiers without native bevel, extrusion or Line's rendering conversion. Object Info reads those modified splines and Curve to Mesh builds the skin. Source rendering stays unchanged. Get Shape creates it at the path. Get Path aligns the path's first tangent to the selected shape's local Z axis.
+
+Mixed Geometry Nodes and native deformers work in either stack order. Loft converts curves to wire geometry before native deformers and restores curves before Geometry Nodes. Empty results, surface meshes and multiple splines show an error in the Loft rollout. Deleting a Loft removes its hidden helpers. Undo restores them, and removing the Loft from one scene preserves them while another scene still uses it.
 
 ## Modifiers
 
@@ -290,6 +307,10 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 - The icons are original GPL artwork with Max's visual vocabulary, not Autodesk's icon artwork. Icons are supplied for toolbar and stack controls that this version does not draw, including Pin Stack, Show End Result, Configure Modifier Sets, Bind to Space Warp, Window/Crossing, Spinner Snap, Layer Explorer and Ribbon. This does not add those controls. The modifier's edit-mode toggle has a mesh-and-pencil icon. The Modifier List menu has a list-and-dropdown icon. Blender still draws its own material preview-type buttons and viewport shading and overlay buttons.
 - `.max` import is partial. The reader does not import lights, cameras, splines, animation or complete modifier stacks. Source units still need to be chosen. Smoothing recovery uses reader 1.9.2's parsed face data and requires matching topology. Missing textures need the original bitmap files.
 - FBX export bakes viewport geometry at the current frame. It does not export editable modifier stacks, subdivision attributes, shape-key animation or skin deformation. Parent-relative shear is baked into mesh vertices and normals to preserve the exported shape, so local mesh coordinates can change. Blender 5.0.1's bundled FBX light importer also fails with Cycles enabled because it references a removed light property. Export still writes lights.
+- Loft supports one profile on one Poly or Bezier spline path. NURBS, Text, multiple-spline shapes, and several profiles along a path are not supported. Spline deformers affect the skin, while native bevel, extrusion and Line's rendering conversion do not.
+- Loft uses Blender's minimum-twist and Z-up frames for Banking, which can differ from Max. Smooth Length and Smooth Width share Blender's face smoothing. Caps use n-gons rather than Morph or Grid capping.
+- Loft Scale and Twist are linear parameters, without Max's deformation graph. Teeter, Bevel and Fit deformations are not implemented. Adaptive Path Steps adds the shape level, without Max's deformation-graph divisions. Loft placement uses the selected spline's initial location and rotation, while source point edits and scale stay live.
+
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - Reference clones share Blender data in both directions. They do not have Max's one-way reference stack. Controller Instance uses one-way drivers from the original children, rather than Max's shared controller objects.
 - Shift-clone dialogs use Blender's dialog frame and controls. Gizmo hit areas are calculated in screen space. Gimbal and custom normal orientations can differ from Blender's native handle picking.

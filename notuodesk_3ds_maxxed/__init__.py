@@ -37,6 +37,7 @@ from . import max_icons
 from . import shift_clone
 from . import max_export
 from . import viewcube
+from . import loft
 
 
 _prefs_cache = [None]
@@ -180,6 +181,7 @@ _classes = (
     + poly_tools.classes
     + shift_clone.classes
     + viewcube.classes
+    + loft.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
     + max_export.classes
 )
@@ -217,7 +219,7 @@ def register():
     wm.max_create_cat = EnumProperty(name="Category", items=max_icons.enum_items(ui_panel.CREATE_CATS), default="GEOMETRY")
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""),
-                                    ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", ""), ("JOKERMARTINI", "JokerMartini", "")])
+                                    ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", ""), ("JOKERMARTINI", "JokerMartini", ""), ("COMPOUND", "Compound Objects", "")])
     prims.register_props()
     keyboard_entry.register_props()
     poly_tools.register()
@@ -230,6 +232,7 @@ def register():
     ffd.register_props()
     line_tool.register_props()
     max_export.register_props()
+    loft.register_props()
     ui_menus.register_draw()
     max_import.register_menus()
     max_export.register_menus()
@@ -259,6 +262,7 @@ def unregister():
     wm = bpy.types.WindowManager
     line_tool.unregister_props()
     max_export.unregister_props()
+    loft.unregister_props()
     ffd.unregister_props()
     turbosmooth.unregister_props()
     mtl_editor.unregister_props()
