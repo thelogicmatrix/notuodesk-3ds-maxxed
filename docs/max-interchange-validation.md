@@ -1,0 +1,120 @@
+﻿# Max interchange validation
+
+Rechecked on 2026-11-10 in Blender 5.0.1, with io_scene_max 1.9.2 (release `37db107`). All input scenes and the reference FBX were copied into `sb-max-interchange/inputs` first. No scene files are included in this repo.
+
+The isolated profile uses `sb-max-interchange/scripts`, `sb-max-interchange/config` and `sb-max-interchange/ext`. The add-on package is a junction to this worktree. The reader is installed only in that sandbox. The tests use factory startup and never save preferences.
+
+## Copied Max scenes
+
+Every row imported supported objects. This does not mean every source object or its evaluated shape survived. Counts describe Blender's imported data. Missing-node counts come from the reader's retained source node list.
+
+All rows used **Inches as an explicit assumption**. The reader does not recover System Units. For each scene, a second import at 1:1 proved that converting to inches scales every object's world matrix uniformly, including children. All imported world transforms are finite. Absolute transforms and dimensions have not been checked against a running copy of Max.
+
+No bitmap assets were present under the source scene folders. No real-scene image loaded. Hangar and Hangar01 now report two missing bitmap names each. The other rows have no recovered bitmap references. This does not prove that their original Max materials had no textures.
+
+| Copied scene | Meshes | Materials | Meshes with UVs | Parent links | Masks recovered on meshes | Missing source nodes |
+|---|---:|---:|---:|---:|---:|---:|
+| `2026/Bear/BEarFinal.max` | 3 | 1 | 3 | 0 | 3 | 0 |
+| `2026/JobApps/3World.max` | 10 | 0 | 0 | 0 | 9 | 1 |
+| `2026/JobApps/Card.max` | 1 | 0 | 1 | 0 | 0 | 0 |
+| `2026/MoonBase/Battery.max` | 26 | 1 | 26 | 6 | 16 | 0 |
+| `2026/MoonBase/Cube.max` | 51 | 0 | 51 | 17 | 22 | 44 |
+| `2026/MoonBase/Cube01.max` | 70 | 0 | 70 | 21 | 30 | 44 |
+| `2026/MoonBase/Cube02.max` | 72 | 0 | 70 | 18 | 55 | 42 |
+| `2026/MoonBase/Environment.max` | 23 | 1 | 23 | 2 | 23 | 0 |
+| `2026/MoonBase/Fab.max` | 49 | 0 | 49 | 20 | 32 | 56 |
+| `2026/MoonBase/Fab01.max` | 53 | 0 | 53 | 20 | 36 | 52 |
+| `2026/MoonBase/Glove.max` | 1 | 1 | 0 | 0 | 0 | 0 |
+| `2026/MoonBase/Hangar.max` | 66 | 4 | 66 | 43 | 42 | 0 |
+| `2026/MoonBase/Hangar01.max` | 67 | 4 | 67 | 43 | 44 | 0 |
+| `2026/MoonBase/oxy.max` | 5 | 0 | 5 | 2 | 5 | 0 |
+| `2026/MoonBase/Spikes.max` | 16 | 0 | 16 | 0 | 16 | 0 |
+| `2026/Steel/ConsoleParts.max` | 5 | 0 | 5 | 0 | 1 | 0 |
+| `2027/Bellroy.max` | 4 | 0 | 4 | 0 | 0 | 1 |
+
+The masks become flat/smooth faces and sharp edges. They remain available as the signed 32-bit `max_smoothing_group` face attribute. A face can share several group bits. An edge stays smooth only when its adjacent masks overlap. Recovery requires exact face topology, uses reader 1.9.2 only, and leaves unmatched meshes alone. Zero masks make flat faces. Native Max shading and explicit normals in `.max` have not been validated.
+
+Specific gaps from the scene audit:
+
+- `3World.max` omits `logo.svg_FillEditPoly001`. Its `Object` mesh is empty. The FBX reference imports a different evaluated mesh set, so `.max` and FBX geometry must not be treated as equivalent.
+- `Cube.max`, `Cube01.max`, `Cube02.max` and `Fab01.max` omit bones and IK chains. The surviving parent links and helpers do not form a complete rig.
+- `Fab.max` also omits four Editable Poly nodes, `Box001`, `Box048`, `Box050` and `Box051`. The reader prints `ImportError: unpack requires a buffer of 12 bytes` for each. An upstream reproduction is in the PR draft.
+- `Bellroy.max` omits `Loft001`, a Loft object. The four meshes import.
+- Hangar material names recover to `EnvironmentPack_DefaultMaterial_AlbedoTransparency_1`, `EvPack`, `Material__42` and `Universal`. The reader's appended bitmap stems no longer appear in the material names.
+
+The latest published reader and its current source expose no camera, light or spline import options. The extension describes mesh, material and UV import. It documents compressed-file support only through Max 2023. These particular 2026/2027 copies did import supported data. That result does not establish support for every file from those versions.
+
+## FBX comparison
+
+The copied `3World.fbx` imported through `max.import_max_fbx`, exported through `max.export_max_fbx`, then imported through `max.import_max_fbx` again.
+
+```text
+FBX_COMPARISON {"objects": 12, "meshes": 9, "units": "INCHES", "matrix_max_abs": 1.2457711129343352e-07, "vertex_max_abs": 0, "corner_normal_max_abs": 0, "smoothing_flag_changes": []}
+VERIFIED reference FBX: names, transforms, scale, pivots, hierarchy, topology, normals, smoothing and material names
+```
+
+The comparison matches objects by name, matrices element by element, mesh vertices and polygons, corner normals, face smoothing, sharpness by edge vertex pair, parent names and material slots. The reference has no material slots, so the separate synthetic material test proves non-empty material naming. Object origins are compared through the matrices and local geometry. Edge indices can reorder during FBX import, so sharp edges are compared by their vertex pairs.
+
+## Exporter regression tests
+
+Keep Editable was removed in fix round 4. It repeatedly changed exported geometry, and sending an evaluated FBX to Max does not need editable subdivision. There is no subdivision export preference, UI choice, allow-list or subdivision-attribute export path.
+
+Both public operators always bake the current viewport-evaluated mesh before calling native FBX. Every source mesh is evaluated before any data is swapped, so dependency targets still refer to the original scene. Armature modifier targets are detached only during the native handoff. Native FBX therefore cannot re-evaluate those meshes in rest pose or attach skin that deforms the baked pose a second time. A `finally` block restores the original mesh data, modifier visibility and armature targets, then removes the temporary meshes. The outer guard also restores armature pose modes, selection, active object, interaction mode, frame and subframe. Unit and visibility guards still restore their own state.
+
+Loose edges are exported. FBX represents object transforms as translation, rotation and scale. When that decomposition loses parent-relative shear, the bake compensates mesh vertices and corner normals for the lost transform. Object origins and exported parent links remain, while local mesh coordinates can change.
+
+Before production edits, the new public-operator tests failed on the posed Armature-before-TurboSmooth fixture by 0.15108180046081543 Blender units. Evaluation failure left both source rigs in REST. The additional geometry regressions caught four lost loose edges and parent-inverse shape changes. Logs are `fix-round-4-red.log` and `fix-round-4-all-red.log` in the sandbox outputs.
+
+```text
+Ran 27 tests in 4.328s
+OK
+VERIFIED posed Armature before TurboSmooth: both operators and animation settings match current evaluated pose
+VERIFIED evaluation failure: both public operators restore source rig, data, modifiers and scene state
+VERIFIED real write failures restore pose mode, subframe, units, mesh data, rig and modifiers through both operators
+VERIFIED subdivision geometry matrix: 62/62 real round trips within 2e-5
+```
+
+The baked matrix retains Mesh, Curve, Text, Surface and Metaball cases, modifier order and levels, UV/boundary modes, creases, hidden sources, linked geometry, nested collection instances and selected-only scope. Separate tests compare loose-edge counts and flat corner normals at matching evaluated vertex positions. Both public operators preserve the parent-inverse fixture's world-space geometry and corner normals. The armature test runs with Animation both enabled and disabled. Failure tests cover the first and second mesh evaluations, partial temporary-mesh cleanup, native write failure, pose interaction mode and a nonzero subframe. Other tests retain all six units, axis metadata, object animation, pivots, hierarchy, camera/light records, embedded images, material names, smoothing and texture relinking.
+
+Geometry comparisons require matching vertex and face counts and bidirectional nearest world-space vertex distances below 0.00002 Blender units. The loose-edge regression also checks edge counts. Corner normals match corresponding positions in both directions within 0.0001. These comparisons do not measure full surface distance or prove Max-side appearance.
+
+The independent round-3 review scripts were copied into `outputs/fix-round-4-review/` and adapted to the baked-only public API. Their geometry sweep reports `PROBE_COMPLETE 32 32`. Their restoration sweep covers success, a real unwritable output, and injected evaluation failure through both operators. The injection targets the wrapper as well as native FBX because the wrapper now evaluates mesh geometry first. It reports `RESTORE_COMPLETE 36 36`, with 12 successful exports and 24 actual failures. The original review scripts and results remain unchanged.
+
+All 17 copied Max scenes were re-imported in this round. Their audit JSON matches round 3 exactly. The copied 3World reference comparison is unchanged. Outputs are `fix-round-4-final.log`, `fix-round-4-max-scenes.json`, `fix-round-4-reference/`, `fix-round-4-probe.log` and `fix-round-4-restoration.log`. The extension build also passes and writes `outputs/fix-round-4-build/notuodesk_3ds_maxxed-1.8.0.zip`, without a version change.
+
+## Commands
+
+From this worktree in PowerShell:
+
+```powershell
+$env:BLENDER_USER_SCRIPTS = 'C:/Users/thelo/.claudework/maxxed-review/sb-max-interchange/scripts'
+$env:BLENDER_USER_CONFIG = 'C:/Users/thelo/.claudework/maxxed-review/sb-max-interchange/config'
+$env:BLENDER_USER_EXTENSIONS = 'C:/Users/thelo/.claudework/maxxed-review/sb-max-interchange/ext'
+& 'C:/Program Files/Blender Foundation/Blender 5.0/blender.exe' -b --factory-startup --python-exit-code 1 --python tests/test_max_interchange.py
+& 'C:/Program Files/Blender Foundation/Blender 5.0/blender.exe' -b --factory-startup --python-exit-code 1 --python tests/report_max_scenes.py -- 'C:/Users/thelo/.claudework/maxxed-review/sb-max-interchange/inputs' 'C:/Users/thelo/.claudework/maxxed-review/sb-max-interchange/outputs/max-scenes.json'
+& 'C:/Program Files/Blender Foundation/Blender 5.0/blender.exe' -b --factory-startup --python-exit-code 1 --python tests/roundtrip_max_fbx.py -- 'C:/Users/thelo/.claudework/maxxed-review/sb-max-interchange/inputs/3World.fbx' 'C:/Users/thelo/.claudework/maxxed-review/sb-max-interchange/outputs'
+```
+
+Full JSON and logs are in the sandbox's `outputs` directory. `max-scenes.json` includes each object's matrix, missing source names and classes, materials, image paths, counts and reader messages.
+
+## Max settings and limits
+
+Autodesk documents a default system unit of one inch. FBX writes the selected System Units into `UnitScaleFactor`, with geometry converted separately. The exporter restores Blender's scene units afterward. It uses Y-forward and Z-up, which is the identity axis conversion for Blender. Import reads FBX axis metadata and applies no extra manual rotation. FBX animation import uses a zero frame offset.
+
+Geometry is frozen at the current viewport-evaluated frame, even when render modifier settings differ. Transform animation still uses native FBX baking. Mesh deformation, shape-key animation and skin bindings are not exported. No subdivision attributes or editable modifier stacks are written. Curves use Blender FBX's evaluated mesh conversion. Other modifier settings, Max plug-in materials, constraints, rigs and procedural texture graphs do not have general parity. Parent-relative mesh shear is compensated at the exported frame, with no claim of animated shear parity.
+
+Blender 5.0.1 supports face smoothing-group bitflags. On versions without that exporter enum, the add-on falls back to face smoothing plus explicit normals. Blender 4.2 was not run, and reconstructed Max group numbers are not guaranteed. Export Selected includes selected objects only, so parent links survive between exported objects. An unselected ancestor is not added automatically.
+
+The menus are registered additively in File, File > Export and Customize. Operators and file output were tested headlessly. File-browser clicking was not driven. Max-side appearance, units and camera/light semantics remain unverified. The reader code and Alt+R operator were not changed.
+
+## Sources
+
+Checked on 2026-11-09. Autodesk defines the destination behavior. Blender's installed exporter/importer code defines the options actually used. The reader release and source define its current limits.
+
+- [Autodesk 2026, Using Units](https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-F48CFCBC-AFC7-43E0-95B2-E28985FF1EC5.htm), default system unit and display units.
+- [Autodesk 2026, FBX Advanced Options](https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Interoperability/files/GUID-94C10F56-EE1D-45E1-9858-7AA9E99CE25D.htm), System Units and axis conversion.
+- [Autodesk 2026, FBX Geometry](https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Interoperability/files/GUID-249100FE-67BE-43B8-AF12-D20703CDF8D1.htm), smoothing groups and TurboSmooth control mesh versus tessellated geometry.
+- [io_scene_max 1.9.2 release](https://github.com/nrgsille76/io_scene_max/releases/tag/v1.9.2) and [Blender extension page](https://extensions.blender.org/add-ons/io-scene-max/), latest reader and supported data.
+- [Reader source at 37db107](https://github.com/nrgsille76/io_scene_max/tree/37db107/source), parsed face data, material suffixes and hierarchy scaling.
+- Blender 5.0.1 bundled `io_scene_fbx/__init__.py`, `export_fbx_bin.py`, `import_fbx.py` and `fbx_utils.py`, inspected on the test machine. Runtime tests inspect their RNA settings and actual FBX output.
+

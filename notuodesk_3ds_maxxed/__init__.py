@@ -35,6 +35,7 @@ from . import freezing, plane_plus
 from . import cursor_policy
 from . import max_icons
 from . import shift_clone
+from . import max_export
 
 
 _prefs_cache = [None]
@@ -166,6 +167,7 @@ _classes = (
     + poly_tools.classes
     + shift_clone.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
+    + max_export.classes
 )
 
 
@@ -213,8 +215,10 @@ def register():
     turbosmooth.register_props()
     ffd.register_props()
     line_tool.register_props()
+    max_export.register_props()
     ui_menus.register_draw()
     max_import.register_menus()
+    max_export.register_menus()
     overlay.register()
     cursor_policy.register()
     p = get_prefs()
@@ -233,10 +237,12 @@ def unregister():
     shift_clone.unregister()
     keymap.unregister_keymaps()
     overlay.unregister()
+    max_export.unregister_menus()
     max_import.unregister_menus()
     ui_menus.unregister_draw()
     wm = bpy.types.WindowManager
     line_tool.unregister_props()
+    max_export.unregister_props()
     ffd.unregister_props()
     turbosmooth.unregister_props()
     mtl_editor.unregister_props()
