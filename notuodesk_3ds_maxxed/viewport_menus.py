@@ -1,244 +1,263 @@
-"""Clickable 3ds Max viewport labels: [+]  [Perspective]  [Standard]  [Default Shading]."""
-
+"""Max viewport label commands. Every command uses the clicked drawable region."""
 import bpy
-from . import max_icons
 from bpy.props import EnumProperty, StringProperty
-from bpy.types import Menu, Operator
 
-from . import overlay
-from .operators import find_view3d
-
-LABEL_MENUS = {
-    "PLUS": "MAX_MT_vp_general",
-    "VIEW": "MAX_MT_vp_point_of_view",
-    "QUALITY": "MAX_MT_vp_quality",
-    "SHADING": "MAX_MT_vp_shading",
-}
-
-
-class MAX_OT_viewport_label(Operator):
-    """Click a viewport label to open its menu (like 3ds Max)"""
-    bl_idname = "max.viewport_label"
-    bl_label = "Viewport Label Menu"
-    bl_options = {"INTERNAL"}
-
-    def invoke(self, context, event):
-        region = context.region
-        if region is None or region.type != "WINDOW":
-            return {"PASS_THROUGH"}
-        from . import xview
-        if xview.click(context, event):
-            return {"FINISHED"}
-        key = overlay.hit_label(region, event.mouse_region_x, event.mouse_region_y)
-        if key is None:
-            return {"PASS_THROUGH"}          # normal click: selection etc. continue
-        bpy.ops.wm.call_menu(name=LABEL_MENUS[key])
-        return {"FINISHED"}
+LABEL_MENUS = dict(zip(('PLUS', 'VIEW', 'QUALITY', 'SHADING'),
+                      ('MAX_MT_vp_general', 'MAX_MT_vp_point_of_view', 'MAX_MT_vp_quality', 'MAX_MT_vp_shading')))
 
 
 def _space(context):
-    sp = context.space_data
-    if sp is not None and sp.type == "VIEW_3D":
-        return sp
-    area, _ = find_view3d(context)
-    return area.spaces.active if area else None
+    if context.area and context.area.type == 'VIEW_3D':
+        return context.area.spaces.active
+    window = context.window
+    if window:
+        return next((a.spaces.active for a in window.screen.areas if a.type == 'VIEW_3D'), None)
+    return None
 
 
-SHADING_MODES = [
-    ("DEFAULT", "Default Shading", "Solid shading with object colors"),
-    ("MAPS", "Shaded Materials with Maps", "Solid shading showing textures"),
-    ("MATERIALS", "Shaded Materials", "Solid shading with material colors"),
-    ("FLAT", "Flat Color", "Unlit flat colors"),
-    ("CLAY", "Clay", "Single clay color, ideal for checking forms"),
-    ("WIRE", "Wireframe Override", "Wireframe (F3)"),
-    ("REALISTIC", "Realistic", "Material preview with lighting (EEVEE)"),
-    ("ACTIVESHADE", "ActiveShade", "Interactive render in the viewport"),
-]
+def region_at(context, x, y):
+    if not context.window:
+        return None, None
+    for area in context.window.screen.areas:
+        if area.type == 'VIEW_3D':
+            for region in area.regions:
+                if region.type == 'WINDOW' and region.x <= x < region.x + region.width and region.y <= y < region.y + region.height:
+                    return area, region
+    return None, None
 
 
-class MAX_OT_viewport_shading(Operator):
-    """Set the viewport shading style"""
-    bl_idname = "max.viewport_shading"
-    bl_label = "Viewport Shading"
+class MAX_OT_viewport_label(bpy.types.Operator):
+    bl_idname = 'max.viewport_label'
+    bl_label = 'Viewport Label Menu'
+    bl_description = 'Open the menu for the viewport label under the pointer'
 
-    mode: EnumProperty(items=SHADING_MODES)
+    def invoke(self, context, event):
+        from . import overlay
+        area, region = region_at(context, event.mouse_x, event.mouse_y)
+        if area is None or not overlay._visible(context):
+            return {'PASS_THROUGH'}
+        with context.temp_override(area=area, region=region):
+            menu = overlay.hit_test(bpy.context, event.mouse_x-region.x, event.mouse_y-region.y)
+            if menu:
+                self.menu = menu
+                self.area = area
+                self.region = region
+                context.window_manager.modal_handler_add(self)
+                return {'RUNNING_MODAL'}
+        return {'PASS_THROUGH'}
 
-    @classmethod
-    def description(cls, context, props):
-        return dict((k, d) for k, _, d in SHADING_MODES).get(props.mode, "")
+    def modal(self, context, event):
+        from . import overlay
+        if event.type in {'ESC', 'RIGHTMOUSE'} or overlay._handle is None:
+            return {'CANCELLED'}
+        if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
+            try:
+                with context.temp_override(area=self.area,region=self.region):
+                    if overlay.hit_test(bpy.context,event.mouse_x-self.region.x,event.mouse_y-self.region.y) != self.menu:
+                        return {'CANCELLED'}
+                    # Open on release. Opening on press lets the same click release
+                    # dismiss the popup before the user can choose a command.
+                    bpy.ops.wm.call_menu('INVOKE_DEFAULT',name=self.menu)
+            except (ReferenceError, RuntimeError):
+                return {'CANCELLED'}
+            return {'FINISHED'}
+        return {'RUNNING_MODAL'}
+
+
+class MAX_OT_viewport_shading(bpy.types.Operator):
+    bl_idname = 'max.viewport_shading'
+    bl_label = 'Viewport Shading'
+    bl_description = 'Set shading for this viewport'
+    mode: EnumProperty(items=[(k, n, d) for k, n, d in (
+        ('DEFAULT', 'Default Shading', 'Solid lighting and object colours'),
+        ('MAPS', 'Shaded with Maps', 'Solid preview with available image textures'),
+        ('MATERIALS', 'Materials', 'Material preview'), ('FLAT', 'Flat Color', 'Unlit object colours'),
+        ('CLAY', 'Clay', 'One neutral material'), ('WIRE', 'Wireframe', 'Visible mesh edges'),
+        ('REALISTIC', 'Realistic', 'Rendered viewport using the scene renderer'),
+        ('ACTIVESHADE', 'ActiveShade', 'ActiveShade requires a supported Max renderer'))])
 
     def execute(self, context):
-        sp = _space(context)
-        if sp is None:
-            return {"CANCELLED"}
-        sh = sp.shading
-        m = self.mode
-        if m == "WIRE":
-            sh.type = "WIREFRAME"
-            return {"FINISHED"}
-        if m == "REALISTIC":
-            sh.type = "MATERIAL"
-            return {"FINISHED"}
-        if m == "ACTIVESHADE":
-            sh.type = "RENDERED"
-            return {"FINISHED"}
-        sh.type = "SOLID"
-        sh.light = "FLAT" if m == "FLAT" else "STUDIO"
-        if m == "CLAY":
-            sh.color_type = "SINGLE"
-            sh.single_color = (0.75, 0.55, 0.42)
-        elif m == "MAPS":
-            sh.color_type = "TEXTURE"
-        elif m == "MATERIALS":
-            sh.color_type = "MATERIAL"
-        else:
-            sh.color_type = "OBJECT"
-        return {"FINISHED"}
+        space = _space(context)
+        if not space:
+            self.report({'WARNING'}, 'Choose a viewport first')
+            return {'CANCELLED'}
+        if self.mode == 'ACTIVESHADE':
+            self.report({'WARNING'}, 'ActiveShade is unavailable. Use Realistic for a rendered viewport')
+            return {'CANCELLED'}
+        s = space.shading
+        s.type = {'WIRE': 'WIREFRAME', 'MATERIALS': 'MATERIAL', 'REALISTIC': 'RENDERED'}.get(self.mode, 'SOLID')
+        if s.type == 'SOLID':
+            s.light = 'FLAT' if self.mode == 'FLAT' else 'STUDIO'
+            s.color_type = {'CLAY': 'SINGLE', 'MAPS': 'TEXTURE'}.get(self.mode, 'OBJECT')
+            if self.mode == 'CLAY':
+                s.single_color = (.65, .65, .65)
+        if context.area:
+            context.area.tag_redraw()
+        return {'FINISHED'}
 
 
-class MAX_OT_viewport_quality(Operator):
-    """Viewport rendering level: Standard, Performance or High Quality"""
-    bl_idname = "max.viewport_quality"
-    bl_label = "Viewport Quality"
-
-    level: EnumProperty(items=[("STANDARD", "Standard", "Solid shading, full detail"),
-                               ("PERFORMANCE", "Performance", "Simplified (Adaptive Degradation)"),
-                               ("HIGH", "High Quality", "Lit materials with shadows and AO")])
+class MAX_OT_viewport_quality(bpy.types.Operator):
+    bl_idname = 'max.viewport_quality'
+    bl_label = 'Viewport Quality'
+    bl_description = 'Set supported preview quality for this viewport'
+    level: EnumProperty(items=[('STANDARD', 'Standard', 'Solid viewport'),
+                              ('PERFORMANCE', 'Performance', 'Solid viewport without shadows or cavity'),
+                              ('HIGH', 'High Quality', 'Material preview, not Nitrous')])
 
     def execute(self, context):
-        sp = _space(context)
-        r = context.scene.render
-        if self.level == "PERFORMANCE":
-            if not r.use_simplify:
-                bpy.ops.max.adaptive_degradation()
-        else:
-            r.use_simplify = False
-        if sp is not None:
-            if self.level == "HIGH":
-                sp.shading.type = "MATERIAL"
-            elif sp.shading.type in {"MATERIAL", "RENDERED"}:
-                sp.shading.type = "SOLID"
-        return {"FINISHED"}
+        space = _space(context)
+        if not space:
+            return {'CANCELLED'}
+        s = space.shading
+        s.type = 'MATERIAL' if self.level == 'HIGH' else 'SOLID'
+        s.show_shadows = self.level != 'PERFORMANCE'
+        s.show_cavity = self.level == 'STANDARD'
+        return {'FINISHED'}
 
 
-class MAX_OT_view_camera(Operator):
-    """Look through this camera"""
-    bl_idname = "max.view_camera"
-    bl_label = "View Camera"
-
+class MAX_OT_view_camera(bpy.types.Operator):
+    bl_idname = 'max.view_camera'
+    bl_label = 'View Camera'
+    bl_description = 'Look through this scene camera in this viewport'
     name: StringProperty()
 
     def execute(self, context):
-        cam = context.scene.objects.get(self.name)
-        if cam is None:
-            return {"CANCELLED"}
-        context.scene.camera = cam
-        rv3d = context.region_data
-        if rv3d is None:
-            area, region = find_view3d(context)
-            rv3d = region.data if region else None
-        if rv3d is not None:
-            rv3d.lock_rotation = False
-            rv3d.view_perspective = "CAMERA"
-        return {"FINISHED"}
+        camera = context.scene.objects.get(self.name)
+        if not camera or camera.type != 'CAMERA' or context.region_data is None:
+            self.report({'WARNING'}, 'Camera is unavailable in this viewport')
+            return {'CANCELLED'}
+        context.space_data.use_local_camera = True
+        context.space_data.camera = camera
+        context.region_data.view_perspective = 'CAMERA'
+        return {'FINISHED'}
 
 
-class MAX_MT_vp_general(Menu):
-    bl_label = "[+]"
-    bl_idname = "MAX_MT_vp_general"
+class MAX_OT_viewport_direction(bpy.types.Operator):
+    bl_idname = 'max.viewport_direction'
+    bl_label = 'Point of View'
+    bl_description = 'Change only the current viewport direction'
+    direction: EnumProperty(items=[(v, v.title(), '') for v in
+                                  ('TOP', 'BOTTOM', 'FRONT', 'BACK', 'LEFT', 'RIGHT', 'PERSP', 'USER')])
 
-    def draw(self, context):
-        lay = self.layout
-        sp = _space(context)
-        lay.operator("max.toggle_quad", text="Maximize Viewport          Alt+W")
-        lay.operator("max.expert_mode", text="Expert Mode                   Ctrl+X")
-        lay.separator()
-        lay.operator("max.toggle", text="Show Grids                        G").what = "GRID"
-        lay.menu("MAX_MT_xview", text="xView")
-        if sp:
-            from . import get_prefs
-            prefs = get_prefs()
-            if prefs:
-                lay.prop(prefs, "show_viewcube", text="Show the ViewCube       Alt+Ctrl+V")
-            lay.prop(sp, "show_gizmo", text="Transform Gizmo                X")
-            lay.prop(context.scene, "max_selection_brackets", text="Selection Brackets             J")
-            lay.prop(sp.overlay, "show_stats", text="xView: Show Statistics       7")
-            lay.prop(sp.overlay, "show_axis_x", text="World Axis X")
-        lay.separator()
-        lay.operator("max.adaptive_degradation", text="Adaptive Degradation          O")
-        lay.popover("VIEW3D_PT_overlay", text="Configure Viewports...")
-
-
-class MAX_MT_vp_point_of_view(Menu):
-    bl_label = "Point of View"
-    bl_idname = "MAX_MT_vp_point_of_view"
-
-    def draw(self, context):
-        lay = self.layout
-        for v, label, key in (("PERSP", "Perspective", "P"), ("ORTHO", "Orthographic", "U"),
-                              (None, None, None),
-                              ("TOP", "Top", "T"), ("BOTTOM", "Bottom", "B"), ("FRONT", "Front", "F"),
-                              ("BACK", "Back", "K"), ("LEFT", "Left", "L"), ("RIGHT", "Right", "")):
-            if v is None:
-                lay.separator()
-                continue
-            lay.operator("max.set_view", text=f"{label:<18}{key}").view = v
-        cams = [o for o in context.scene.objects if o.type == "CAMERA"]
-        lay.separator()
-        if cams:
-            lay.label(text="Cameras")
-            for c in cams:
-                lay.operator("max.view_camera", text=c.name, **max_icons.ui("cameras", "CAMERA_DATA")).name = c.name
+    def execute(self, context):
+        if not context.region_data:
+            return {'CANCELLED'}
+        if self.direction in {'PERSP', 'USER'}:
+            context.region_data.view_perspective = 'PERSP' if self.direction == 'PERSP' else 'ORTHO'
         else:
-            lay.operator("max.camera_from_view", text="Create Camera From View   Ctrl+C")
-        sp = _space(context)
-        if sp:
-            lay.separator()
-            lay.prop(sp, "lens", text="Viewport Lens (mm)")
+            bpy.ops.view3d.view_axis(type=self.direction, align_active=False)
+        return {'FINISHED'}
 
 
-class MAX_MT_vp_quality(Menu):
-    bl_label = "Viewport Quality"
-    bl_idname = "MAX_MT_vp_quality"
+class MAX_OT_viewport_configure(bpy.types.Operator):
+    bl_idname = 'max.viewport_configure'
+    bl_label = 'Viewport Configuration'
+    bl_description = 'Configure this viewport display, safe frames and Home Grid'
 
-    def draw(self, context):
-        lay = self.layout
-        current = overlay.quality_label(context, _space(context)) if _space(context) else ""
-        for key, label in (("HIGH", "High Quality"), ("STANDARD", "Standard"), ("PERFORMANCE", "Performance")):
-            lay.operator("max.viewport_quality", text=label,
-                         **(max_icons.ui("check", "CHECKMARK") if current == label else {"icon": "BLANK1"})).level = key
-        lay.separator()
-        lay.menu("MAX_MT_xview", text="xView")
-        sp = _space(context)
-        if sp:
-            lay.separator()
-            lay.label(text="Lighting and Shadows")
-            lay.prop(sp.shading, "show_shadows", text="Shadows")
-            lay.prop(sp.shading, "show_cavity", text="Ambient Occlusion")
-            lay.prop(sp.shading, "show_specular_highlight", text="Highlights")
-
-
-class MAX_MT_vp_shading(Menu):
-    bl_label = "Viewport Shading"
-    bl_idname = "MAX_MT_vp_shading"
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=420)
 
     def draw(self, context):
-        lay = self.layout
-        sp = _space(context)
-        current = overlay.shading_label(context, sp) if sp else ""
-        for key, label, _ in SHADING_MODES:
-            if key == "WIRE":
-                lay.separator()
-            lay.operator("max.viewport_shading", text=label,
-                         **(max_icons.ui("check", "CHECKMARK") if current == label else {"icon": "BLANK1"})).mode = key
-        lay.separator()
-        if sp:
-            lay.prop(sp.overlay, "show_wireframes", text="Edged Faces                     F4")
-            lay.prop(sp.shading, "show_xray", text="See-Through                     Alt+X")
-            lay.prop(sp.shading, "show_backface_culling", text="Backface Cull")
-            lay.separator()
-            lay.popover("VIEW3D_PT_shading", text="Lighting & Shading Settings...")
+        space = _space(context)
+        if not space:
+            self.layout.label(text='Choose a viewport first')
+            return
+        for title, fields in (
+            ('Visual Style', ((space.overlay, 'show_wireframes', 'Edged Faces'),
+                              (space.overlay, 'show_stats', 'Statistics'))),
+            ('Display', ((space.overlay, 'show_floor', 'Home Grid'),
+                         (space, 'show_region_ui', 'Command Panel'))),
+        ):
+            box = self.layout.box()
+            box.label(text=title)
+            for owner, prop, label in fields:
+                box.prop(owner, prop, text=label)
+        camera = space.camera or context.scene.camera
+        if camera:
+            self.layout.prop(camera.data, 'show_safe_areas', text='Safe Frames')
+        from . import get_prefs
+        prefs = get_prefs()
+        if prefs:
+            self.layout.prop(prefs, 'show_viewcube', text='ViewCube')
+            grid = self.layout.box()
+            grid.label(text='Home Grid')
+            grid.prop(prefs.snap_settings, 'grid_spacing', text='Grid Spacing')
+            grid.prop(prefs.snap_settings, 'major_lines', text='Major Lines every Nth Grid Line')
+        self.layout.label(text='Viewport renderer and grid extent differ from Nitrous', icon='INFO')
+
+    def execute(self, context):
+        return {'FINISHED'}
 
 
-classes = (MAX_OT_viewport_label, MAX_OT_viewport_shading, MAX_OT_viewport_quality, MAX_OT_view_camera,
+class MAX_MT_vp_general(bpy.types.Menu):
+    bl_label = '[+]'
+
+    def draw(self, context):
+        l, space = self.layout, _space(context)
+        if not space:
+            return
+        l.prop(space.overlay, 'show_floor', text='Show Grids')
+        l.prop(space.overlay, 'show_stats', text='Statistics')
+        if hasattr(context.scene, 'max_selection_brackets'):
+            l.prop(context.scene, 'max_selection_brackets', text='Selection Brackets             J')
+        camera = space.camera or context.scene.camera
+        row = l.row()
+        row.enabled = camera is not None
+        if camera:
+            row.prop(camera.data, 'show_safe_areas', text='Show Safe Frames')
+        else:
+            row.label(text='Show Safe Frames (camera view required)')
+        from . import get_prefs
+        prefs = get_prefs()
+        if prefs:
+            l.prop(prefs, 'show_viewcube', text='ViewCube')
+        for menu, label in (('MAX_MT_viewcube', 'ViewCube'), ('MAX_MT_xview', 'xView')):
+            if hasattr(bpy.types, menu):
+                l.menu(menu, text=label)
+        l.separator()
+        l.operator('max.viewport_configure', text='Configure Viewports...')
+
+
+class MAX_MT_vp_point_of_view(bpy.types.Menu):
+    bl_label = 'Point of View'
+
+    def draw(self, context):
+        for direction in ('TOP', 'BOTTOM', 'FRONT', 'BACK', 'LEFT', 'RIGHT', 'PERSP', 'USER'):
+            self.layout.operator('max.viewport_direction', text={'PERSP': 'Perspective'}.get(direction, direction.title())).direction = direction
+        self.layout.separator()
+        cameras = [ob for ob in context.scene.objects if ob.type == 'CAMERA']
+        for camera in cameras:
+            self.layout.operator('max.view_camera', text=camera.name).name = camera.name
+        if not cameras:
+            row = self.layout.row()
+            row.enabled = False
+            row.label(text='No scene cameras')
+
+
+class MAX_MT_vp_quality(bpy.types.Menu):
+    bl_label = 'Viewport Quality'
+
+    def draw(self, context):
+        for value, label in (('STANDARD', 'Standard'), ('PERFORMANCE', 'Performance'), ('HIGH', 'High Quality')):
+            self.layout.operator('max.viewport_quality', text=label).level = value
+
+
+class MAX_MT_vp_shading(bpy.types.Menu):
+    bl_label = 'Viewport Shading'
+
+    def draw(self, context):
+        for value, label in (('DEFAULT', 'Default Shading'), ('MAPS', 'Shaded with Maps'),
+                             ('MATERIALS', 'Materials'), ('FLAT', 'Flat Color'), ('CLAY', 'Clay'),
+                             ('WIRE', 'Wireframe'), ('REALISTIC', 'Realistic')):
+            self.layout.operator('max.viewport_shading', text=label).mode = value
+        row = self.layout.row()
+        row.enabled = False
+        row.operator('max.viewport_shading', text='ActiveShade (renderer unavailable)').mode = 'ACTIVESHADE'
+        space = _space(context)
+        if space:
+            self.layout.prop(space.overlay, 'show_wireframes', text='Edged Faces')
+
+
+classes = (MAX_OT_viewport_label, MAX_OT_viewport_shading, MAX_OT_viewport_quality,
+           MAX_OT_view_camera, MAX_OT_viewport_direction, MAX_OT_viewport_configure,
            MAX_MT_vp_general, MAX_MT_vp_point_of_view, MAX_MT_vp_quality, MAX_MT_vp_shading)
