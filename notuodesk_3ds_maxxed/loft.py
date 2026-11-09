@@ -714,13 +714,9 @@ def params_visible(context):
 
 
 def draw_creation(layout, context):
+    from . import max_widgets
     wm = context.window_manager
-    row = layout.row(align=True)
-    row.alignment = 'CENTER'
-    row.emboss = 'NONE'
-    for key, label, _ in MODES:
-        icon = 'RADIOBUT_ON' if wm.max_loft_mode == key else 'RADIOBUT_OFF'
-        row.prop_enum(wm, 'max_loft_mode', key, text=label, icon=icon)
+    max_widgets.radios(layout, wm, 'max_loft_mode', [(key, label) for key, label, _ in MODES])
     row = layout.row(align=True)
     row.operator_context = 'INVOKE_DEFAULT'
     row.operator('max.loft_pick', text='Get Path').source = 'PATH'
@@ -737,30 +733,37 @@ def draw_creation(layout, context):
 
 
 def draw_skin(layout, context):
+    from . import max_widgets
     p = context.active_object.max_loft
     for attr, name in FIELDS[:8]:
-        layout.prop(p, attr, text=name)
+        if p.bl_rna.properties[attr].type == 'BOOLEAN':
+            max_widgets.checkbox(layout, p, attr, name)
+        else:
+            max_widgets.spinner(layout, p, attr, name, step=1 if p.bl_rna.properties[attr].type == 'INT' else .1)
 
 
 def draw_surface(layout, context):
+    from . import max_widgets
     p = context.active_object.max_loft
-    layout.prop(p, 'smooth_length')
-    layout.prop(p, 'smooth_width')
+    max_widgets.checkbox(layout, p, 'smooth_length', 'Smooth Length')
+    max_widgets.checkbox(layout, p, 'smooth_width', 'Smooth Width')
 
 
 def draw_path(layout, context):
+    from . import max_widgets
     p = context.active_object.max_loft
-    layout.prop(p, 'path_percent', text='Path %')
+    max_widgets.spinner(layout, p, 'path_percent', 'Path %')
     layout.label(text=f'Shape at {p.shape_level:g}%')
     layout.label(text='Get Shape replaces the single profile')
 
 
 def draw_deformations(layout, context):
+    from . import max_widgets
     p = context.active_object.max_loft
     layout.label(text='Scale')
-    layout.prop(p, 'scale_start')
-    layout.prop(p, 'scale_end')
-    layout.prop(p, 'twist', text='Twist (degrees)')
+    max_widgets.spinner(layout, p, 'scale_start', 'Scale Start')
+    max_widgets.spinner(layout, p, 'scale_end', 'Scale End')
+    max_widgets.spinner(layout, p, 'twist', 'Twist (degrees)')
 
 
 classes = (MaxLoftParams, MAX_OT_loft_start, MAX_OT_loft_pick)

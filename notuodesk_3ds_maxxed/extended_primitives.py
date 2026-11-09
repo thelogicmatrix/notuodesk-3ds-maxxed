@@ -454,20 +454,5 @@ def mapping(ob):
 
 
 def draw(layout, ob):
-    col = layout.column(align=True)
-    col.use_property_split = False
-    col.use_property_decorate = False
-    for prop, label, unit in FIELDS[ob.max_prim.kind]:
-        row = col.row(align=True)
-        row.scale_y = 0.85
-        if prop in {"smooth", "generate_mapping"}:
-            row.prop(ob.max_prim, prop, text=label)
-            continue
-        split = row.split(factor=0.48, align=True)
-        caption = split.row(align=True)
-        caption.alignment = "RIGHT"
-        caption.label(text=label + ":")
-        field = split.row(align=True)
-        field.alignment = "LEFT"
-        field.ui_units_x = 5.0
-        field.prop(ob.max_prim, prop, text="")
+    from . import prims
+    return prims.draw(layout, ob)

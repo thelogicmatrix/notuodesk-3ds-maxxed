@@ -4,7 +4,7 @@ import bpy
 from bpy.props import CollectionProperty, EnumProperty, FloatProperty, StringProperty
 from mathutils import Matrix, Vector
 
-from . import prims
+from . import prims, extended_primitives
 
 # Autodesk 3ds Max 2026 help, Creating Primitives from the Keyboard:
 # https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-97C903B3-A972-45BA-A6E4-1DE9A6343BAF.htm
@@ -35,6 +35,18 @@ METHODS = {
 
 DEFAULT_METHODS = {k: "CENTER" for k in METHODS}
 DEFAULT_METHODS.update(BOX="BOX", PYRAMID="BASE_APEX", PLANE="RECTANGLE")
+for _kind, _data in prims.PRIMITIVES.items():
+    if _kind not in DEFAULT_METHODS:
+        DEFAULT_METHODS[_kind] = "EDGE" if _data[2] == "RECT" else "CENTER"
+
+EXTENDED_FIELDS = {
+    kind: tuple((name, label) for name, label, unit in fields if unit == 'LENGTH')
+    for kind, fields in extended_primitives.FIELDS.items()
+}
+
+
+def entry_fields(kind):
+    return FIELDS.get(kind, EXTENDED_FIELDS.get(kind, ()))
 
 
 class MaxKeyboardValues(bpy.types.PropertyGroup):
@@ -56,6 +68,9 @@ class MaxKeyboardValues(bpy.types.PropertyGroup):
         ("RECTANGLE", "Rectangle", "Drag opposite corners"),
         ("SQUARE", "Square", "Drag opposite corners with equal sides"),
     ])
+
+
+MaxKeyboardValues.__annotations__.update(extended_primitives.property_definitions(None))
 
 
 def settings(context, kind):
@@ -82,8 +97,8 @@ def current_kind(context):
 def visible(context):
     wm = context.window_manager
     kind = current_kind(context)
-    return (wm.max_create_cat == "GEOMETRY" and wm.max_create_sub == "STANDARD"
-            and kind in FIELDS and context.scene.max_keyboard_entries.get(kind) is not None)
+    return (wm.max_create_cat == "GEOMETRY" and wm.max_create_sub in {"STANDARD", "EXTENDED"}
+            and bool(entry_fields(kind)) and context.scene.max_keyboard_entries.get(kind) is not None)
 
 
 def method(context, kind):
@@ -142,14 +157,14 @@ class MAX_OT_keyboard_create(bpy.types.Operator):
     kind: StringProperty(default="")
 
     def execute(self, context):
-        from .create import new_object
+        from .create import new_object, _session_end
         from .operators import max_name
         kind = self.kind or current_kind(context)
-        if kind not in FIELDS or kind not in prims.PRIMITIVES:
+        if not entry_fields(kind) or kind not in prims.PRIMITIVES:
             self.report({"WARNING"}, "Pick a primitive type first")
             return {"CANCELLED"}
         values = settings(context, kind)
-        params = {prop: getattr(values, prop) for prop, label in FIELDS[kind]}
+        params = {prop: getattr(values, prop) for prop, label in entry_fields(kind)}
         if any(params.get(p, 1.0) <= 0 for p in ("length", "width")) or (
                 "radius1" in params and max(params.get("radius1", 0), params.get("radius2", 0)) <= 0):
             self.report({"WARNING"}, "Enter a non-zero size before creating")
@@ -160,6 +175,7 @@ class MAX_OT_keyboard_create(bpy.types.Operator):
         if kind == "TORUS" and values.radius2 <= 0:
             self.report({"WARNING"}, "Enter a non-zero Radius 2 for the torus cross section")
             return {"CANCELLED"}
+        _session_end(context)
         if context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
             context.window_manager.max_sublevel = 0
@@ -176,35 +192,23 @@ class MAX_OT_keyboard_create(bpy.types.Operator):
 
 
 def draw_method(layout, context):
+    from . import max_widgets
     kind = current_kind(context)
     values = context.scene.max_keyboard_entries[kind]
-    row = layout.row(align=True)
-    row.alignment = "CENTER"
-    row.emboss = "NONE"
-    for key, label in METHODS.get(kind, ()):
-        icon = "RADIOBUT_ON" if values.method == key else "RADIOBUT_OFF"
-        row.prop_enum(values, "method", key, text=label, icon=icon)
+    max_widgets.radios(layout, values, 'method', METHODS.get(kind, (("EDGE", "Edge"), ("CENTER", "Center"))))
 
 
 def draw_keyboard(layout, context):
+    from . import max_widgets
     kind = current_kind(context)
     values = context.scene.max_keyboard_entries[kind]
     col = layout.column(align=True)
     col.use_property_split = False
     col.use_property_decorate = False
-    for prop, label in (("x", "X"), ("y", "Y"), ("z", "Z")) + FIELDS[kind]:
-        if prop == FIELDS[kind][0][0]:
+    for prop, label in (("x", "X"), ("y", "Y"), ("z", "Z")) + entry_fields(kind):
+        if prop == entry_fields(kind)[0][0]:
             col.separator(factor=0.4)
-        row = col.row(align=True)
-        row.scale_y = 0.85
-        split = row.split(factor=0.48, align=True)
-        caption = split.row(align=True)
-        caption.alignment = "RIGHT"
-        caption.label(text=label + ":")
-        field = split.row(align=True)
-        field.alignment = "LEFT"
-        field.ui_units_x = 5.0
-        field.prop(values, prop, text="")
+        max_widgets.spinner(col, values, prop, label)
     layout.separator(factor=0.4)
     layout.operator("max.keyboard_create", text="Create").kind = kind
 
