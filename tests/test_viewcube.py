@@ -60,6 +60,16 @@ class ViewCubeTests(unittest.TestCase):
         q = viewcube.rotation_for((0, -1, 0), basis)
         self.assertLess(q.rotation_difference(front).angle, .0001)
 
+    def test_clicked_edge_and_corner_keep_upright_or_preserve_current_roll(self):
+        for target in ((0, 1, 1), (1, 1, 1)):
+            for upright in (False, True):
+                rotation = viewcube.clicked_rotation(target, Quaternion(), Quaternion(), upright)
+                self.assertGreater((rotation @ Vector((0, 0, 1))).dot(Vector(target).normalized()), .9999)
+                up = (rotation @ Vector((0, 1, 0))).z
+                self.assertGreater(up if upright else -up, .4)
+                if not upright:
+                    self.assertLess(Quaternion().rotation_difference(rotation).angle, 1.0)
+
     def test_projection_has_pickable_face_edge_corner_and_no_scene_hits(self):
         geometry = viewcube.cube_geometry(Quaternion(), 200, 200, 40)
         self.assertEqual(viewcube.pick(geometry, 200, 200), (0, 0, 1))
@@ -93,8 +103,10 @@ class ViewCubeTests(unittest.TestCase):
     def test_compass_band_surrounds_top_face_and_foreshortens_with_cube(self):
         top = viewcube.compass_geometry(Quaternion(), 0, 0, 1)
         self.assertEqual(len(top), 96)
+        picking = viewcube.compass_geometry(Quaternion(), 0, 0, 100)
+        self.assertTrue(any(viewcube._inside(poly, 172, 0) for poly in picking))
         radii = [(x * x + y * y) ** .5 for poly in top for x, y in poly]
-        self.assertAlmostEqual(min(radii), 1.78, places=5)
+        self.assertAlmostEqual(min(radii), 1.69, places=5)
         self.assertAlmostEqual(max(radii), 2.15, places=5)
         tilted = viewcube.compass_geometry(viewcube.rotation_for((1, -1, 1)), 0, 0, 1)
         def height(band):

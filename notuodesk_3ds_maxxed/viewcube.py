@@ -7,6 +7,7 @@ import time
 import bpy
 import gpu
 from bpy.props import EnumProperty
+from bpy.app.handlers import persistent
 from gpu_extras.batch import batch_for_shader
 from mathutils import Euler, Matrix, Quaternion, Vector
 
@@ -39,6 +40,15 @@ def rotation_for(direction, basis=None):
     else:
         q = (-d).to_track_quat('-Z', 'Y')
     return basis @ q if basis is not None else q
+
+
+def clicked_rotation(direction, current, basis, upright):
+    """Keep world up, or carry the current roll along the shortest view change."""
+    if upright:
+        return rotation_for(direction, basis)
+    start = current @ Vector((0, 0, 1))
+    end = basis @ Vector(direction).normalized()
+    return start.rotation_difference(end) @ current
 
 
 def orbit_rotation(rotation, dx, dy, upright):
@@ -237,10 +247,10 @@ def compass_geometry(rotation, cx, cy, radius):
     def point(a, r):
         p = inv @ Vector((r * math.sin(a), r * math.cos(a), -1.18))
         return cx + radius * p.x, cy + radius * p.y
-    return [[point(a, r) for a, r in ((i * math.tau / 96, 1.78),
+    return [[point(a, r) for a, r in ((i * math.tau / 96, 1.69),
                                      (i * math.tau / 96, 2.15),
                                      ((i + 1) * math.tau / 96, 2.15),
-                                     ((i + 1) * math.tau / 96, 1.78))] for i in range(96)]
+                                     ((i + 1) * math.tau / 96, 1.69))] for i in range(96)]
 
 
 def _compass(context):
@@ -305,10 +315,16 @@ def _texture_quad(texture, points, uv, color, sample_step=(0, 0)):
             }
             if (sampleStep.x != 0.0 && pixel.a > 0.0) {
                 // The offscreen stores the widget's sRGB artwork. Composite in
-                // linear light, without changing the requested group opacity.
+                // linear light. Dark ink needs a little more coverage over
+                // bright viewports, while faces retain the group opacity.
                 vec3 rgb = pixel.rgb / pixel.a;
+                float darkest = min(rgb.r, min(rgb.g, rgb.b));
+                float lightest = max(rgb.r, max(rgb.g, rgb.b));
+                float ink = (1.0 - smoothstep(0.40, 0.55, lightest))
+                          * (1.0 - smoothstep(0.16, 0.25, lightest - darkest));
+                float opacity = color.a * mix(1.0, 1.125, ink);
                 rgb = mix(rgb / 12.92, pow((rgb + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), rgb));
-                fragColor = vec4(rgb * pixel.a * color.a, pixel.a * color.a);
+                fragColor = vec4(rgb * pixel.a * opacity, pixel.a * opacity);
             }
             else { fragColor = pixel * color; }
         }''')
@@ -333,7 +349,7 @@ def _label(label, poly):
     i = LABELS.index(label)
     x, y = i % 4 / 4, 1 - (i // 4 + 1) / 4
     uv = ((x, y), (x + .25, y), (x + .25, y + .25), (x, y + .25))
-    _texture_quad(_atlas_texture, poly, uv, (.22, .24, .27, 1))
+    _texture_quad(_atlas_texture, poly, uv, (.08, .16, .26, 1))
 
 
 def _roll_arrow(cx, cy, r, start, end, color):
@@ -361,12 +377,13 @@ def _draw_art(context, current):
     for poly in compass_geometry(rotation, cx, cy, r):
         _poly(poly, (.73, .77, .82, 1))
     # Inner rim gives the broad, flat band the same recessed centre as Max.
-    inner = []
-    for i in range(97):
-        a = i * math.tau / 96
-        p = q @ Vector((1.78 * math.sin(a), 1.78 * math.cos(a), -1.18))
-        inner.append((cx + r * p.x, cy + r * p.y))
-    _poly(inner, (.43, .48, .55, 1), line=True)
+    for i in range(96):
+        rim = []
+        for a, radius in ((i * math.tau / 96, 1.69), (i * math.tau / 96, 1.80),
+                          ((i + 1) * math.tau / 96, 1.80), ((i + 1) * math.tau / 96, 1.69)):
+            p = q @ Vector((radius * math.sin(a), radius * math.cos(a), -1.18))
+            rim.append((cx + r * p.x, cy + r * p.y))
+        _poly(rim, (.20, .24, .29, 1))
     for name, direction in (('N', (0, 1)), ('E', (1, 0)), ('S', (0, -1)), ('W', (-1, 0))):
         centre = Vector((direction[0] * 1.965, direction[1] * 1.965, -1.18))
         poly = []
@@ -496,7 +513,8 @@ def transition(context, rotation, perspective='ORTHO', location=None, distance=N
 
 
 def _snap(context, target):
-    transition(context, rotation_for(target, _basis(context.scene)))
+    transition(context, clicked_rotation(target, context.region_data.view_rotation,
+                                        _basis(context.scene), _prefs().viewcube_upright))
 
 
 def _home(context):
@@ -730,9 +748,45 @@ classes = (MAX_OT_viewcube_mouse, MAX_OT_viewcube_action, MAX_OT_viewcube_contex
            MAX_OT_viewcube_configure, MAX_MT_viewcube)
 
 
+def _release_artwork():
+    global _offscreen, _atlas_image, _atlas_texture, _shader, _image_shader, _smooth_shader
+    offscreen, image = _offscreen, _atlas_image
+    _offscreen = _atlas_image = _atlas_texture = None
+    _shader = _image_shader = _smooth_shader = None
+    if offscreen is not None:
+        try:
+            offscreen.free()
+        except (ReferenceError, RuntimeError):
+            pass
+    if image is not None:
+        try:
+            bpy.data.images.remove(image)
+        except (ReferenceError, RuntimeError):
+            pass
+
+
+@persistent
+def _load_pre(_):
+    _release_artwork()
+
+
+@persistent
+def _load_post(_):
+    global _hover, _menu_target
+    # File loading replaces Images, areas and regions. Never retain their RNA
+    # or GPU wrappers, even when a load occurred without our pre callback.
+    _release_artwork()
+    _animations.clear()
+    _gizmos.clear()
+    _hover = _menu_target = None
+    sync_gizmos()
+
+
 def register():
     global _handle, _enabled
     _enabled = True
+    bpy.app.handlers.load_pre.append(_load_pre)
+    bpy.app.handlers.load_post.append(_load_post)
     if bpy.app.background:
         return
     _handle = bpy.types.SpaceView3D.draw_handler_add(_draw, (), 'WINDOW', 'POST_PIXEL')
@@ -755,9 +809,12 @@ def register():
 
 
 def unregister():
-    global _handle, _enabled, _hover, _menu_target, _shader
-    global _offscreen, _atlas_image, _atlas_texture, _image_shader, _smooth_shader
+    global _handle, _enabled, _hover, _menu_target
     _enabled = False
+    for handlers, callback in ((bpy.app.handlers.load_pre, _load_pre),
+                               (bpy.app.handlers.load_post, _load_post)):
+        if callback in handlers:
+            handlers.remove(callback)
     if bpy.app.timers.is_registered(_maintain):
         bpy.app.timers.unregister(_maintain)
     sync_gizmos()
@@ -770,13 +827,4 @@ def unregister():
     _animations.clear()
     _hover = None
     _menu_target = None
-    _shader = None
-    if _offscreen is not None:
-        _offscreen.free()
-        _offscreen = None
-    _atlas_texture = None
-    if _atlas_image is not None:
-        bpy.data.images.remove(_atlas_image)
-        _atlas_image = None
-    _image_shader = None
-    _smooth_shader = None
+    _release_artwork()
