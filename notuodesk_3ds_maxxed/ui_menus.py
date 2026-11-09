@@ -533,14 +533,19 @@ def draw_main_toolbar(self, context):
                          ("builtin.scale", "FULLSCREEN_ENTER")):
         kind = {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]
         row.operator("max.select_transform", text="", icon=icon,
-                     depress=(tool in {idname, idname.replace("builtin.", "max.snap_")})).kind = kind
+                     depress=(tool in {idname, idname.replace("builtin.", "max.snap_"), idname.replace("builtin.", "max.")})).kind = kind
 
     slot = context.scene.transform_orientation_slots[0]
-    sub = lay.row(align=True)
-    sub.ui_units_x = 4.5
-    sub.prop(slot, "type", text="")
-    sub = lay.row(align=True)
-    sub.prop(ts, "transform_pivot_point", text="", icon_only=True)
+    from . import max_rotate
+    if tool == "max.rotate":
+        max_rotate.draw_managers(lay, context)
+    else:
+        sub = lay.row(align=True)
+        sub.ui_units_x = 4.5
+        sub.prop(slot, "type", text="")
+        sub = lay.row(align=True)
+        sub.prop(ts, "transform_pivot_point", text="", icon_only=True)
+    lay.menu("MAX_MT_scale_flyout", text="", icon="DOWNARROW_HLT")
 
     from . import snaps
     snaps.draw_toolbar(lay, context)

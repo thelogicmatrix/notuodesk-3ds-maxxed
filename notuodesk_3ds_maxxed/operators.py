@@ -800,6 +800,9 @@ class MAX_OT_transform_typein(Operator):
         return context.active_object is not None
 
     def invoke(self, context, event):
+        from . import snaps
+        if snaps._tool(context) == "max.rotate":
+            return bpy.ops.max.rotate_typein("INVOKE_DEFAULT")
         return context.window_manager.invoke_popup(self, width=320)
 
     def draw(self, context):

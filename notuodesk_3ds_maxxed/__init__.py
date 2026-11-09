@@ -26,6 +26,8 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty, PointerProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor, snaps
+from . import max_rotate
+from . import max_gizmos
 
 
 _prefs_cache = [None]
@@ -144,7 +146,7 @@ HOTKEY_CHEATSHEET = (
 _classes = (
     snaps.classes + (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
-    + ui_menus.classes
+    + ui_menus.classes + max_rotate.classes + max_gizmos.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
@@ -180,6 +182,8 @@ def register():
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""), ("VRAY", "V-Ray", "")])
     prims.register_props()
     snaps.register_props()
+    max_rotate.register()
+    max_gizmos.register()
     ui_panel.register_props()
     vray.register_props()
     mtl_editor.register_props()
@@ -209,6 +213,8 @@ def unregister():
     mtl_editor.unregister_props()
     vray.unregister_props()
     ui_panel.unregister_props()
+    max_gizmos.unregister()
+    max_rotate.unregister()
     snaps.unregister_props()
     prims.unregister_props()
     for prop in ("max_cmd_tab", "max_create_cat", "max_create_sub", "max_sublevel"):
