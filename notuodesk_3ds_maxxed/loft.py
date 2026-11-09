@@ -12,6 +12,7 @@ from . import create, gn_mods
 from .operators import max_name
 
 GROUP_NAME = gn_mods.PREFIX + 'Loft'
+_syncing = False
 MODES = (('MOVE', 'Move', 'Hide the source after using it'),
          ('COPY', 'Copy', 'Use an independent copy of the source'),
          ('INSTANCE', 'Instance', 'Keep a live reference to the source'))
@@ -216,7 +217,7 @@ def build_group():
 
 
 def _spline_state(data):
-    """Only editable geometry, without bevel, extrusion or object modifiers."""
+    """Editable knots, before render thickness and object modifiers."""
     result = []
     for sp in data.splines:
         points = sp.bezier_points if sp.type == 'BEZIER' else sp.points
@@ -231,8 +232,67 @@ def _spline_state(data):
     return tuple(result)
 
 
+def _rna_state(value):
+    """Snapshot modifier settings, including nested mappings and node inputs."""
+    result = []
+    for prop in value.bl_rna.properties:
+        if prop.identifier in {'rna_type', 'id_data', 'is_active', 'node_warnings'}:
+            continue
+        if prop.is_readonly and prop.type not in {'POINTER', 'COLLECTION'}:
+            continue
+        item = getattr(value, prop.identifier)
+        if prop.type == 'POINTER':
+            item = item if item is None or isinstance(item, bpy.types.ID) else _rna_state(item)
+        elif prop.type == 'COLLECTION':
+            item = tuple(_rna_state(child) for child in item)
+        elif getattr(prop, 'is_array', False):
+            item = tuple(item)
+        result.append((prop.identifier, item))
+    if isinstance(value, bpy.types.NodesModifier):
+        result.append(('inputs', tuple((key, repr(item.to_dict() if hasattr(item, 'to_dict')
+                                                else item.to_list() if hasattr(item, 'to_list')
+                                                else item)) for key, item in value.items())))
+    return value.bl_rna.identifier, tuple(result)
+
+
+def _spline_modifiers(source):
+    # Other Geometry Nodes modifiers can deform the spline. Filter by Line's
+    # explicit marker, never by a modifier name or by its node types.
+    return [m for m in source.modifiers if not (m.type == 'NODES' and m.node_group
+                                               and m.node_group.get('max_spline_render'))]
+
+
+def _sync_modifiers(source, proxy):
+    modifiers = _spline_modifiers(source)
+    current = [m for m in proxy.modifiers if not (m.type == 'NODES' and m.node_group
+                                                 and m.node_group.get('max_loft_spline'))]
+    if tuple(_rna_state(m) for m in modifiers) == tuple(_rna_state(m) for m in current):
+        return
+    proxy.modifiers.clear()
+    # Blender's native copier preserves settings, node inputs and stack order.
+    # The context override also works for hidden sources and during Edit Mode.
+    with bpy.context.temp_override(object=source, active_object=source,
+                                   selected_objects=[proxy], selected_editable_objects=[proxy]):
+        for mod in modifiers:
+            bpy.ops.object.modifier_copy_to_selected(modifier=mod.name)
+    if modifiers:
+        # Native curve deformers such as Bend expose their result as wire mesh
+        # edges. Recover those curves after the stack, keeping node curves too.
+        group = next((g for g in bpy.data.node_groups if g.get('max_loft_spline')), None)
+        if group is None:
+            g = gn_mods.G('Loft spline')
+            parts = _node(g, 'GeometryNodeSeparateComponents', Geometry=g.g('Geometry'))
+            edges = _node(g, 'GeometryNodeMeshToCurve', Mesh=parts.outputs['Mesh'])
+            join = g.nodes.new('GeometryNodeJoinGeometry')
+            g.links.new(parts.outputs['Curve'], join.inputs['Geometry'])
+            g.links.new(edges.outputs['Curve'], join.inputs['Geometry'])
+            group = g.out(join.outputs[0])
+            group['max_loft_spline'] = True
+        proxy.modifiers.new('Loft spline', 'NODES').node_group = group
+
+
 def _curve_source(ob, role):
-    """Object Info needs a curve object whose evaluation cannot turn into a mesh."""
+    """Evaluate the modified spline independently of its render thickness."""
     p = ob.max_loft
     source = getattr(p, role)
     if source is not None and source.mode == 'EDIT':
@@ -255,30 +315,37 @@ def _curve_source(ob, role):
         data = source.data.copy()
         # 3D also prevents a closed 2D spline's fill from becoming a mesh.
         data.dimensions = '3D'
-        data.bevel_depth = data.extrude = data.offset = 0
+        data.bevel_depth = data.extrude = 0
         data.bevel_mode = 'ROUND'
         data.bevel_object = data.taper_object = None
         proxy.data = data
         if old.users == 0:
             bpy.data.curves.remove(old)
+    _sync_modifiers(source, proxy)
     return proxy
 
 
 def _sync_sources(ob):
+    global _syncing
     mod = modifier(ob)
-    if mod is None:
+    if mod is None or _syncing:
         return
-    for role in ('path', 'shape'):
-        source = _curve_source(ob, role)
-        name = role.title()
-        for ident, label in gn_mods.inputs(mod):
-            if label == name:
-                data, prop = gn_mods.input_ref(mod, ident)
-                current = data.value if prop == 'value' else mod.get(ident)
-                if current != source:
-                    gn_mods.set_input(mod, name, source)
-                    ob.update_tag()
-                break
+    # Native modifier copying can request another depsgraph update.
+    _syncing = True
+    try:
+        for role in ('path', 'shape'):
+            source = _curve_source(ob, role)
+            name = role.title()
+            for ident, label in gn_mods.inputs(mod):
+                if label == name:
+                    data, prop = gn_mods.input_ref(mod, ident)
+                    current = data.value if prop == 'value' else mod.get(ident)
+                    if current != source:
+                        gn_mods.set_input(mod, name, source)
+                        ob.update_tag()
+                    break
+    finally:
+        _syncing = False
 
 
 @persistent

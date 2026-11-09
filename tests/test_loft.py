@@ -1,6 +1,7 @@
 """Run in the isolated profile: blender -b --factory-startup --python tests/test_loft.py."""
 
 import os
+import math
 import sys
 import tempfile
 import unittest
@@ -29,6 +30,8 @@ def curve(name, coords, cyclic=False):
 def mesh_snapshot(ob, depsgraph):
     result = ob.evaluated_get(depsgraph)
     mesh = result.to_mesh()
+    if mesh is None:
+        return [], []
     verts = [tuple(v.co) for v in mesh.vertices]
     faces = [(tuple(p.vertices), p.use_smooth, tuple(p.normal)) for p in mesh.polygons]
     result.to_mesh_clear()
@@ -101,6 +104,23 @@ def rendering_modifier(ob, viewport, renderer):
     return mod
 
 
+def transform_modifier(ob, scale=(1, 1, 1), translation=(0, 0, 0)):
+    group = bpy.data.node_groups.new('Spline deformation', 'GeometryNodeTree')
+    group.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+    group.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+    nodes, links = group.nodes, group.links
+    source, out = nodes.new('NodeGroupInput'), nodes.new('NodeGroupOutput')
+    transform = nodes.new('GeometryNodeTransform')
+    transform.inputs['Scale'].default_value = scale
+    transform.inputs['Translation'].default_value = translation
+    links.new(source.outputs['Geometry'], transform.inputs['Geometry'])
+    links.new(transform.outputs['Geometry'], out.inputs['Geometry'])
+    # The name alone must never identify Line's rendering conversion.
+    mod = ob.modifiers.new('Rendering', 'NODES')
+    mod.node_group = group
+    return mod
+
+
 class LoftTests(unittest.TestCase):
     def setUp(self):
         for ob in list(bpy.data.objects):
@@ -153,12 +173,81 @@ class LoftTests(unittest.TestCase):
         self.assertAlmostEqual(max(v[0] for v in evaluated(ob)[0]), 3)
         print('LOFT live Instance: path endpoint z=9 and profile x=3 reach evaluated mesh', flush=True)
 
-    def test_rendered_sources_keep_raw_spline_in_viewport_and_render(self):
+    def viewport_and_render(self, ob):
+        if bpy.context.scene.camera is None:
+            bpy.ops.object.camera_add(location=(10, -10, 10))
+            bpy.context.scene.camera = bpy.context.object
+        return (evaluated(ob), rendered()[ob.name])
+
+    def test_path_bend_is_evaluated_before_loft(self):
+        self.path.data.splines.clear()
+        spline = self.path.data.splines.new('POLY')
+        spline.points.add(10)
+        for i, point in enumerate(spline.points):
+            point.co = (0, 0, i * .5, 1)
+        bend = self.path.modifiers.new('Bend', 'SIMPLE_DEFORM')
+        bend.deform_method = 'BEND'
+        bend.deform_axis = 'X'
+        bend.angle = math.pi / 2
+        ob = self.make()
+        for verts, faces in self.viewport_and_render(ob):
+            self.assertEqual((len(verts), len(faces)), (44, 42))
+            # Four profile corners per ring. The bent path ends at radius 10/pi.
+            end = [sum(v[axis] for v in verts[-4:]) / 4 for axis in range(3)]
+            for actual, expected in zip(end, (0, 10 / math.pi, 10 / math.pi)):
+                self.assertAlmostEqual(actual, expected, places=5)
+        bend.angle = 0
+        for verts, _ in self.viewport_and_render(ob):
+            self.assertAlmostEqual(max(v[2] for v in verts), 5)
+            self.assertAlmostEqual(max(v[1] for v in verts), 1)
+        print('LOFT deformers: 90-degree path Bend reaches end (0, 3.183099, 3.183099) in VIEWPORT and RENDER', flush=True)
+
+    def test_profile_width_modifier_is_evaluated_before_loft(self):
+        transform_modifier(self.shape, scale=(2, 1, 1))
+        ob = self.make()
+        for verts, faces in self.viewport_and_render(ob):
+            self.assertEqual((len(verts), len(faces)), (8, 6))
+            self.assertAlmostEqual(min(v[0] for v in verts), -2)
+            self.assertAlmostEqual(max(v[0] for v in verts), 2)
+        print('LOFT deformers: profile width modifier produces x=-2..2 in VIEWPORT and RENDER', flush=True)
+
+    def test_modifier_stack_changes_stay_live(self):
+        ob = self.make()
+        evaluated(ob)
+        shift = transform_modifier(self.shape, translation=(1, 0, 0))
+        stretch = transform_modifier(self.shape, scale=(2, 1, 1))
+        for verts, _ in self.viewport_and_render(ob):
+            self.assertAlmostEqual(min(v[0] for v in verts), 0)
+            self.assertAlmostEqual(max(v[0] for v in verts), 4)
+        with bpy.context.temp_override(object=self.shape, active_object=self.shape):
+            bpy.ops.object.modifier_move_up(modifier=stretch.name)
+        for verts, _ in self.viewport_and_render(ob):
+            self.assertAlmostEqual(min(v[0] for v in verts), -1)
+            self.assertAlmostEqual(max(v[0] for v in verts), 3)
+        stretch.show_viewport = False
+        viewport, render = self.viewport_and_render(ob)
+        self.assertAlmostEqual(max(v[0] for v in viewport[0]), 2)
+        self.assertAlmostEqual(max(v[0] for v in render[0]), 3)
+        stretch.show_viewport = True
+        stretch.show_render = False
+        viewport, render = self.viewport_and_render(ob)
+        self.assertAlmostEqual(max(v[0] for v in viewport[0]), 3)
+        self.assertAlmostEqual(max(v[0] for v in render[0]), 2)
+        self.shape.modifiers.remove(stretch)
+        shift.node_group.nodes.get('Transform Geometry').inputs['Translation'].default_value.x = 3
+        for verts, _ in self.viewport_and_render(ob):
+            self.assertAlmostEqual(min(v[0] for v in verts), 2)
+            self.assertAlmostEqual(max(v[0] for v in verts), 4)
+        print('LOFT deformers live: add, reorder, viewport flag, remove and node edits update in VIEWPORT and RENDER', flush=True)
+
+    def test_rendered_sources_keep_deformed_spline_in_viewport_and_render(self):
         bpy.ops.object.camera_add(location=(10, -10, 10))
         bpy.context.scene.camera = bpy.context.object
         ob = self.make()
         baseline = evaluated(ob)
         self.assertEqual((len(baseline[0]), len(baseline[1])), (8, 6))
+        transform_modifier(self.path, scale=(1, 1, 2))
+        transform_modifier(self.shape, scale=(2, 1, 1))
         for role in ('path', 'shape'):
             source = getattr(self, role)
             for kind in ('bevel', 'extrude', 'viewport', 'renderer', 'both'):
@@ -178,13 +267,16 @@ class LoftTests(unittest.TestCase):
                         # Prove the fixture really converts the source in the intended evaluation.
                         self.assertEqual(bool(viewport_source[1]), kind != 'renderer')
                         self.assertEqual(bool(render_meshes[source.name][1]), kind != 'viewport')
-                        self.assertEqual(viewport_mesh, baseline)
-                        self.assertEqual(render_meshes[ob.name], baseline)
+                        for verts, faces in (viewport_mesh, render_meshes[ob.name]):
+                            self.assertEqual((len(verts), len(faces)), (8, 6))
+                            self.assertAlmostEqual(min(v[0] for v in verts), -2)
+                            self.assertAlmostEqual(max(v[0] for v in verts), 2)
+                            self.assertAlmostEqual(max(v[2] for v in verts), 10)
                     finally:
                         source.data.bevel_depth = source.data.extrude = 0
                         if mod:
                             source.modifiers.remove(mod)
-        print('LOFT rendering: path and shape bevel, extrude and Line-style viewport/render switches preserve 8 vertices, 6 faces', flush=True)
+        print('LOFT rendering: ten path/shape thickness cases preserve deformed width 4, height 10, 8 vertices, 6 faces in VIEWPORT and RENDER', flush=True)
 
     def test_rendered_sources_stay_live_in_edit_mode(self):
         self.shape.data.bevel_depth = .2
@@ -371,6 +463,7 @@ class LoftTests(unittest.TestCase):
 
     def test_save_reload_keeps_live_sources(self):
         self.path.data.extrude = .25
+        transform_modifier(self.shape, scale=(2, 1, 1))
         rendering_modifier(self.shape, True, True)
         ob = self.make()
         ob.max_loft.scale_end = 150
@@ -384,10 +477,12 @@ class LoftTests(unittest.TestCase):
             loaded.max_loft.path.data.splines[0].points[1].co.z = 8
             loaded.max_loft.path.data.update_tag()
             self.assertAlmostEqual(max(v[2] for v in evaluated(loaded)[0]), 8)
+            self.assertAlmostEqual(max(v[0] for v in evaluated(loaded)[0]), 3)
         print('LOFT persistence: save/reload preserves settings, sources and live mesh updates', flush=True)
 
 
-suite = unittest.defaultTestLoader.loadTestsFromTestCase(LoftTests)
-result = unittest.TextTestRunner(stream=sys.stdout, verbosity=2).run(suite)
-if not result.wasSuccessful():
-    raise SystemExit(1)
+if __name__ == '__main__':
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(LoftTests)
+    result = unittest.TextTestRunner(stream=sys.stdout, verbosity=2).run(suite)
+    if not result.wasSuccessful():
+        raise SystemExit(1)
