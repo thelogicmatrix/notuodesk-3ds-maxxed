@@ -50,11 +50,14 @@ class LoftTestRenderEngine(bpy.types.RenderEngine):
     bl_label = 'Loft test'
     snapshots = {}
     mode = None
+    errors = {}
 
     def render(self, depsgraph):
         type(self).mode = depsgraph.mode
         type(self).snapshots = {ob.name: mesh_snapshot(ob, depsgraph)
                                 for ob in depsgraph.scene.objects if ob.type in {'CURVE', 'MESH'}}
+        type(self).errors = {ob.name: loft.source_error(ob.original, depsgraph)
+                             for ob in depsgraph.scene.objects if loft.is_loft(ob)}
         self.end_result(self.begin_result(0, 0, 1, 1))
 
 
@@ -327,6 +330,146 @@ class LoftTests(unittest.TestCase):
         self.assertEqual((len(evaluated(duplicate)[0]), len(evaluated(duplicate)[1])), (8, 6))
         self.assertTrue(all(name not in bpy.data.objects for name in original_curves))
         print('LOFT internal curves: duplicate owns independent helpers, deleting a Loft removes its helpers', flush=True)
+
+    def test_mixed_gn_native_stack_orders(self):
+        # A real wire-mesh source is the independent oracle. Native Bend can
+        # deform it in either order without Blender's GN curve limitation.
+        for role in ('path', 'shape'):
+            for gn_first in (True, False):
+                for thickness in (False, True):
+                    with self.subTest(role=role, gn_first=gn_first, thickness=thickness):
+                        source = curve('Mixed', [(0, 0, i * .5) if role == 'path'
+                                                else (i * .5, .2, 0) for i in range(11)])
+                        rendering_modifier(source, thickness, thickness)
+                        transform = transform_modifier(source, scale=(2, 1, 2))
+                        bend = source.modifiers.new('Bend', 'SIMPLE_DEFORM')
+                        bend.deform_method = 'BEND'
+                        bend.deform_axis = 'X' if role == 'path' else 'Z'
+                        bend.angle = math.pi / 2
+                        if not gn_first:
+                            with bpy.context.temp_override(object=source, active_object=source):
+                                bpy.ops.object.modifier_move_up(modifier=bend.name)
+                        mesh = bpy.data.meshes.new('Independent wire')
+                        mesh.from_pydata([tuple(p.co[:3]) for p in source.data.splines[0].points],
+                                         [(i, i + 1) for i in range(10)], [])
+                        oracle = bpy.data.objects.new('Oracle', mesh)
+                        bpy.context.collection.objects.link(oracle)
+                        with bpy.context.temp_override(object=source, active_object=source,
+                                                       selected_objects=[oracle], selected_editable_objects=[oracle]):
+                            for mod in source.modifiers:
+                                if mod != source.modifiers[0]:
+                                    bpy.ops.object.modifier_copy_to_selected(modifier=mod.name)
+                        path, shape = (source, self.shape) if role == 'path' else (self.path, source)
+                        ob = loft.make_loft(bpy.context, path, shape)
+                        ob.max_loft.path_steps = ob.max_loft.shape_steps = 0
+                        ob.max_loft.adaptive = False
+                        if bpy.context.scene.camera is None:
+                            bpy.ops.object.camera_add(location=(10, -10, 10))
+                            bpy.context.scene.camera = bpy.context.object
+                        for angle in (math.pi / 2, .5):
+                            bend.angle = angle
+                            oracle.modifiers.get(bend.name).angle = angle
+                            points = evaluated(oracle)[0]
+                            baked = curve('Baked', points)
+                            expected = loft.make_loft(bpy.context, baked if role == 'path' else self.path,
+                                                      self.shape if role == 'path' else baked)
+                            expected.max_loft.path_steps = expected.max_loft.shape_steps = 0
+                            expected.max_loft.adaptive = False
+                            vp = evaluated(ob)[0], evaluated(expected)[0]
+                            # Capture both Lofts in the same actual render depsgraph.
+                            render = rendered()
+                            for actual, wanted in (vp, (render[ob.name][0], render[expected.name][0])):
+                                self.assertEqual(len(actual), len(wanted))
+                                self.assertGreater(len(actual), 0)
+                                self.assertLess(max((Vector(a) - Vector(b)).length
+                                                    for a, b in zip(actual, wanted)), 1e-4)
+                            bpy.data.objects.remove(expected, do_unlink=True)
+                        print(f'LOFT mixed: {role} {"GN->Bend" if gn_first else "Bend->GN"} thickness={thickness}, live angles, VIEWPORT and RENDER match independent wire', flush=True)
+
+    def test_normal_delete_and_reload_remove_helpers(self):
+        ob = self.make()
+        helpers = [ob.max_loft.path_curve.name, ob.max_loft.shape_curve.name]
+        data = [bpy.data.objects[name].data.name for name in helpers]
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.delete(use_global=False)
+        bpy.context.view_layer.update()
+        self.assertTrue(all(name not in bpy.data.objects for name in helpers))
+        self.assertTrue(all(name not in bpy.data.curves for name in data))
+        with tempfile.TemporaryDirectory(prefix='maxxed-loft-delete-') as folder:
+            filename = os.path.join(folder, 'deleted.blend')
+            bpy.ops.wm.save_as_mainfile(filepath=filename)
+            bpy.ops.wm.open_mainfile(filepath=filename)
+            self.assertFalse(any('max_loft_owner' in o for o in bpy.data.objects))
+        print('LOFT normal Delete: helpers and unused curves removed, save/reload stays clean', flush=True)
+
+    def test_unusable_modifier_result_reports_source_role(self):
+        ob = self.make()
+        for role in ('path', 'shape'):
+            source = getattr(self, role)
+            for kind in ('empty', 'surface', 'multiple'):
+                with self.subTest(role=role, result=kind):
+                    group = bpy.data.node_groups.new('Unusable result', 'GeometryNodeTree')
+                    group.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+                    group.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+                    out = group.nodes.new('NodeGroupOutput')
+                    if kind == 'surface':
+                        cube = group.nodes.new('GeometryNodeMeshCube')
+                        group.links.new(cube.outputs['Mesh'], out.inputs['Geometry'])
+                    elif kind == 'multiple':
+                        line = group.nodes.new('GeometryNodeCurvePrimitiveLine')
+                        join = group.nodes.new('GeometryNodeJoinGeometry')
+                        inp = group.nodes.new('NodeGroupInput')
+                        group.links.new(line.outputs['Curve'], join.inputs['Geometry'])
+                        group.links.new(inp.outputs['Geometry'], join.inputs['Geometry'])
+                        group.links.new(join.outputs[0], out.inputs['Geometry'])
+                    mod = source.modifiers.new('Unusable', 'NODES')
+                    mod.node_group = group
+                    for _, faces in self.viewport_and_render(ob):
+                        self.assertEqual(faces, [])
+                    self.assertIn(role.title() + ': modifier stack', loft.source_error(ob))
+                    self.assertIn(role.title() + ': modifier stack', LoftTestRenderEngine.errors[ob.name])
+                    source.modifiers.remove(mod)
+                    self.assertGreater(len(evaluated(ob)[0]), 0)
+                    self.assertEqual(loft.source_error(ob), '')
+        print('LOFT invalid stacks: empty, surface and multiple results show path/shape error, suppress skin, recover after removal in VIEWPORT and RENDER', flush=True)
+
+    def test_owner_linked_to_two_scenes(self):
+        ob = self.make()
+        baseline = evaluated(ob)
+        other = bpy.data.scenes.new('Other scene')
+        other.collection.objects.link(ob)
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.delete(use_global=False)
+        bpy.context.view_layer.update()
+        self.assertEqual(len([o for o in bpy.data.objects if o.get('max_loft_owner') == ob]), 2)
+        self.assertIn(ob.name, other.objects)
+        bpy.context.window.scene = other
+        self.assertEqual(evaluated(ob), baseline)
+        print('LOFT multi-scene: removing owner from one scene preserves two helpers and working mesh in the other', flush=True)
+
+    def test_reload_cleans_preexisting_unlinked_owner(self):
+        ob = self.make()
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        # Simulate an old file saved before normal Delete cleanup existed.
+        bpy.app.handlers.depsgraph_update_pre.remove(loft._sync_splines)
+        with tempfile.TemporaryDirectory(prefix='maxxed-loft-old-delete-') as folder:
+            filename = os.path.join(folder, 'old-delete.blend')
+            try:
+                bpy.ops.object.delete(use_global=False)
+                self.assertEqual(len([o for o in bpy.data.objects if 'max_loft_owner' in o]), 2)
+                bpy.ops.wm.save_as_mainfile(filepath=filename)
+            finally:
+                bpy.app.handlers.depsgraph_update_pre.append(loft._sync_splines)
+            bpy.ops.wm.open_mainfile(filepath=filename)
+            bpy.context.view_layer.update()
+            self.assertFalse(any('max_loft_owner' in o for o in bpy.data.objects))
+        print('LOFT reload cleanup: old file with unlinked owner loses both stale helpers', flush=True)
 
     def test_copy_and_move(self):
         copied = self.make(mode='COPY')

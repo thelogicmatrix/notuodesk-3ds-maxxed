@@ -13,6 +13,7 @@ from .operators import max_name
 
 GROUP_NAME = gn_mods.PREFIX + 'Loft'
 _syncing = False
+_handling = False
 MODES = (('MOVE', 'Move', 'Hide the source after using it'),
          ('COPY', 'Copy', 'Use an independent copy of the source'),
          ('INSTANCE', 'Instance', 'Keep a live reference to the source'))
@@ -262,11 +263,64 @@ def _spline_modifiers(source):
                                                and m.node_group.get('max_spline_render'))]
 
 
+def _spline_boundary(kind):
+    group = next((g for g in bpy.data.node_groups if g.get('max_loft_spline') == kind), None)
+    if group is not None:
+        return group
+    g = gn_mods.G('Loft ' + kind)
+    parts = _node(g, 'GeometryNodeSeparateComponents', Geometry=g.g('Geometry'))
+    join = g.nodes.new('GeometryNodeJoinGeometry')
+    if kind == 'wire':
+        # GN curves must become real wire vertices before native deformers.
+        wire = _node(g, 'GeometryNodeCurveToMesh', Curve=parts.outputs['Curve'])
+        g.links.new(wire.outputs['Mesh'], join.inputs['Geometry'])
+        g.links.new(parts.outputs['Mesh'], join.inputs['Geometry'])
+    else:
+        size = g.nodes.new('GeometryNodeAttributeDomainSize')
+        size.component = 'MESH'
+        g.links.new(parts.outputs['Mesh'], size.inputs['Geometry'])
+        has_faces = g.m('GREATER_THAN', size.outputs['Face Count'], 0)
+        # Only wire meshes represent a spline. Never interpret surface edges
+        # as an undeformed profile or silently use an earlier stack result.
+        edges = _node(g, 'GeometryNodeMeshToCurve', Mesh=parts.outputs['Mesh'])
+        empty = g.nodes.new('GeometryNodeJoinGeometry').outputs[0]
+        recovered = _switch(g, 'GEOMETRY', has_faces, edges.outputs['Curve'], empty)
+        g.links.new(parts.outputs['Curve'], join.inputs['Geometry'])
+        g.links.new(recovered, join.inputs['Geometry'])
+        if kind == 'curve':
+            # Keep surfaces so a later GN modifier may intentionally turn
+            # them into a spline. The final boundary rejects surfaces.
+            g.links.new(_switch(g, 'GEOMETRY', has_faces, empty, parts.outputs['Mesh']),
+                        join.inputs['Geometry'])
+        else:
+            count = g.nodes.new('GeometryNodeAttributeDomainSize')
+            count.component = 'CURVE'
+            g.links.new(join.outputs[0], count.inputs['Geometry'])
+            invalid = g.m('MAXIMUM', has_faces,
+                          g.m('SUBTRACT', 1, g.m('COMPARE', count.outputs['Spline Count'], 1)))
+            # A diagnostic mesh travels beside the curve component. Loft's
+            # curve nodes ignore it, while the rollout can read its attribute.
+            marker = _node(g, 'GeometryNodeMeshLine', Count=1)
+            flag = _node(g, 'GeometryNodeStoreNamedAttribute', Geometry=marker.outputs['Mesh'],
+                         Name='max_loft_invalid', Value=invalid)
+            flag.data_type = 'INT'
+            flag.domain = 'POINT'
+            result = g.nodes.new('GeometryNodeJoinGeometry')
+            g.links.new(_switch(g, 'GEOMETRY', invalid, join.outputs[0], empty), result.inputs['Geometry'])
+            g.links.new(flag.outputs[0], result.inputs['Geometry'])
+            join = result
+    group = g.out(join.outputs[0])
+    group['max_loft_spline'] = kind
+    return group
+
+
 def _sync_modifiers(source, proxy):
     modifiers = _spline_modifiers(source)
     current = [m for m in proxy.modifiers if not (m.type == 'NODES' and m.node_group
                                                  and m.node_group.get('max_loft_spline'))]
-    if tuple(_rna_state(m) for m in modifiers) == tuple(_rna_state(m) for m in current):
+    if (tuple(_rna_state(m) for m in modifiers) == tuple(_rna_state(m) for m in current)
+            and any(m.type == 'NODES' and m.node_group
+                    and m.node_group.get('max_loft_spline') == 'validate' for m in proxy.modifiers)):
         return
     proxy.modifiers.clear()
     # Blender's native copier preserves settings, node inputs and stack order.
@@ -274,21 +328,10 @@ def _sync_modifiers(source, proxy):
     with bpy.context.temp_override(object=source, active_object=source,
                                    selected_objects=[proxy], selected_editable_objects=[proxy]):
         for mod in modifiers:
+            kind = 'curve' if mod.type == 'NODES' else 'wire'
+            proxy.modifiers.new('Loft ' + kind, 'NODES').node_group = _spline_boundary(kind)
             bpy.ops.object.modifier_copy_to_selected(modifier=mod.name)
-    if modifiers:
-        # Native curve deformers such as Bend expose their result as wire mesh
-        # edges. Recover those curves after the stack, keeping node curves too.
-        group = next((g for g in bpy.data.node_groups if g.get('max_loft_spline')), None)
-        if group is None:
-            g = gn_mods.G('Loft spline')
-            parts = _node(g, 'GeometryNodeSeparateComponents', Geometry=g.g('Geometry'))
-            edges = _node(g, 'GeometryNodeMeshToCurve', Mesh=parts.outputs['Mesh'])
-            join = g.nodes.new('GeometryNodeJoinGeometry')
-            g.links.new(parts.outputs['Curve'], join.inputs['Geometry'])
-            g.links.new(edges.outputs['Curve'], join.inputs['Geometry'])
-            group = g.out(join.outputs[0])
-            group['max_loft_spline'] = True
-        proxy.modifiers.new('Loft spline', 'NODES').node_group = group
+    proxy.modifiers.new('Loft spline', 'NODES').node_group = _spline_boundary('validate')
 
 
 def _curve_source(ob, role):
@@ -333,6 +376,18 @@ def _sync_sources(ob):
     # Native modifier copying can request another depsgraph update.
     _syncing = True
     try:
+        group = mod.node_group
+        if not group.get('max_loft_spline_inputs'):
+            # Read curves only. The helper's diagnostic mesh must never enter
+            # the skin. Upgrade saved Loft groups as well as newly built ones.
+            for node in list(group.nodes):
+                if node.bl_idname == 'GeometryNodeObjectInfo':
+                    links = list(node.outputs['Geometry'].links)
+                    parts = group.nodes.new('GeometryNodeSeparateComponents')
+                    group.links.new(node.outputs['Geometry'], parts.inputs['Geometry'])
+                    for link in links:
+                        group.links.new(parts.outputs['Curve'], link.to_socket)
+            group['max_loft_spline_inputs'] = True
         for role in ('path', 'shape'):
             source = _curve_source(ob, role)
             name = role.title()
@@ -351,15 +406,50 @@ def _sync_sources(ob):
 @persistent
 def _sync_splines(scene, depsgraph=None):
     # Run before evaluation so viewport and render both see the latest knots.
-    for ob in list(scene.objects):
-        if ob.max_loft.enabled:
-            _sync_sources(ob)
-    for proxy in list(scene.objects):
-        if 'max_loft_owner' in proxy and proxy.get('max_loft_owner') is None:
-            data = proxy.data
-            bpy.data.objects.remove(proxy, do_unlink=True)
-            if data.users == 0:
-                bpy.data.curves.remove(data)
+    global _handling
+    if _syncing or _handling:
+        return
+    _handling = True
+    try:
+        for ob in list(scene.objects):
+            if ob.max_loft.enabled:
+                _sync_sources(ob)
+        for proxy in list(bpy.data.objects):
+            if 'max_loft_owner' not in proxy:
+                continue
+            owner = proxy.get('max_loft_owner')
+            if owner is None or not owner.users_scene:
+                data = proxy.data
+                bpy.data.objects.remove(proxy, do_unlink=True)
+                if data.users == 0:
+                    bpy.data.curves.remove(data)
+    finally:
+        _handling = False
+
+
+def source_error(ob, depsgraph=None):
+    """Read the evaluated spline validation, including empty GN results."""
+    depsgraph = depsgraph or bpy.context.evaluated_depsgraph_get()
+    for role in ('path', 'shape'):
+        proxy = getattr(ob.max_loft, role + '_curve')
+        if proxy is None:
+            return role.title() + ': missing spline source'
+        evaluated = proxy.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        try:
+            flag = mesh.attributes.get('max_loft_invalid') if mesh else None
+            if flag is None or any(v.value for v in flag.data):
+                return role.title() + ': modifier stack must yield one spline without surface faces'
+        finally:
+            evaluated.to_mesh_clear()
+    return ''
+
+
+@persistent
+def _load_splines(_):
+    # A loaded file may already have a cached depsgraph and orphan helpers
+    # from an older version, so cleanup cannot wait for a geometry edit.
+    _sync_splines(bpy.context.scene)
 
 
 def _update(self, context):
@@ -604,6 +694,11 @@ def draw_creation(layout, context):
     if is_loft(ob):
         layout.label(text='Path: ' + (ob.max_loft.path.name if ob.max_loft.path else '(missing)'))
         layout.label(text='Shape: ' + (ob.max_loft.shape.name if ob.max_loft.shape else '(missing)'))
+        error = source_error(ob)
+        if error:
+            layout.label(text='Cannot evaluate ' + error.split(':', 1)[0].lower() + ' spline', icon='ERROR')
+            layout.label(text='Modifier stack must yield one spline')
+            layout.label(text='Surface faces are unsupported')
 
 
 def draw_skin(layout, context):
@@ -642,11 +737,13 @@ def register_props():
     bpy.types.WindowManager.max_loft_mode = EnumProperty(items=MODES, default='INSTANCE')
     bpy.app.handlers.depsgraph_update_pre.append(_sync_splines)
     bpy.app.handlers.render_pre.append(_sync_splines)
+    bpy.app.handlers.load_post.append(_load_splines)
 
 
 def unregister_props():
     bpy.app.handlers.depsgraph_update_pre.remove(_sync_splines)
     bpy.app.handlers.render_pre.remove(_sync_splines)
+    bpy.app.handlers.load_post.remove(_load_splines)
     del bpy.types.WindowManager.max_loft_mode
     del bpy.types.WindowManager.max_loft_active
     del bpy.types.Object.max_loft

@@ -95,6 +95,8 @@ Only single Poly or Bezier splines can be picked.
 
 The Loft is a mesh with a Geometry Nodes modifier. Hidden spline copies evaluate the source modifiers without native bevel, extrusion or Line's rendering conversion. Object Info reads those modified splines and Curve to Mesh builds the skin. Source rendering stays unchanged. Get Shape creates it at the path. Get Path aligns the path's first tangent to the selected shape's local Z axis.
 
+Mixed Geometry Nodes and native deformers work in either stack order. Loft converts curves to wire geometry before native deformers and restores curves before Geometry Nodes. Empty results, surface meshes and multiple splines show an error in the Loft rollout. Deleting a Loft removes its hidden helpers. Undo restores them, and removing the Loft from one scene preserves them while another scene still uses it.
+
 ## Modifiers
 
 ### TurboSmooth
