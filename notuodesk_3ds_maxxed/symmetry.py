@@ -5,6 +5,7 @@ import bpy
 from bpy.app.handlers import persistent
 from bpy.props import EnumProperty, StringProperty
 from mathutils import Matrix, Vector
+from . import symmetry_nodes
 
 HELPER = 'max_symmetry_plane'
 STATE = 'max_symmetry_planes'
@@ -13,10 +14,74 @@ _draw_handle = None
 _enabled = False
 _busy = False
 
+_INPUTS = {'use_axis': 'Axes', 'use_bisect_flip_axis': 'Flips',
+           'slice': 'Slice', 'bisect_threshold': 'Slice Threshold',
+           'use_mirror_merge': 'Weld', 'weld': 'Weld',
+           'merge_threshold': 'Weld Threshold', 'proximity': 'Proximity',
+           'radial': 'Radial', 'count': 'Count', 'radial_axis': 'Radial Axis',
+           'mirror_symmetry': 'Mirror Symmetry', 'radial_flip': 'Radial Flip'}
+
+
+def raw(mod):
+    return mod.mod if isinstance(mod, Settings) else mod
+
+
+def plane(mod):
+    mod = raw(mod)
+    if mod.type == 'MIRROR':
+        return mod.mirror_object
+    return mod.node_group.nodes['Mirror frame'].inputs['Object'].default_value
+
+
+class Settings:
+    """Named parameters backed by saved native modifier sockets."""
+    def __init__(self, mod):
+        object.__setattr__(self, 'mod', raw(mod))
+
+    def path(self, key):
+        name = _INPUTS[key]
+        socket = next(s for s in self.mod.node_group.interface.items_tree
+                      if s.item_type == 'SOCKET' and s.in_out == 'INPUT' and s.name == name)
+        return socket.identifier
+
+    def __getattr__(self, key):
+        if key == 'mirror_object':
+            return plane(self.mod)
+        if key == 'use_bisect_axis':
+            return (self.slice,)*3
+        if key in _INPUTS:
+            return self.mod[self.path(key)]
+        return getattr(self.mod, key)
+
+    def __setattr__(self, key, value):
+        if key == 'use_bisect_axis':
+            self.slice = any(value)
+        elif key in _INPUTS:
+            if key in {'use_axis', 'use_bisect_flip_axis'}:
+                value = tuple(float(x) for x in value)
+            self.mod[self.path(key)] = value
+            self.mod.id_data.update_tag()
+        else:
+            setattr(self.mod, key, value)
+
+    def prop(self, layout, key, **kwargs):
+        layout.prop(self.mod, '["'+self.path(key)+'"]', **kwargs)
+
+
+def settings(mod):
+    return Settings(mod)
+
 
 def is_symmetry(mod):
-    return (mod is not None and mod.type == 'MIRROR'
-            and mod.mirror_object is not None and bool(mod.mirror_object.get(HELPER)))
+    mod = raw(mod)
+    if mod is not None and mod.type == 'NODES':
+        return bool(mod.node_group and mod.node_group.get(symmetry_nodes.MARKER))
+    if mod is None or mod.type != 'MIRROR':
+        return False
+    if mod.mirror_object is not None and mod.mirror_object.get(HELPER):
+        return True
+    uid = int(getattr(mod, 'persistent_uid', 0))
+    return bool(uid and any(rec.get('uid') == uid for rec in _records(mod.id_data).values()))
 
 
 def owner(context):
@@ -45,7 +110,7 @@ def _collection():
 
 
 def _remember(ob, mod):
-    plane = mod.mirror_object
+    plane = settings(mod).mirror_object
     records = _records(ob)
     record = dict(name=mod.name, matrix=_matrix_values(plane),
                   uid=int(getattr(mod, 'persistent_uid', 0)))
@@ -76,24 +141,51 @@ def _new_plane(ob, mod, token=None, matrix=None):
     plane.hide_render = True
     plane.hide_select = True
     plane.hide_set(True)
-    mod.mirror_object = plane
+    if raw(mod).type == 'MIRROR':
+        raw(mod).mirror_object = plane
+    else:
+        raw(mod).node_group.nodes['Mirror frame'].inputs['Object'].default_value = plane
     _remember(ob, mod)
     return plane
 
 
 def add(ob):
-    mod = ob.modifiers.new('Symmetry', 'MIRROR')
-    mod.use_axis = (True, False, False)
-    mod.use_bisect_axis = (True, True, True)
-    mod.use_bisect_flip_axis = (False, False, False)
-    mod.use_mirror_merge = True
-    mod.merge_threshold = .01
-    mod.bisect_threshold = .01
+    mod = ob.modifiers.new('Symmetry', 'NODES')
+    token = uuid.uuid4().hex
+    mod.node_group = symmetry_nodes.build(token)
     mod.show_in_editmode = True
     mod.show_on_cage = False
     mod.show_expanded = False
-    _new_plane(ob, mod)
+    _new_plane(ob, mod, token)
     ob.modifiers.active = mod
+    return mod
+
+
+def _upgrade(ob, old):
+    """Keep scenes saved by the earlier native-Mirror implementation usable."""
+    index, name = ob.modifiers.find(old.name), old.name
+    helper = old.mirror_object
+    values = {key: getattr(old, key) for key in
+              ('merge_threshold', 'bisect_threshold', 'use_mirror_merge')}
+    values['use_axis'] = tuple(old.use_axis)
+    values['use_bisect_flip_axis'] = tuple(old.use_bisect_flip_axis)
+    values['slice'] = any(old.use_bisect_axis)
+    values['proximity'] = True
+    display = {key: getattr(old, key) for key in
+               ('show_viewport', 'show_render', 'show_in_editmode', 'show_on_cage', 'show_expanded')}
+    mod = ob.modifiers.new('Symmetry migration', 'NODES')
+    mod.node_group = symmetry_nodes.build(helper['token'])
+    mod.node_group.nodes['Mirror frame'].inputs['Object'].default_value = helper
+    for key, value in values.items():
+        setattr(settings(mod), key, value)
+    for key, value in display.items():
+        setattr(mod, key, value)
+    active = ob.modifiers.active == old
+    ob.modifiers.remove(old)
+    mod.name = name
+    ob.modifiers.move(ob.modifiers.find(mod.name), index)
+    if active:
+        ob.modifiers.active = mod
     return mod
 
 
@@ -113,13 +205,14 @@ def leave(context):
 
 
 def enter(context, mod):
+    mod = raw(mod)
     leave(context)
     if context.object and context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
     ob = mod.id_data
     for selected in context.selected_objects:
         selected.select_set(False)
-    plane = mod.mirror_object
+    plane = settings(mod).mirror_object
     plane.hide_select = False
     plane.hide_set(False)
     plane.select_set(True)
@@ -142,24 +235,34 @@ def reconcile():
                 continue
             records = _records(ob)
             live_tokens = set()
-            for mod in ob.modifiers:
-                if mod.type != 'MIRROR':
+            for mod in list(ob.modifiers):
+                if not is_symmetry(mod):
                     continue
-                if is_symmetry(mod):
-                    plane = mod.mirror_object
+                current = settings(mod).mirror_object
+                if current is not None and current.get(HELPER):
+                    plane = current
                     if plane.get('owner') != ob or plane in used:
+                        if mod.type == 'NODES':
+                            mod.node_group = mod.node_group.copy()
+                            mod.node_group[symmetry_nodes.MARKER] = uuid.uuid4().hex
                         plane = _new_plane(ob, mod, matrix=plane.matrix_basis.copy())
                 else:
                     uid = int(getattr(mod, 'persistent_uid', 0))
                     match = next(((token, rec) for token, rec in records.items()
-                                  if rec.get('suspended') and
-                                  (rec.get('uid') == uid if uid and rec.get('uid')
+                                  if (rec.get('uid') == uid if uid and rec.get('uid')
                                    else rec['name'] == mod.name)), None)
                     if match is None:
+                        # The native node group retains Symmetry identity even
+                        # after the user deletes all helper scene data.
+                        plane = _new_plane(ob, mod)
+                        used.add(plane)
+                        live_tokens.add(plane['token'])
                         continue
                     token, rec = match
                     values = rec['matrix']
                     plane = _new_plane(ob, mod, token, Matrix([values[i:i+4] for i in range(0, 16, 4)]))
+                if mod.type == 'MIRROR':
+                    mod = _upgrade(ob, mod)
                 used.add(plane)
                 live_tokens.add(plane['token'])
                 _remember(ob, mod)
@@ -181,6 +284,9 @@ def reconcile():
         collection = _collection()
         if collection and not collection.objects:
             bpy.data.collections.remove(collection)
+        for group in list(bpy.data.node_groups):
+            if group.get(symmetry_nodes.MARKER) and group.users == 0:
+                bpy.data.node_groups.remove(group)
     finally:
         _busy = False
 
@@ -232,26 +338,32 @@ def draw_stack(layout, context, ob):
             row = box.row(align=True)
             row.label(text='', icon='BLANK1')
             op = row.operator('max.symmetry_action', text='Mirror',
-                              depress=(context.active_object == mod.mirror_object))
+                              depress=(context.active_object == plane(mod)))
             op.name, op.action = mod.name, 'MIRROR'
     return True
 
 
 def draw(layout, ob, mod):
+    mod = settings(mod)
     layout.use_property_split = False
     layout.use_property_decorate = False
     row = layout.row(align=True)
-    row.menu('MAX_MT_symmetry_type', text='Planar')
+    row.menu('MAX_MT_symmetry_type', text='Radial' if mod.radial else 'Planar')
     box = layout.box().column(align=True)
     box.label(text='Mirror Axis:')
     for i, axis in enumerate('XYZ'):
         row = box.row(align=True)
         split = row.split(factor=.52, align=True)
-        split.prop(mod, 'use_axis', index=i, text=axis, emboss=False,
-                   icon='RADIOBUT_ON' if mod.use_axis[i] else 'RADIOBUT_OFF')
-        sub = split.row(align=True)
-        sub.enabled = mod.use_axis[i]
-        sub.prop(mod, 'use_bisect_flip_axis', index=i, text='Flip')
+        selected = mod.radial_axis == i if mod.radial else mod.use_axis[i]
+        op = split.operator('max.symmetry_action', text=axis, emboss=False,
+                            icon='RADIOBUT_ON' if selected else 'RADIOBUT_OFF')
+        op.name, op.action = mod.name, 'AXIS_'+axis
+        if not mod.radial:
+            sub = split.row(align=True)
+            sub.enabled = bool(mod.use_axis[i])
+            op = sub.operator('max.symmetry_action', text='Flip', emboss=False,
+                              icon='CHECKBOX_HLT' if mod.use_bisect_flip_axis[i] else 'CHECKBOX_DEHLT')
+            op.name, op.action = mod.name, 'FLIP_'+axis
     row = layout.row(align=True)
     op = row.operator('max.symmetry_pick', text='Align to Face')
     op.name, op.kind = mod.name, 'FACE'
@@ -261,6 +373,18 @@ def draw(layout, ob, mod):
     op.name, op.kind = mod.name, 'OBJECT'
     box = layout.box().column(align=True)
     box.label(text='Symmetry Options:')
+    if mod.radial:
+        row = box.row(align=True)
+        split = row.split(factor=.55, align=True)
+        label = split.row()
+        label.alignment = 'RIGHT'
+        label.label(text='Count:')
+        mod.prop(split, 'count', text='')
+        row = box.row(align=True)
+        mod.prop(row, 'mirror_symmetry', text='Mirror Symmetry')
+        sub = row.row(align=True)
+        sub.enabled = mod.mirror_symmetry
+        mod.prop(sub, 'radial_flip', text='Flip')
     # Slice is one switch in Max, independent of which axes are enabled.
     op = box.operator('max.symmetry_action', text='Slice Along Mirror', emboss=False,
                       icon='CHECKBOX_HLT' if any(mod.use_bisect_axis) else 'CHECKBOX_DEHLT')
@@ -273,26 +397,27 @@ def draw(layout, ob, mod):
         label = split.row()
         label.alignment = 'RIGHT'
         label.label(text='Threshold:')
-        split.prop(mod, prop, text='')
+        mod.prop(split, prop, text='')
 
     spinner('bisect_threshold', any(mod.use_bisect_axis))
-    box.prop(mod, 'use_mirror_merge', text='Weld Seam')
+    mod.prop(box, 'use_mirror_merge', text='Weld Seam')
     spinner('merge_threshold', mod.use_mirror_merge)
-    row = box.row()
-    row.enabled = False
-    row.label(text='Use Proximity Weld', icon='CHECKBOX_HLT')
-    box.label(text='Mirror uses proximity welding.')
+    mod.prop(box, 'proximity', text='Use Proximity Weld')
 
 
 class MAX_MT_symmetry_type(bpy.types.Menu):
     bl_label = 'Symmetry Type'
 
     def draw(self, context):
-        self.layout.label(text='Planar', icon='RADIOBUT_ON')
-        row = self.layout.row()
-        row.enabled = False
-        row.label(text='Radial', icon='RADIOBUT_OFF')
-        self.layout.label(text='Radial needs a separate geometry engine.')
+        ob = owner(context)
+        mod = ob.modifiers.active if ob else None
+        if not is_symmetry(mod):
+            return
+        for action in ('PLANAR', 'RADIAL'):
+            active = settings(mod).radial == (action == 'RADIAL')
+            op = self.layout.operator('max.symmetry_action', text=action.title(),
+                                      icon='RADIOBUT_ON' if active else 'RADIOBUT_OFF')
+            op.name, op.action = mod.name, action
 
 
 class MAX_OT_symmetry_action(bpy.types.Operator):
@@ -302,13 +427,15 @@ class MAX_OT_symmetry_action(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     name: StringProperty()
     action: EnumProperty(items=[(x, x.title(), '') for x in
-                         ('MIRROR', 'EXPAND', 'RESET', 'SLICE', 'REMOVE', 'APPLY', 'UP', 'DOWN')])
+                         ('MIRROR', 'EXPAND', 'RESET', 'SLICE', 'REMOVE', 'APPLY', 'UP', 'DOWN',
+                          'PLANAR', 'RADIAL', 'AXIS_X', 'AXIS_Y', 'AXIS_Z', 'FLIP_X', 'FLIP_Y', 'FLIP_Z')])
 
     def execute(self, context):
         ob = owner(context)
         mod = ob.modifiers.get(self.name) if ob else None
         if not is_symmetry(mod):
             return {'CANCELLED'}
+        mod = settings(mod)
         if self.action == 'MIRROR':
             if context.active_object == mod.mirror_object:
                 leave(context)
@@ -327,10 +454,26 @@ class MAX_OT_symmetry_action(bpy.types.Operator):
             leave(context)
             if self.action == 'APPLY':
                 with context.temp_override(object=ob, active_object=ob):
-                    bpy.ops.object.modifier_apply(modifier=mod.name)
+                    if bpy.ops.object.modifier_apply(modifier=mod.name) != {'FINISHED'}:
+                        return {'CANCELLED'}
             else:
-                ob.modifiers.remove(mod)
+                ob.modifiers.remove(raw(mod))
             reconcile()
+        elif self.action in {'PLANAR', 'RADIAL'}:
+            mod.radial = self.action == 'RADIAL'
+        elif self.action.startswith('AXIS_'):
+            axis = 'XYZ'.index(self.action[-1])
+            if mod.radial:
+                mod.radial_axis = axis
+            else:
+                axes = list(mod.use_axis)
+                axes[axis] = not axes[axis]
+                mod.use_axis = axes
+        elif self.action.startswith('FLIP_'):
+            axis = 'XYZ'.index(self.action[-1])
+            flips = list(mod.use_bisect_flip_axis)
+            flips[axis] = not flips[axis]
+            mod.use_bisect_flip_axis = flips
         else:
             index = ob.modifiers.find(mod.name)
             target = index + (-1 if self.action == 'UP' else 1)
@@ -377,10 +520,11 @@ class MAX_OT_symmetry_pick(bpy.types.Operator):
                 mod = self._owner.modifiers.get(self.name)
                 if not is_symmetry(mod):
                     return {'CANCELLED'}
+                mod = settings(mod)
                 if self.kind == 'OBJECT':
                     mod.mirror_object.matrix_world = target.matrix_world.copy()
                 else:
-                    axis = next((i for i, enabled in enumerate(mod.use_axis) if enabled), 0)
+                    axis = mod.radial_axis if mod.radial else next((i for i, enabled in enumerate(mod.use_axis) if enabled), 0)
                     rotation = Vector(tuple(1 if i == axis else 0 for i in range(3))).rotation_difference(normal)
                     mod.mirror_object.matrix_world = Matrix.Translation(point) @ rotation.to_matrix().to_4x4()
                 return {'FINISHED'}
@@ -394,16 +538,33 @@ def _draw_plane():
         return
     plane = context.active_object
     ob = owner(context)
-    mod = next((m for m in ob.modifiers if is_symmetry(m) and m.mirror_object == plane), None) if ob else None
+    mod = next((m for m in ob.modifiers if is_symmetry(m) and settings(m).mirror_object == plane), None) if ob else None
     if mod is None:
         return
+    mod = settings(mod)
     import gpu
     from gpu_extras.batch import batch_for_shader
     size = max((Vector(c).length for c in ob.bound_box), default=1) * .65
     size = max(size, .25)
     vertices = []
+    if mod.radial:
+        import math
+        axis = mod.radial_axis
+        a, b = [i for i in range(3) if i != axis]
+        for i in range(64):
+            for angle in (math.tau*i/64, math.tau*(i+1)/64):
+                p = Vector((0, 0, 0))
+                p[a], p[b] = math.cos(angle)*size, math.sin(angle)*size
+                vertices.append(plane.matrix_world @ p)
+        for i in range(mod.count):
+            p = Vector((0, 0, 0))
+            p[a], p[b] = math.cos(math.tau*i/mod.count)*size, math.sin(math.tau*i/mod.count)*size
+            vertices.extend((plane.matrix_world.translation, plane.matrix_world @ p))
+        p = Vector((0, 0, 0))
+        p[axis] = size
+        vertices.extend((plane.matrix_world @ -p, plane.matrix_world @ p))
     for axis, enabled in enumerate(mod.use_axis):
-        if not enabled:
+        if mod.radial or not enabled:
             continue
         a, b = [i for i in range(3) if i != axis]
         corners = []
@@ -471,15 +632,5 @@ def unregister():
     if _draw_handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_draw_handle, 'WINDOW')
         _draw_handle = None
-    for ob in bpy.data.objects:
-        if ob.type == 'MESH' and STATE in ob:
-            records = _records(ob)
-            for record in records.values():
-                record['suspended'] = True
-            ob[STATE] = records
-    for plane in list(bpy.data.objects):
-        if plane.get(HELPER):
-            bpy.data.objects.remove(plane, do_unlink=True)
-    collection = _collection()
-    if collection and not collection.objects:
-        bpy.data.collections.remove(collection)
+    # These are native scene dependencies, not runtime registrations. Keeping
+    # them makes render, export and editing evaluate identically while disabled.

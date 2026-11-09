@@ -35,7 +35,7 @@ class SymmetryTests(unittest.TestCase):
 
     def add(self):
         self.assertEqual(bpy.ops.max.add_modifier(kind='SYMMETRY|Symmetry'), {'FINISHED'})
-        mod = self.ob.modifiers.active
+        mod = symmetry.settings(self.ob.modifiers.active)
         self.assertTrue(symmetry.is_symmetry(mod))
         return mod
 
@@ -62,7 +62,9 @@ class SymmetryTests(unittest.TestCase):
         for axis in range(3):
             m.use_axis = [i == axis for i in range(3)]
             for flip in (False, True):
-                m.use_bisect_flip_axis[axis] = flip
+                flips = list(m.use_bisect_flip_axis)
+                flips[axis] = flip
+                m.use_bisect_flip_axis = flips
                 coords, _ = evaluated(self.ob)
                 extent = max(abs(v[axis]) for v in coords)
                 self.assertAlmostEqual(extent, 1 - (.4, .3, .2)[axis] if flip else 1 + (.4, .3, .2)[axis], places=5)
@@ -75,6 +77,7 @@ class SymmetryTests(unittest.TestCase):
 
     def test_weld_threshold(self):
         m = self.add()
+        m.proximity = True
         m.use_bisect_axis = (False, False, False)
         for v in self.ob.data.vertices:
             v.co.x = .003 if v.co.x < 0 else 1
@@ -126,7 +129,7 @@ class SymmetryTests(unittest.TestCase):
         m = self.add()
         plane = m.mirror_object
         name = plane.name
-        self.ob.modifiers.remove(m)
+        self.ob.modifiers.remove(symmetry.raw(m))
         symmetry.reconcile()
         self.assertNotIn(name, bpy.data.objects)
         m = self.add()
@@ -141,7 +144,7 @@ class SymmetryTests(unittest.TestCase):
         m = self.add()
         self.assertFalse(other.hide_render)
         self.assertNotIn(m.mirror_object.name, other.objects)
-        self.ob.modifiers.remove(m)
+        self.ob.modifiers.remove(symmetry.raw(m))
         symmetry.reconcile()
         self.assertIn(other.name, bpy.data.collections)
         bpy.data.collections.remove(other)
@@ -155,7 +158,7 @@ class SymmetryTests(unittest.TestCase):
         before = evaluated(self.ob)
         symmetry.reconcile()
         addon_utils.disable('notuodesk_3ds_maxxed', default_set=False)
-        self.assertFalse(any(ob.get(symmetry.HELPER) for ob in bpy.data.objects))
+        self.assertEqual(before, evaluated(self.ob))
         addon_utils.enable('notuodesk_3ds_maxxed', default_set=True)
         symmetry.reconcile()
         self.assertTrue(symmetry.is_symmetry(a))
@@ -177,7 +180,7 @@ class SymmetryTests(unittest.TestCase):
         bpy.ops.wm.save_as_mainfile(filepath=path, check_existing=False)
         bpy.ops.wm.open_mainfile(filepath=path)
         self.ob = bpy.data.objects['SymmetryFixture']
-        m = self.ob.modifiers[0]
+        m = symmetry.settings(self.ob.modifiers[0])
         self.assertTrue(symmetry.is_symmetry(m))
         self.assertEqual(tuple(m.use_axis), (False, True, True))
         self.assertAlmostEqual(m.merge_threshold, .025)
@@ -191,7 +194,7 @@ class SymmetryTests(unittest.TestCase):
         copy.data = self.ob.data.copy()
         bpy.context.collection.objects.link(copy)
         symmetry.reconcile()
-        other = copy.modifiers[0]
+        other = symmetry.settings(copy.modifiers[0])
         self.assertTrue(symmetry.is_symmetry(other))
         self.assertNotEqual(m.mirror_object, other.mirror_object)
         self.assertEqual(other.mirror_object.parent, copy)
@@ -229,7 +232,7 @@ class SymmetryTests(unittest.TestCase):
     def test_new_scene_helper_and_plain_mirror_stays_plain(self):
         m = self.add()
         uid = int(getattr(m, 'persistent_uid', 0))
-        self.ob.modifiers.remove(m)
+        self.ob.modifiers.remove(symmetry.raw(m))
         plain = self.ob.modifiers.new('Symmetry', 'MIRROR')
         symmetry.reconcile()
         if uid:
@@ -250,10 +253,10 @@ class SymmetryTests(unittest.TestCase):
         bpy.ops.ed.undo_push(message='Symmetry after plane move')
         bpy.ops.ed.undo()
         self.ob = bpy.data.objects['SymmetryFixture']
-        self.assertAlmostEqual(self.ob.modifiers[0].mirror_object.location.x, 0)
+        self.assertAlmostEqual(symmetry.plane(self.ob.modifiers[0]).location.x, 0)
         bpy.ops.ed.redo()
         self.ob = bpy.data.objects['SymmetryFixture']
-        self.assertAlmostEqual(self.ob.modifiers[0].mirror_object.location.x, .7)
+        self.assertAlmostEqual(symmetry.plane(self.ob.modifiers[0]).location.x, .7)
         bpy.ops.ed.undo_push(message='Before remove')
         bpy.ops.object.modifier_remove(modifier=self.ob.modifiers[0].name)
         symmetry.reconcile()
@@ -263,7 +266,7 @@ class SymmetryTests(unittest.TestCase):
         self.ob = bpy.data.objects['SymmetryFixture']
         symmetry.reconcile()
         self.assertTrue(symmetry.is_symmetry(self.ob.modifiers[0]))
-        self.assertAlmostEqual(self.ob.modifiers[0].mirror_object.location.x, .7)
+        self.assertAlmostEqual(symmetry.plane(self.ob.modifiers[0]).location.x, .7)
 
 
 if __name__ == '__main__':

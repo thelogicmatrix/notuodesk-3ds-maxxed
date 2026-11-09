@@ -581,16 +581,20 @@ class MAX_OT_object_cmd(Operator):
 
     def run(self, context, how):
         c = self.cmd
+        from . import symmetry
+        symmetry.leave(context)
         if context.mode != "OBJECT" and c not in {"ISOLATE", "MIRROR"}:
             bpy.ops.object.mode_set(mode="OBJECT")
             context.window_manager.max_sublevel = 0
         sel = context.selected_objects
         try:
             if c == "CONVERT_POLY":
-                bpy.ops.object.convert(target="MESH")
+                if bpy.ops.object.convert(target="MESH") != {"FINISHED"}:
+                    return {"CANCELLED"}
                 for ob in context.selected_objects:
                     if ob.type == "MESH":
                         ob.max_prim.kind = ""
+                symmetry.reconcile()
             elif c == "CONVERT_SPLINE":
                 bpy.ops.object.convert(target="CURVE")
                 from . import poly_tools
