@@ -11,7 +11,7 @@ LEVEL_ACTIONS = {
         "DELETE_ISOLATED", "REMOVE_UNUSED_MAP"),
     2: ("INSERT_VERTEX", "REMOVE", "SPLIT", "EXTRUDE", "WELD", "CHAMFER", "TARGET_WELD",
         "BRIDGE", "CONNECT", "CREATE_SHAPE"),
-    3: ("EXTRUDE", "INSERT_VERTEX", "CHAMFER", "CAP", "BRIDGE", "CONNECT", "CREATE_SHAPE"),
+    3: ("EXTRUDE", "INSERT_VERTEX", "CHAMFER", "CAP", "TARGET_WELD", "BRIDGE", "CONNECT", "CREATE_SHAPE"),
     4: ("INSERT_VERTEX", "EXTRUDE", "OUTLINE", "BEVEL", "INSET", "BRIDGE", "FLIP",
         "HINGE", "SPLINE_EXTRUDE", "EDIT_TRIANGULATION", "RETRIANGULATE", "TURN"),
     5: ("INSERT_VERTEX", "FLIP", "EDIT_TRIANGULATION", "RETRIANGULATE", "TURN"),
@@ -33,7 +33,11 @@ def button(layout, action, text=None):
         row.operator("max.poly_unavailable", text=label).reason = ep.UNSUPPORTED[action]
     else:
         row.operator_context = "EXEC_DEFAULT"
-        row.operator("max.edit_poly", text=label).op = action
+        if action == "TARGET_WELD":
+            from .target_weld import is_active
+            row.operator("max.edit_poly", text=label, depress=is_active(bpy.context)).op = action
+        else:
+            row.operator("max.edit_poly", text=label).op = action
     if action in ep.CADDIES:
         sub = row.row(align=True)
         sub.operator_context = "INVOKE_DEFAULT"
@@ -44,6 +48,20 @@ def grid(layout, actions):
     flow = layout.grid_flow(row_major=True, columns=2, even_columns=True, align=True)
     for action in actions:
         button(flow, action)
+
+
+def radios(layout, data, key):
+    row = layout.row(align=True)
+    row.emboss = "NONE"
+    for item in data.bl_rna.properties[key].enum_items:
+        row.prop_enum(data, key, item.identifier, text=item.name,
+                      icon="RADIOBUT_ON" if getattr(data, key) == item.identifier else "RADIOBUT_OFF")
+
+
+def spinner(layout, data, key):
+    row = layout.row(align=True)
+    row.label(text=data.bl_rna.properties[key].name + ":")
+    row.prop(data, key, text="")
 
 
 def selection(layout, context):
@@ -69,7 +87,7 @@ def selection(layout, context):
     button(row, "SHRINK")
     button(row, "GROW")
     row = col.row(align=True)
-    row.enabled = level == 2
+    row.enabled = level in (2, 3)
     for action in ("RING", "LOOP"):
         sub = row.row(align=True)
         button(sub, action)
@@ -79,7 +97,7 @@ def selection(layout, context):
     col.label(text="Preview Selection")
     row = col.row(align=True)
     row.enabled = False
-    row.prop(p, "preview", expand=True)
+    radios(row, p, "preview")
     if level == 3:
         button(col, "OPEN_EDGES")
     if level == 0:
@@ -120,12 +138,15 @@ def soft_selection(layout, context):
     row = col.row(align=True)
     row.enabled = False
     row.prop(p, "affect_backfacing")
-    col.prop(p, "falloff")
+    spinner(col, p, "falloff")
     row = col.row(align=True)
     row.enabled = False
     row.prop(p, "pinch")
     row.prop(p, "bubble")
     col.prop(p, "falloff_curve")
+    row = col.row(align=True)
+    row.enabled = False
+    row.prop(p, "shaded_faces")
 
 
 def edit_level(layout, context):
@@ -165,6 +186,16 @@ def edit_level(layout, context):
         row.prop(p, "crease")
         row.operator("max.poly_weight", text="Set").crease = True
     if level in (2, 3):
+        if level == 2:
+            row = layout.row(align=True)
+            row.enabled = False
+            spinner(row, context.active_object.max_poly, "depth")
+            row = layout.row(align=True)
+            unavailable(row, "Hard", "Max's automatic smoothing-group reassignment for hard edges is not implemented")
+            unavailable(row, "Smooth", "Max's automatic smoothing-group reassignment for smooth edges is not implemented")
+            row = layout.row(align=True)
+            row.enabled = False
+            row.prop(context.active_object.max_poly, "display_hard_edges")
         grid(layout, ("EDIT_TRIANGULATION", "TURN"))
 
 
@@ -174,7 +205,7 @@ def geometry(layout, context):
     layout.label(text="Constraints")
     row = layout.row(align=True)
     row.enabled = False
-    row.prop(context.active_object.max_poly, "constraints", expand=True)
+    radios(row, context.active_object.max_poly, "constraints")
     row = layout.row(align=True)
     row.prop(context.tool_settings, "use_transform_correct_face_attributes", text="Preserve UVs")
     unavailable(row, "...", "Blender cannot choose preserved map channels per transform")
@@ -220,8 +251,10 @@ def geometry(layout, context):
     col.enabled = level > 0
     col.label(text="Named Selections")
     grid(col, ("COPY_SELECTION", "PASTE_SELECTION"))
-    if level in (2, 3, 4, 5):
-        button(col, "DELETE_ISOLATED")
+    layout.prop(context.active_object.max_poly, "delete_isolated")
+    row = layout.row(align=True)
+    row.enabled = False
+    row.prop(context.active_object.max_poly, "full_interactivity")
 
 
 def material_ids(layout, context):
@@ -252,6 +285,7 @@ def smoothing_groups(layout, context):
     row = layout.row(align=True)
     row.operator("max.poly_smoothing", text="Auto Smooth").action = "AUTO"
     row.prop(context.active_object.max_poly, "auto_angle", text="")
+    layout.prop(context.active_object.max_poly, "sg_clear_selection")
 
 
 def subdivision(layout, context):
@@ -263,6 +297,29 @@ def subdivision(layout, context):
     row.prop(p, "smoothness")
 
 
+def vertex_colors(layout, context):
+    layout.enabled = False
+    p = context.active_object.max_poly
+    for key in ("vertex_color", "illumination", "alpha"):
+        spinner(layout, p, key)
+
+
+def displacement(layout, context):
+    layout.enabled = False
+    p = context.active_object.max_poly
+    layout.prop(p, "use_displacement")
+    layout.prop(p, "split_mesh")
+
+
+def paint_deformation(layout, context):
+    layout.enabled = False
+    p = context.active_object.max_poly
+    radios(layout, p, "paint_mode")
+    for key in ("paint_value", "brush_size", "brush_strength"):
+        spinner(layout, p, key)
+    layout.prop(p, "paint_direction")
+
+
 def install(rollout, when, is_poly):
     rollout("Soft Selection", {"MODIFY"}, 5, closed=True)(when(is_poly)(soft_selection))
     for level, label in ((1, "Edit Vertices"), (2, "Edit Edges"), (3, "Edit Borders"), (4, "Edit Polygons"), (5, "Edit Elements")):
@@ -270,6 +327,8 @@ def install(rollout, when, is_poly):
             edit_level(layout, context)
         draw.__name__ = "poly_level_" + str(level)
         rollout(label, {"MODIFY"}, 6)(when(lambda c, n=level: is_poly(c) and current_level(c) == n)(draw))
-    for label, fn in (("Polygon: Material IDs", material_ids), ("Polygon: Smoothing Groups", smoothing_groups)):
+    for label, fn in (("Polygon: Material IDs", material_ids), ("Polygon: Smoothing Groups", smoothing_groups), ("Polygon: Vertex Colors", vertex_colors)):
         rollout(label, {"MODIFY"}, 8, closed=True)(when(lambda c: is_poly(c) and current_level(c) in (4, 5))(fn))
     rollout("Subdivision Surface", {"MODIFY"}, 8, closed=True)(when(is_poly)(subdivision))
+    rollout("Subdivision Displacement", {"MODIFY"}, 9, closed=True)(when(is_poly)(displacement))
+    rollout("Paint Deformation", {"MODIFY"}, 10, closed=True)(when(is_poly)(paint_deformation))

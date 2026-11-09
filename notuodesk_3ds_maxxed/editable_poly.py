@@ -20,7 +20,7 @@ def is_nurms(mod):
 EXTRA_OPS = [
     ("INSERT_VERTEX", "Insert Vertex", "Subdivide selected edges or poke selected faces"),
     ("SPLIT", "Split", "Split selected edges from adjacent faces"),
-    ("DELETE_ISOLATED", "Delete Isolated Vertices", "Delete vertices with no edges"),
+    ("DELETE_ISOLATED", "Delete Isolated Vertices", "Delete vertices not used by polygons"),
     ("REMOVE_UNUSED_MAP", "Remove Unused Map Verts", "Blender stores UVs per face corner and has no unused map vertices"),
     ("CREATE_SHAPE", "Create Shape From Selection", "Copy selected edges into a curve"),
     ("RETRIANGULATE", "Retriangulate", "Triangulate selected polygons"),
@@ -53,11 +53,11 @@ UNSUPPORTED = {
 }
 
 CADDIES = {
-    "EXTRUDE": ("extrusion_type", "amount", "base_width"), "WELD": ("threshold",),
+    "EXTRUDE": ("extrusion_type", "amount", "local_bias", "base_width"), "WELD": ("threshold",),
     "CHAMFER": ("amount", "segments", "open", "tension"),
-    "BRIDGE": ("segments", "taper", "bias", "smooth", "twist"),
+    "BRIDGE": ("segments", "taper", "bias", "smooth", "twist1", "twist2", "bridge_selection"),
     "CONNECT": ("segments", "pinch", "slide"),
-    "OUTLINE": ("amount",), "BEVEL": ("amount", "height"),
+    "OUTLINE": ("amount",), "BEVEL": ("bevel_type", "height", "amount", "local_bias"),
     "INSET": ("amount", "individual"), "HINGE": (), "SPLINE_EXTRUDE": (),
     "MSMOOTH": ("smoothness",), "TESSELLATE": ("tessellate_type", "tension"),
     "RELAX": ("relax", "iterations", "hold_boundary", "hold_outer"), "DETACH": ("object_name", "as_clone", "as_element"),
@@ -70,6 +70,8 @@ def option_properties():
         "amount": FloatProperty(name="Amount", default=0.1),
         "height": FloatProperty(name="Height", default=0.1),
         "extrusion_type": EnumProperty(name="Extrusion Type", items=[("GROUP", "Group", ""), ("LOCAL", "Local Normal", ""), ("POLYGON", "By Polygon", "")]),
+        "bevel_type": EnumProperty(name="Bevel Type", items=[("GROUP", "Group", ""), ("LOCAL", "Local Normal", ""), ("POLYGON", "By Polygon", "")]),
+        "local_bias": FloatProperty(name="Bias", default=0, description="Blender has no Max Local Normal Bias solver"),
         "base_width": FloatProperty(name="Extrusion Base Width", default=0, description="Blender extrusion has no base-width parameter"),
         "tessellate_type": EnumProperty(name="Type", items=[("EDGE", "Edge", ""), ("FACE", "Face", "")]),
         "threshold": FloatProperty(name="Weld Threshold", min=0, default=0.0001),
@@ -80,6 +82,9 @@ def option_properties():
         "bias": FloatProperty(name="Bias", default=0, min=-99, max=99),
         "smooth": FloatProperty(name="Smooth", default=45, min=0, max=180),
         "twist": IntProperty(name="Twist", default=0),
+        "twist1": IntProperty(name="Twist 1", default=0),
+        "twist2": IntProperty(name="Twist 2", default=0),
+        "bridge_selection": EnumProperty(name="Selection", description="Blender bridges the current selection. Max's caddy selection mode and pick controls are not implemented", items=[("SELECTION", "Use Polygon/Border Selection", "Blender uses the current selection and has no Max caddy selection mode"), ("PICK", "Use Specific Polygons/Borders", "Blender has no Max bridge caddy border picker")]),
         "pinch": FloatProperty(name="Pinch", default=0, min=-100, max=100, description="Blender subdivision has no Max Connect Pinch spacing solver"),
         "slide": FloatProperty(name="Slide", default=0, min=-100, max=100, description="Blender subdivision has no Max Connect Slide spacing solver"),
         "smoothness": FloatProperty(name="Smoothness", default=1, min=0, max=1),
@@ -184,7 +189,12 @@ class MaxPolyState(PropertyGroup):
     affect_backfacing: BoolProperty(name="Affect Backfacing", default=True, description="Blender proportional editing has no backface influence filter")
     pinch: FloatProperty(name="Pinch", description="Blender uses preset curves rather than Max's Pinch parameter")
     bubble: FloatProperty(name="Bubble", description="Blender uses preset curves rather than Max's Bubble parameter")
-    falloff: FloatProperty(name="Falloff", default=1, min=0.00001, update=soft_update)
+    falloff: FloatProperty(name="Falloff", default=20, min=0.00001, update=soft_update)
+    shaded_faces: BoolProperty(name="Shaded Faces", description="Blender proportional editing does not draw Max's soft-selection face gradient")
+    delete_isolated: BoolProperty(name="Delete Isolated Vertices", default=True, description="Remove vertices not used by polygons after Delete or Remove")
+    full_interactivity: BoolProperty(name="Full Interactivity", default=True, description="Blender does not expose Max's deferred mesh evaluation mode")
+    depth: FloatProperty(name="Depth", description="Blender crease attributes have no Max crease depth control")
+    display_hard_edges: BoolProperty(name="Display Hard Edges", description="Blender has no separate Max hard-edge display mode")
     falloff_curve: EnumProperty(name="Falloff Curve", items=[(v, n, "") for v, n in (
         ("SMOOTH", "Smooth"), ("SPHERE", "Sphere"), ("ROOT", "Root"),
         ("INVERSE_SQUARE", "Inverse Square"), ("SHARP", "Sharp"), ("LINEAR", "Linear"), ("CONSTANT", "Constant"))], update=soft_update)
@@ -194,6 +204,7 @@ class MaxPolyState(PropertyGroup):
     material_id: IntProperty(name="Set ID", min=1, max=32767, default=1)
     select_id: IntProperty(name="Select ID", min=1, max=32767, default=1)
     clear_selection: BoolProperty(name="Clear Selection", default=True)
+    sg_clear_selection: BoolProperty(name="Clear Selection", default=True)
     material_name: EnumProperty(name="Select by Name", items=lambda self, c: material_items(self, c))
     sg_select: IntProperty(name="Smoothing Group", min=1, max=32, default=1)
     auto_angle: FloatProperty(name="Threshold", default=45, min=0, max=180)
@@ -204,6 +215,16 @@ class MaxPolyState(PropertyGroup):
     smooth_result: BoolProperty(name="Smooth Result", default=True, update=subdiv_update)
     isoline: BoolProperty(name="Isoline Display", update=subdiv_update)
     iterations: IntProperty(name="Iterations", default=1, min=0, max=6, update=subdiv_update)
+    vertex_color: bpy.props.FloatVectorProperty(name="Color", subtype="COLOR", size=3, default=(1, 1, 1), min=0, max=1, description="Max vertex color editing is not mapped to a Blender color attribute")
+    illumination: bpy.props.FloatVectorProperty(name="Illumination", subtype="COLOR", size=3, default=(1, 1, 1), min=0, max=1, description="Blender has no Max vertex illumination channel")
+    alpha: FloatProperty(name="Alpha", default=100, min=0, max=100, description="Max vertex alpha editing is not mapped to a Blender attribute")
+    use_displacement: BoolProperty(name="Use Displacement", description="Blender has no Max subdivision displacement approximation")
+    split_mesh: BoolProperty(name="Split Mesh", default=True, description="Blender has no Max subdivision displacement Split Mesh option")
+    paint_mode: EnumProperty(name="Paint Deformation", items=[(v, n, "Max Paint Deformation is not mapped to Blender sculpt mode") for v,n in (("PUSH", "Push/Pull"), ("RELAX", "Relax"), ("REVERT", "Revert"))])
+    paint_value: FloatProperty(name="Push/Pull Value", description="Max Paint Deformation is unavailable in mesh Edit mode")
+    brush_size: FloatProperty(name="Brush Size", min=0, description="Max Paint Deformation is unavailable in mesh Edit mode")
+    brush_strength: FloatProperty(name="Brush Strength", min=0, description="Max Paint Deformation is unavailable in mesh Edit mode")
+    paint_direction: EnumProperty(name="Push/Pull Direction", items=[("ORIGINAL", "Original Normals", "Max Paint Deformation is not mapped to Blender sculpt mode")])
 
 
 def material_items(self, context):
@@ -234,19 +255,29 @@ class MAX_OT_poly_settings(Operator):
         from .operators import EDIT_POLY_OPS, current_level
         self.layout.label(text=dict((k, n) for k, n, _ in EDIT_POLY_OPS)[self.action])
         for key in CADDIES[self.action]:
+            if key == "local_bias" and not ((self.action == "BEVEL" and self.bevel_type == "LOCAL") or (self.action == "EXTRUDE" and current_level(context) >= 4 and self.extrusion_type == "LOCAL")):
+                continue
             if self.action == "EXTRUDE" and ((key == "extrusion_type" and current_level(context) < 4) or (key == "base_width" and current_level(context) >= 4)):
                 continue
-            if self.action == "BRIDGE" and current_level(context) == 2 and key not in {"segments", "smooth"}:
+            if self.action == "BRIDGE" and current_level(context) == 2 and key not in {"segments", "smooth", "bridge_selection"}:
                 continue
             row = self.layout.row()
             # Connect has no native Max pinch/slide spacing control.
-            if (self.action == "CONNECT" and key in {"pinch", "slide"}) or key == "base_width":
+            if (self.action == "CONNECT" and key in {"pinch", "slide"}) or key in {"base_width", "bridge_selection", "local_bias"}:
                 row.enabled = False
-            label = "Extrusion Height" if self.action == "EXTRUDE" and key == "amount" else "Outline" if self.action == "BEVEL" and key == "amount" else "Amount" if key == "relax" else None
-            if label:
-                row.prop(self, key, text=label)
+            label = "Extrusion Height" if self.action == "EXTRUDE" and key == "amount" else "Outline Amount" if self.action == "BEVEL" and key == "amount" else "Amount" if key == "relax" else None
+            prop = self.properties.bl_rna.properties[key]
+            if prop.type in {"INT", "FLOAT"}:
+                row.label(text=(label or prop.name) + ":")
+                row.prop(self, key, text="")
             else:
                 row.prop(self, key)
+        if self.action == "BRIDGE":
+            from .editable_poly_ui import unavailable
+            name = "Edge" if current_level(context) == 2 else "Border" if current_level(context) == 3 else "Polygon"
+            row = self.layout.row(align=True)
+            for i in (1, 2):
+                unavailable(row, f"Pick {name} {i}", "Blender bridge uses the current selection and has no Max caddy picker")
         if self.action == "CONNECT":
             self.layout.label(text="Pinch and Slide require Max's edge spacing solver", icon="INFO")
         if self.action == "EXTRUDE" and current_level(context) < 4:
@@ -289,6 +320,13 @@ def update_mesh(context):
 
 def selected_vertices(bm):
     return [v for v in bm.verts if v.select and not v.hide]
+
+
+def cleanup_isolated(context):
+    if context.active_object.max_poly.delete_isolated:
+        bm = bmesh.from_edit_mesh(context.active_object.data)
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces and not v.hide], context="VERTS")
+        update_mesh(context)
 
 
 def flatten(context, normal):
@@ -365,6 +403,23 @@ def run(operator, context, how, operation_settings=None):
     """Return None for the legacy commands that need no new handling."""
     from .operators import mesh_select_mode
     action = operator.op
+    if action in {"CUT", "QUICK_SLICE", "TARGET_WELD"} and context.mode == "EDIT_MESH":
+        if action == "TARGET_WELD":
+            from .operators import current_level
+            if current_level(context) not in (1, 2, 3):
+                operator.report({"WARNING"}, "Target Weld is available at Vertex, Edge and Border levels")
+                return {"CANCELLED"}
+        if action == "TARGET_WELD" or how == "INVOKE_DEFAULT":
+            from .operators import viewport_override
+            override = viewport_override(context)
+            if override is None or override["region"] is None:
+                operator.report({"WARNING"}, "This tool requires a 3D viewport")
+                return {"CANCELLED"}
+            with context.temp_override(**override):
+                if action == "TARGET_WELD":
+                    return bpy.ops.max.target_weld("INVOKE_DEFAULT")
+                tool = bpy.ops.mesh.knife_tool if action == "CUT" else bpy.ops.mesh.bisect
+                return tool("INVOKE_DEFAULT")
     if context.mode == "OBJECT":
         if action not in OBJECT_ACTIONS:
             return {"CANCELLED"}
@@ -401,6 +456,12 @@ def run(operator, context, how, operation_settings=None):
                 result = bmesh.ops.extrude_discrete_faces(bm, faces=faces)
                 for face in result["faces"]:
                     bmesh.ops.translate(bm, verts=list(face.verts), vec=face.normal * s.amount)
+                for seq in (bm.faces, bm.edges, bm.verts):
+                    for item in seq:
+                        item.select_set(False)
+                for face in result["faces"]:
+                    face.select_set(True)
+                bm.select_flush_mode()
                 update_mesh(context)
                 return {"FINISHED"}
             if mode == "FACE":
@@ -454,7 +515,7 @@ def run(operator, context, how, operation_settings=None):
                                 todo.append(edge)
                 verts = {v for e in loop for v in e.verts}
                 centers.append(sum((v.co for v in verts), Vector()) / len(verts))
-            ops.bridge_edge_loops(number_cuts=s.segments - 1, twist_offset=s.twist,
+            ops.bridge_edge_loops(number_cuts=s.segments - 1, twist_offset=s.twist + s.twist2 - s.twist1,
                                   interpolation="LINEAR")
             if len(centers) == 2 and s.taper:
                 start, end = centers
@@ -502,8 +563,24 @@ def run(operator, context, how, operation_settings=None):
                     offset.normalize()
                     v.co += offset * s.amount / max(abs(offset.dot(normals[0])), 0.01)
         elif action == "BEVEL":
-            faces = [f for f in bm.faces if f.select]
-            bmesh.ops.inset_region(bm, faces=faces, thickness=-s.amount, depth=s.height, use_even_offset=True, use_boundary=True)
+            faces = [f for f in bm.faces if f.select and not f.hide]
+            if not faces:
+                return {"CANCELLED"}
+            if s.bevel_type == "POLYGON":
+                bmesh.ops.inset_individual(bm, faces=faces, thickness=-s.amount, depth=s.height, use_even_offset=True)
+            else:
+                normal = sum((f.normal for f in faces), Vector()).normalized()
+                bmesh.ops.inset_region(bm, faces=faces, thickness=-s.amount, depth=0, use_even_offset=True, use_boundary=True)
+                tops = set(faces)
+                for vert in {v for f in faces for v in f.verts}:
+                    direction = normal if s.bevel_type == "GROUP" else sum((f.normal for f in vert.link_faces if f in tops), Vector()).normalized()
+                    vert.co += direction * s.height
+            for seq in (bm.faces, bm.edges, bm.verts):
+                for item in seq:
+                    item.select_set(False)
+            for face in faces:
+                face.select_set(True)
+            bm.select_flush_mode()
         elif action == "MSMOOTH":
             ops.subdivide(number_cuts=s.segments, smoothness=s.smoothness)
         elif action == "TESSELLATE":
@@ -539,7 +616,7 @@ def run(operator, context, how, operation_settings=None):
         elif action == "SPLIT":
             ops.edge_split(type="EDGE")
         elif action == "DELETE_ISOLATED":
-            bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_edges and not v.hide], context="VERTS")
+            bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces and not v.hide], context="VERTS")
         elif action == "CREATE_SHAPE":
             return create_shape(context, s.object_name)
         elif action == "RETRIANGULATE":
@@ -579,7 +656,11 @@ def run(operator, context, how, operation_settings=None):
             if not normal.length:
                 operator.report({"WARNING"}, "Slice plane normal must not be zero")
                 return {"CANCELLED"}
-            result = bmesh.ops.bisect_plane(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces),
+            from .operators import current_level
+            faces = [f for f in bm.faces if not f.hide and (current_level(context) < 4 or f.select)]
+            edges = {e for f in faces for e in f.edges if not e.hide}
+            verts = {v for e in edges for v in e.verts if not v.hide}
+            result = bmesh.ops.bisect_plane(bm, geom=list(verts) + list(edges) + faces,
                 dist=0.00001, plane_co=(plane.plane_x, plane.plane_y, plane.plane_z), plane_no=normal)
             if plane.split:
                 edges = [e for e in result["geom_cut"] if isinstance(e, bmesh.types.BMEdge)]
@@ -700,7 +781,7 @@ class MAX_OT_poly_smoothing(Operator):
                 face[layer] = 0
         elif self.action == "SELECT":
             bit = 1 << (p.sg_select - 1)
-            if p.clear_selection:
+            if p.sg_clear_selection:
                 bpy.ops.mesh.select_all(action="DESELECT")
             for face in bm.faces:
                 if not face.hide and face[layer] & bit:
@@ -812,7 +893,9 @@ class MAX_OT_poly_weight(Operator):
         return {"FINISHED"}
 
 
-classes = (MaxPolyOperation, MaxPolyState, MAX_OT_poly_settings, MAX_OT_poly_unavailable,
+from . import target_weld
+
+classes = target_weld.classes + (MaxPolyOperation, MaxPolyState, MAX_OT_poly_settings, MAX_OT_poly_unavailable,
            MAX_OT_poly_attach_list, MAX_OT_poly_smoothing, MAX_OT_poly_material, MAX_OT_poly_weight)
 
 

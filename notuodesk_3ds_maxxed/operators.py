@@ -337,7 +337,9 @@ class MAX_OT_delete(Operator):
         if m == "OBJECT":
             bpy.ops.object.delete(use_global=False, confirm=False)
         elif m == "EDIT_MESH":
-            bpy.ops.mesh.delete(type=mesh_select_mode(context))
+            mode = mesh_select_mode(context)
+            bpy.ops.mesh.delete(type="ONLY_FACE" if mode == "FACE" and not context.active_object.max_poly.delete_isolated else mode)
+            editable_poly.cleanup_isolated(context)
         elif m == "EDIT_CURVE":
             bpy.ops.curve.delete(type="VERT")
         else:
@@ -472,8 +474,10 @@ class MAX_OT_edit_poly(Operator):
                     ops.subdivide(number_cuts=1)
             elif o == "REMOVE":
                 ops.dissolve_mode(use_verts=False)
+                editable_poly.cleanup_isolated(context)
             elif o == "REMOVE_WITH_VERTS":
                 ops.dissolve_mode(use_verts=True)
+                editable_poly.cleanup_isolated(context)
             elif o == "LOOP":
                 ops.loop_multi_select(ring=False)
             elif o == "RING":
