@@ -175,6 +175,7 @@ class MeshClone:
         self.obj = obj or context.edit_object
         self.mesh = self.obj.data
         self.bm = bmesh.from_edit_mesh(self.mesh)
+        self.bm.verts.index_update()
         # Independent of the edit BMesh, which mode exit frees.
         self.snapshot = self.bm.copy()
         self.level = level
@@ -183,16 +184,29 @@ class MeshClone:
         self.selected = [[e for e in seq if e.select] for seq in
                          (self.bm.verts, self.bm.edges, self.bm.faces)]
         self.history = list(self.bm.select_history)
+        source_indices = {v: v.index for v in self.selected[0]}
+        vertex_map = {}
         if level in {2, 3}:
             edges = [e for e in self.selected[1] if e.is_boundary or e.is_wire]
             geom = bmesh.ops.extrude_edge_only(self.bm, edges=edges)['geom'] if edges else []
         elif level in {4, 5}:
             faces = self.selected[2]
-            geom = bmesh.ops.duplicate(self.bm, geom=faces)['geom'] if faces else []
+            result = bmesh.ops.duplicate(self.bm, geom=faces) if faces else {}
+            geom = result.get('geom', [])
+            vertex_map = result.get('vert_map', {})
         else:
             verts = self.selected[0]
-            geom = bmesh.ops.duplicate(self.bm, geom=verts)['geom'] if verts else []
+            result = bmesh.ops.duplicate(self.bm, geom=verts) if verts else {}
+            geom = result.get('geom', [])
+            vertex_map = result.get('vert_map', {})
         self.new_verts = [e for e in geom if isinstance(e, bmesh.types.BMVert)]
+        if level in {2, 3}:
+            new = set(self.new_verts)
+            vertex_map = {v: e.other_vert(v) for v in source_indices for e in v.link_edges
+                          if e.other_vert(v) in new}
+        self.bm.verts.index_update()
+        self.constraint_indices = {source_indices[v]: dup.index for v, dup in vertex_map.items()
+                                   if v in source_indices}
         self.new_faces = [e for e in geom if isinstance(e, bmesh.types.BMFace)]
         for seq in (self.bm.faces, self.bm.edges, self.bm.verts):
             for elem in seq:
@@ -316,6 +330,9 @@ class MeshClones:
         return bool(self.parts) and all(p.valid() for p in self.parts)
 
     def cancel(self):
+        session = getattr(self, 'constraint_session', None)
+        if session is not None:
+            session.cancel()
         for p in self.parts:
             p.cancel()
 

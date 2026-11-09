@@ -407,8 +407,26 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 - T-Vertices requires three incident edges with faces on both sides, as in Autodesk's 2026 SDK. It has no Tolerance dialog or unwelded near-edge extension. Overlapping Faces also finds edge-only crossings that Max's documented check misses.
 - Large xView checks finish over multiple timer ticks. Edits cancel and restart the snapshot, so continuous edits can postpone a finished result. Python scans yield, but Blender's native modifier evaluation and mesh extraction can take longer than the timer budget.
 
+- Editable Poly Constraints work with Select and Move (W), Rotate (E) and Scale
+  (R), their gizmos and free drag. Edge chooses original connected edges by
+  transform direction before clamping to their endpoints. A straight drag keeps
+  its rail. A deliberate direction change can choose another rail. Edge and
+  Border selections slide along adjoining unselected edges. Face stays on each
+  vertex's original incident polygons, without crossing to other islands or
+  walking across adjacent polygons. Normal uses original geometric vertex
+  normals. Opposing normals still permit a Push-style move. Each object saves
+  its own setting. None restores ordinary transforms. Right-click or Esc
+  cancels, and each transform is one undo step.
+  Magnetic target snapping runs before Constraints, which keep the final
+  position on the original geometry. Each drag restores the snap settings. Rotate and Scale project each vertex's requested displacement
+  onto the same frozen edges, polygons or normals. The solver uses BMesh and
+  shares repeated Edge calculations on dense selections. It affects the explicit
+  selection, without Soft Selection or Preserve UVs correction. Native Blender
+  G and tools selected directly from Blender's toolbar bypass these Max tools.
+  The rebuilt Max tools use the same geometry hook. See
+  [transform integration](docs/poly-constraints-integration.md) for merge details.
 - Editable Poly's By Vertex click filter, Ignore Backfacing, hover Preview
-  Selection, topology Constraints and Preserve UVs channel settings are disabled.
+  Selection and Preserve UVs channel settings are disabled.
   By Angle expands the current face selection with a separate button.
 - Soft Selection uses Blender proportional editing for transforms. Edge Distance
   means connected-only, with no edge-count cutoff. Falloff is Blender's radius.
@@ -498,6 +516,6 @@ GPL-3.0-or-later (required for Blender add-ons). See [LICENSE](LICENSE).
 
 ## Constraints integration hook
 
-`snaps.MAX_OT_snap_transform.invoke` has one hook point before clone creation and geometry snapshots. When Edit Poly Constraints lands, delegate Move to `poly_constraints.invoke_move(context, event, constraint_axis=self.constraint_axis, from_gizmo=self.from_gizmo)`. Return its result when it is not None. Leave Rotate and Scale on the shared snap transform. Constraints must preserve Shift-clone transactions when it takes over Move. The native Move selector is the other caller owned by that branch.
+`snaps.constraint_session` freezes Edit Poly geometry before clone creation. Move, Rotate and Scale use `MoveSession.apply_targets` after snapping and axis orientation. Active Constraints retain the shared snap tools with snaps on or off. Shift-clone writes to preview vertices using the original source rails and leaves the source in place. The transform owns cancel and undo, and Clone Part of Mesh owns clone acceptance. See [transform integration](docs/poly-constraints-integration.md) for the hook contract used by the later Max Rotate tools.
 
 All interactive standard and extended primitive measurements, Line points and PlanePlus placement and endpoints use `snaps.snap_point`. Grid Points attracts only within Snap Radius. Typed Keyboard Entry values stay exact. Line's Shift angle constraint and PlanePlus's Shift square constraint apply after picking. PlanePlus keeps its explicit pivot instead of AutoPivot. Loft and Target Weld use the picked location to identify existing source geometry. They never move source objects or create a weld target at an empty grid point. Shift-drag on the snap tools uses the existing Clone Options or Clone Part of Mesh transaction.

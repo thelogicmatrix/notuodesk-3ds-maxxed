@@ -8,6 +8,7 @@ from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, FloatProp
                        IntProperty, PointerProperty, StringProperty)
 from bpy.types import Operator, PropertyGroup
 from mathutils import Vector
+from . import poly_constraints
 
 SG_ATTRIBUTE = "max_smoothing_group"
 SMOOTH_BACKUP = "max_poly_original_smooth"
@@ -182,7 +183,10 @@ class MaxPolyState(PropertyGroup):
     by_vertex: BoolProperty(name="By Vertex", description="Use Blender's Vertex selection level. Per-click By Vertex is unavailable")
     ignore_backfacing: BoolProperty(name="Ignore Backfacing", description="Blender does not expose Max's backface selection filter")
     preview: EnumProperty(name="Preview Selection", items=[(v, n, "Blender has no Max-style hover preview and multi-level selection") for v, n in (("OFF", "Off"), ("SUBOBJ", "SubObj"), ("MULTI", "Multi"))])
-    constraints: EnumProperty(name="Constraints", items=[(v, n, "Blender has snapping and transform orientations, but no Max topology constraint") for v, n in (("NONE", "None"), ("EDGE", "Edge"), ("FACE", "Face"), ("NORMAL", "Normal"))])
+    constraints: EnumProperty(name="Constraints", default="NONE", update=poly_constraints.constraint_update,
+                              items=[("NONE", "None", "Ordinary Move"), ("EDGE", "Edge", "Slide along the original connected edges"),
+                                     ("FACE", "Face", "Project each vertex onto this object's original surface"),
+                                     ("NORMAL", "Normal", "Move along the original averaged vertex normals")])
     soft: BoolProperty(name="Use Soft Selection", update=soft_update)
     edge_distance: BoolProperty(name="Edge Distance", description="Connected-only proportional editing. Blender has no edge-count cutoff", update=soft_update)
     edge_steps: IntProperty(name="Edge Distance", default=1, min=1, description="Blender proportional editing has no edge-count cutoff")
@@ -935,7 +939,7 @@ class MAX_OT_poly_weight(Operator):
 
 from . import target_weld, poly_modal
 
-classes = target_weld.classes + poly_modal.classes + hsx_adapter_classes() + (MaxPolyOperation, MaxPolyState, MAX_OT_poly_settings, MAX_OT_poly_unavailable,
+classes = poly_constraints.classes + target_weld.classes + poly_modal.classes + hsx_adapter_classes() + (MaxPolyOperation, MaxPolyState, MAX_OT_poly_settings, MAX_OT_poly_unavailable,
            MAX_OT_poly_attach_list, MAX_OT_poly_smoothing, MAX_OT_poly_material, MAX_OT_poly_weight)
 
 
@@ -943,9 +947,11 @@ def register_props():
     bpy.types.Scene.max_poly_operations = CollectionProperty(type=MaxPolyOperation)
     bpy.types.Scene.max_poly_slice = PointerProperty(type=MaxPolyOperation)
     bpy.types.Object.max_poly = PointerProperty(type=MaxPolyState)
+    poly_constraints.register_tools()
 
 
 def unregister_props():
+    poly_constraints.unregister_tools()
     del bpy.types.Object.max_poly
     del bpy.types.Scene.max_poly_operations
     del bpy.types.Scene.max_poly_slice

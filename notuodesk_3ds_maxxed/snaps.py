@@ -803,10 +803,18 @@ def _selection_center(context):
     return sum(points, Vector()) / max(1, len(points))
 
 
+def constraint_session(context):
+    """Freeze Edit Poly rails before cloning or the first transform preview."""
+    from . import poly_constraints
+    return poly_constraints.MoveSession(context) if poly_constraints.active(context) else None
+
+
 def select_transform(context, kind):
+    from . import poly_constraints
     s = settings(context)
     use = context.scene.tool_settings.use_snap or s.override != "NONE"
     use |= (kind == "ROTATE" and s.angle_snap) or (kind == "SCALE" and s.percent_snap)
+    use |= poly_constraints.active(context)
     use = use and context.mode in {"OBJECT", "EDIT_MESH"}
     names = {"MOVE": "move", "ROTATE": "rotate", "SCALE": "scale"}
     name = names[kind]
@@ -955,8 +963,8 @@ class MAX_OT_snap_transform(bpy.types.Operator):
         return context.area and context.area.type == "VIEW_3D" and context.mode in {"OBJECT", "EDIT_MESH"}
 
     def invoke(self, context, event):
-        # Edit Poly Constraints hook: delegate MOVE here, before clone creation
-        # or geometry snapshots. See README "Constraints integration hook".
+        # All three tools own snapping, input, clones and undo. The shared
+        # constraint session only projects their requested geometry.
         from .create import construction_frame
         self.region = context.region
         self.rv3d = context.region_data
@@ -968,11 +976,15 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                                     event.mouse_prev_press_y - self.region.y))
         self.u, self.v, self.n = construction_frame(self.rv3d)
         self.plane = (Vector((0, 0, 0)), self.n)
+        self.constraint_tx = constraint_session(context)
+        self.normal_distance = None
         self.clone_tx = None
         if event.shift and not event.ctrl and not event.alt:
             from . import shift_clone
             self.clone_tx = shift_clone.ObjectClone(context) if context.mode == "OBJECT" else shift_clone.MeshClones(context)
             shift_clone._active[context.window.as_pointer()] = (self.clone_tx, context.window_manager, None)
+            if self.constraint_tx is not None:
+                self.constraint_tx.retarget_clones(self.clone_tx)
         self.objects = list(context.objects_in_mode_unique_data) if context.mode == "EDIT_MESH" else list(context.selected_objects)
         self.meshes = []
         self.matrices = []
@@ -986,7 +998,7 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 self.matrices.append((ob, ob.matrix_world.copy()))
         s = settings(context)
         enabled = {s.override} if s.override != "NONE" else {k for k, _ in TYPES if getattr(s, k)}
-        center = (_selection_center(context) if self.from_gizmo else
+        center = (_selection_center(context) if self.from_gizmo or self.constraint_tx is not None else
                   sum((ob.matrix_world.translation for ob in self.objects), Vector()) / max(1, len(self.objects)))
         hit = None
         if context.scene.tool_settings.use_snap or s.override not in {"NONE", "OFF"}:
@@ -1035,6 +1047,15 @@ class MAX_OT_snap_transform(bpy.types.Operator):
     def _apply(self, context, matrix):
         for ob, saved in self.matrices:
             ob.matrix_world = matrix @ saved
+        tx = getattr(self, "constraint_tx", None)
+        if tx is not None:
+            if self.kind == "MOVE":
+                tx.apply_targets({}, move_delta=matrix.translation, normal_distance=self.normal_distance)
+            else:
+                tx.apply_targets({ob: {index: matrix @ (ob.matrix_world @ saved)
+                                      for index, saved in vertices} for ob, vertices in self.meshes})
+            context.view_layer.update()
+            return
         for ob, vertices in self.meshes:
             bm = bmesh.from_edit_mesh(ob.data)
             bm.verts.ensure_lookup_table()
@@ -1070,6 +1091,15 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 delta -= self.constraint_normal * delta.dot(self.constraint_normal)
             if self.number not in {"", "-", ".", "-."}:
                 delta = (self.axis if self.axis is not None else self.u) * float(self.number)
+            tx = self.constraint_tx
+            if tx is not None:
+                self.normal_distance = delta.dot(tx.normal)
+                if tx.normal_degenerate or abs(tx.normal.dot(self.view_n)) > .95:
+                    unit_point = self._ray(self.start_co + Vector((1, 0)), self.base, self.view_n)
+                    origin = self._ray(self.start_co, self.base, self.view_n)
+                    self.normal_distance = (co.x-self.start_co.x) * (unit_point-origin).length
+                if self.number not in {"", "-", ".", "-."}:
+                    self.normal_distance = float(self.number)
             mat = Matrix.Translation(delta)
         else:
             axis = self.axis if self.axis is not None else self.view_n
@@ -1104,11 +1134,16 @@ class MAX_OT_snap_transform(bpy.types.Operator):
         context.area.tag_redraw()
 
     def _finish(self, context, cancel=False):
+        constraint_tx = getattr(self, "constraint_tx", None)
         if cancel:
             tx = getattr(self, "clone_tx", None)
-            if tx is None or tx.valid():
+            if constraint_tx is not None:
+                constraint_tx.cancel()
+            elif tx is None or tx.valid():
                 self._apply(context, Matrix.Identity(4))
         else:
+            if constraint_tx is not None:
+                constraint_tx.finish()
             consume_override(context)
         clear_preview(self.region)
         tx = getattr(self, "clone_tx", None)
@@ -1126,6 +1161,9 @@ class MAX_OT_snap_transform(bpy.types.Operator):
         self._finish(context, True)
 
     def modal(self, context, event):
+        constraint_tx = getattr(self, "constraint_tx", None)
+        if constraint_tx is not None and (constraint_tx.closed or context.mode != "EDIT_MESH"):
+            return self._finish(context, True)
         tx = getattr(self, "clone_tx", None)
         if tx is not None and not tx.valid():
             return self._finish(context, True)

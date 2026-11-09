@@ -212,7 +212,6 @@ def geometry(layout, context):
     layout.operator("screen.repeat_last", text="Repeat Last")
     layout.label(text="Constraints")
     row = layout.row(align=True)
-    row.enabled = False
     radios(row, context.active_object.max_poly, "constraints")
     row = layout.row(align=True)
     row.prop(context.tool_settings, "use_transform_correct_face_attributes", text="Preserve UVs")
