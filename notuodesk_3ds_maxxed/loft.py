@@ -539,7 +539,27 @@ def make_loft(context, path, shape, mode='INSTANCE', anchor='PATH'):
     p.path = _source(context, path, mode)
     p.shape = _source(context, shape, mode)
     _update(p, context)
+    from . import poly_tools
+    poly_tools.finalize_new_object(context, ob)
     return ob
+
+
+
+def offset_origin(ob, delta):
+    """Compensate the generated skin when AutoPivot moves the object origin."""
+    mod = next((m for m in ob.modifiers if m.get('max_loft_origin')), None)
+    if mod is None:
+        g = gn_mods.G('Loft Origin')
+        transform = g.nodes.new('GeometryNodeTransform')
+        g.links.new(g.g('Geometry'), transform.inputs['Geometry'])
+        g.out(transform.outputs['Geometry'])
+        mod = ob.modifiers.new('Loft Origin', 'NODES')
+        mod.node_group = g.ng
+        mod['max_loft_origin'] = True
+    elif mod.node_group.users > 1:
+        mod.node_group = mod.node_group.copy()
+    transform = next(n for n in mod.node_group.nodes if n.bl_idname == 'GeometryNodeTransform')
+    transform.inputs['Translation'].default_value -= delta
 
 
 def _polyline(ob):

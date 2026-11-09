@@ -368,7 +368,7 @@ def create_object_type(layout, context):
     elif vray_sub and cat == "CAMERAS":
         g.operator("max.vray_camera", text="VRayPhysicalCamera")
     elif cat == "GEOMETRY" and wm.max_create_sub == "COMPOUND":
-        g.operator("max.loft_start", text="Loft", depress=wm.max_loft_active)
+        g.operator("max.loft_start", text="Loft", depress=wm.max_loft_active, **max_icons.ui("geometry", "OUTLINER_OB_MESH"))
     elif cat == "GEOMETRY":
         kinds = (prims.extended_primitives.DISPLAY_ORDER if wm.max_create_sub == "EXTENDED"
                  else prims.PRIMITIVES)

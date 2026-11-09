@@ -425,7 +425,10 @@ def move_pivot(ob, mode):
     children = [(child, child.matrix_world.copy()) for child in ob.children]
     if ob.data.users > 1:
         ob.data = ob.data.copy()
-    if ob.type == "FONT":
+    if getattr(ob, "max_loft", None) and ob.max_loft.enabled:
+        from . import loft
+        loft.offset_origin(ob, delta)
+    elif ob.type == "FONT":
         # Curve.transform does not translate generated text glyphs.
         _offset_font_geometry(ob, delta)
     else:

@@ -10,7 +10,7 @@ A Blender add-on (Blender 4.2+, tested on 5.2.3 LTS) that makes Blender look and
 
 1. In Blender, open **Edit › Preferences › Get Extensions**, click the **⌄** menu (top right), then **Install from Disk…**
 2. Pick `notuodesk_3ds_maxxed-1.8.0.zip` (download it from this repo's **Releases** page).
-3. On first enable, the add-on applies the 3ds Max theme and adds a **3ds Max** workspace, then switches you to it.
+3. On first enable, the add-on applies the 3ds Max theme and adds a **3ds Max** workspace with one viewport, then switches you to it. Alt+W toggles the optional four-view layout.
 
 To reset a rearranged layout, choose **Customize › Apply 3ds Max Look**. It rebuilds the "3ds Max" workspace from scratch.
 
@@ -26,7 +26,7 @@ The 3ds Max workspace hides Blender's 3D cursor in every viewport, including new
 | Workspaces dropdown | Top right, replaces the workspace tabs |
 | Main Toolbar | Viewport header: undo/redo, link/unlink, select by name, region select, move/rotate/scale, reference coordinate system, pivot, snaps, mirror, align, editors, render |
 | Scene Explorer | Outliner on the left |
-| 4 viewports: Top, Front, Left, Perspective | Quad view with clickable `[+] [Top] [Standard] [Edged Faces]` labels, like Max:<br>**[+]** maximize, grid, ViewCube, statistics<br>**[Perspective]** Top / Front / Left… and your cameras<br>**[Standard]** High Quality / Standard / Performance, shadows and AO<br>**[Default Shading]** Default Shading, Shaded Materials with Maps, Flat Color, Clay, Wireframe Override, Realistic, ActiveShade, Edged Faces, See-Through |
+| One viewport, optional Top, Front, Left and Perspective quads | Alt+W toggles quad view. Clickable `[+] [Top] [Standard] [Edged Faces]` labels, like Max:<br>**[+]** maximize, grid, ViewCube, statistics<br>**[Perspective]** Top / Front / Left… and your cameras<br>**[Standard]** High Quality / Standard / Performance, shadows and AO<br>**[Default Shading]** Default Shading, Shaded Materials with Maps, Flat Color, Clay, Wireframe Override, Realistic, ActiveShade, Edged Faces, See-Through |
 | ViewCube | Shaded, labelled cube in each viewport of the 3ds Max workspace, with a compass and Home. Click faces, edges or corners, drag to orbit, or drag the compass to turn around the vertical axis. Right-click for Home, projection, Front and configuration. Orthographic face views have adjacent-view and roll arrows |
 | Command Panel: Create, Modify, Hierarchy, Motion, Display, Utilities | Right sidebar with collapsible rollouts |
 | Click-drag creation (base first, then height) | Box, Cone, Sphere, GeoSphere, Cylinder, Tube, Torus, Pyramid, Plane. Right-click stops creating |
@@ -127,7 +127,7 @@ Parameter names and segment defaults follow [Autodesk's Extended Primitives refe
 
 These tools follow the public descriptions of [rapidTools](https://rapidmxs.com/store/rapidtools/) and [AutoPivot](https://www.scriptspot.com/3ds-max/scripts/autopivot). The original scripts do not run inside Blender.
 
-Creation tools call `poly_tools.finalize_new_object(context, ob)` after setting the final geometry and transform, before recording creation undo. Standard and extended primitives, Keyboard Entry, Shapes and finished Lines share this function. It never runs during previews.
+Creation tools call `poly_tools.finalize_new_object(context, ob)` after setting the final geometry and transform, before recording creation undo. Standard and extended primitives, Keyboard Entry, Shapes, finished Lines and Loft share this function. Loft keeps its live skin through an origin-compensation modifier. It never runs during previews.
 
 PlanePlus keeps its own Pivot setting and bypasses Auto Pivot on Create.
 ## xView

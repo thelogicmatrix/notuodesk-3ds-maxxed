@@ -59,6 +59,8 @@ VIEWPORT = [
     K("view3d.zoom_border", "W", ctrl=True),
     K("max.toggle_quad", "W", alt=True),
     K("view3d.localview", "Q", alt=True),
+    K("max.viewcube_action", "V", ctrl=True, alt=True, action="TOGGLE"),
+    K("max.viewcube_action", "H", ctrl=True, alt=True, action="HOME"),
     # Display toggles
     K("max.toggle", "F3", what="WIREFRAME"),
     K("max.toggle", "F4", what="EDGED_FACES"),

@@ -1163,7 +1163,7 @@ def setup_quad_views(context, window, area):
 WS_NAME = "3ds Max"
 
 
-def _configure_viewport(context, window, area, quad=True):
+def _configure_viewport(context, window, area, quad=False):
     space = area.spaces.active
     space.show_region_ui = True
     space.show_region_tool_header = False
@@ -1194,7 +1194,7 @@ def _configure_viewport(context, window, area, quad=True):
         pass
 
 
-def _build_screen(window):
+def _build_screen(window, quad=False):
     """Turn the duplicated Layout into: Scene Explorer | quad viewports | Command Panel."""
     context = bpy.context
     screen = window.screen
@@ -1228,14 +1228,14 @@ def _build_screen(window):
                     explorer = views[0]
                     explorer.ui_type = "OUTLINER"
                     view = views[-1]
-            _configure_viewport(context, window, view)
+            _configure_viewport(context, window, view, quad=quad)
         except Exception as exc:
             print(f"[3ds Maxxed] layout: {exc}")
         return None
     bpy.app.timers.register(split_later, first_interval=0.1)
 
 
-def _build_new_workspace(window, quad=True):
+def _build_new_workspace(window, quad=False):
     """Duplicate Blender's Layout workspace and turn it into the 3ds Max layout."""
     old = bpy.data.workspaces.get(WS_NAME)
     base = bpy.data.workspaces.get("Layout")
@@ -1253,12 +1253,12 @@ def _build_new_workspace(window, quad=True):
     def wait():
         if window.workspace != new[0]:
             return 0.05
-        _build_screen(window)
+        _build_screen(window, quad=quad)
         return None
     bpy.app.timers.register(wait, first_interval=0.05)
 
 
-def apply_layout(context, quad=True):
+def apply_layout(context, quad=False):
     """(Re)build the '3ds Max' workspace from scratch, so Apply always resets the layout."""
     wm = context.window_manager
     window = context.window or (wm.windows[0] if wm.windows else None)
@@ -1407,7 +1407,7 @@ class MAX_OT_apply(Operator):
 
     theme: BoolProperty(default=True)
     layout_: BoolProperty(name="Layout", default=True)
-    quad: BoolProperty(default=True)
+    quad: BoolProperty(default=False)
 
     def execute(self, context):
         if self.theme:

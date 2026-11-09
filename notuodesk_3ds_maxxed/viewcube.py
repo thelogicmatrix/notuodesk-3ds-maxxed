@@ -818,11 +818,6 @@ def register():
                 item = km.keymap_items.new('max.viewcube_mouse', event,
                                           'ANY' if event == 'MOUSEMOVE' else 'PRESS', head=True)
                 _keys.append((km, item))
-            # Autodesk's 2026 keyboard shortcut tables, ViewCube group.
-            for key, action in (('V', 'TOGGLE'), ('H', 'HOME')):
-                item = km.keymap_items.new('max.viewcube_action', key, 'PRESS', ctrl=True, alt=True, head=True)
-                item.properties.action = action
-                _keys.append((km, item))
     bpy.app.timers.register(_maintain, first_interval=.1, persistent=True)
 
 

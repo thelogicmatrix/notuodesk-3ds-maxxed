@@ -12,7 +12,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 addon_utils.enable("notuodesk_3ds_maxxed", default_set=True)
-from notuodesk_3ds_maxxed import create, extended_primitives, get_prefs, keyboard_entry, line_tool, prims
+from notuodesk_3ds_maxxed import create, extended_primitives, get_prefs, keyboard_entry, line_tool, prims, loft
 
 
 def world_vertices(ob):
@@ -57,6 +57,24 @@ def staged_chamferbox():
     return ob
 
 
+def finished_loft():
+    def curve(name, coords, closed=False):
+        data = bpy.data.curves.new(name, 'CURVE')
+        data.dimensions = '3D'
+        sp = data.splines.new('POLY')
+        sp.points.add(len(coords) - 1)
+        for point, co in zip(sp.points, coords):
+            point.co = (*co, 1)
+        sp.use_cyclic_u = closed
+        ob = bpy.data.objects.new(name, data)
+        bpy.context.collection.objects.link(ob)
+        return ob
+    path = curve('Pivot path', [(0, 0, 1), (0, 0, 7)])
+    path.location = (7, -3, 11)
+    shape = curve('Pivot shape', [(-1, -2, 0), (1, -2, 0), (1, 2, 0), (-1, 2, 0)], True)
+    return loft.make_loft(bpy.context, path, shape)
+
+
 class AutoPivotCreationTests(unittest.TestCase):
     def tearDown(self):
         get_prefs().auto_pivot_on_create = "OFF"
@@ -81,6 +99,23 @@ class AutoPivotCreationTests(unittest.TestCase):
                 self.assertLess(max((a - b).length for a, b in zip(before, after)), 1e-4,
                                 "AutoPivot must preserve world geometry")
                 print(f"AUTOPIVOT PASS {creator.__name__} {mode} origin=world_bounds geometry=unchanged", flush=True)
+
+    def test_finished_loft(self):
+        self.check_creation(finished_loft)
+        get_prefs().auto_pivot_on_create = 'CENTER'
+        ob = finished_loft()
+        before = world_vertices(ob)
+        path = ob.max_loft.path
+        path.data.splines[0].points[-1].co.z += 2
+        after = world_vertices(ob)
+        self.assertGreater(max(v.z for v in after), max(v.z for v in before) + 1.9)
+        # Repeated manual pivot moves must preserve the live generated mesh too.
+        from notuodesk_3ds_maxxed import poly_tools
+        poly_tools.move_pivot(ob, 'BOTTOM')
+        again = world_vertices(ob)
+        self.assertLess(max((a-b).length for a,b in zip(after, again)), 1e-4)
+        self.assertEqual(sum(bool(m.get('max_loft_origin')) for m in ob.modifiers), 1)
+        print('AUTOPIVOT PASS Loft source edits live, repeated pivot preserves geometry', flush=True)
 
     def test_keyboard_box(self):
         self.check_creation(keyboard_box)
