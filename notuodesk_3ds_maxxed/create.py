@@ -467,7 +467,7 @@ class MAX_OT_create(Operator):
 
 
 # ---------------------------------------------------------------------------
-# shapes, lights, cameras, helpers (created at the 3D cursor)
+# shapes, lights, cameras, helpers (created at the world origin)
 # ---------------------------------------------------------------------------
 
 SHAPES = [
@@ -488,12 +488,12 @@ def _poly_curve(context, name, points, cyclic):
         pt.co = (*co, 1.0)
     sp.use_cyclic_u = cyclic
     ob = new_object(context, name, cu)
-    ob.location = context.scene.cursor.location
+    ob.location = (0, 0, 0)
     return ob
 
 
 class MAX_OT_create_shape(Operator):
-    """Create a 3ds Max spline shape at the 3D cursor"""
+    """Create a 3ds Max spline shape at the world origin"""
     bl_idname = "max.create_shape"
     bl_label = "Create Shape"
     bl_options = {"REGISTER", "UNDO"}
@@ -522,7 +522,7 @@ class MAX_OT_create_shape(Operator):
         if k == "RECTANGLE":
             _poly_curve(context, name, [(-r, -r * .6, 0), (r, -r * .6, 0), (r, r * .6, 0), (-r, r * .6, 0)], True)
         elif k in {"CIRCLE", "ELLIPSE"}:
-            bpy.ops.curve.primitive_bezier_circle_add(radius=r, location=context.scene.cursor.location)
+            bpy.ops.curve.primitive_bezier_circle_add(radius=r, location=(0, 0, 0))
             ob = context.active_object
             ob.name = name
             ob.color = random_color()
@@ -545,7 +545,7 @@ class MAX_OT_create_shape(Operator):
                    for t in (i * tau / 24 for i in range(24 * 3 + 1))]
             _poly_curve(context, name, pts, False)
         elif k == "TEXT":
-            bpy.ops.object.text_add(location=context.scene.cursor.location)
+            bpy.ops.object.text_add(location=(0, 0, 0))
             ob = context.active_object
             ob.name = name
             ob.data.body = "MAX Text"
@@ -564,13 +564,12 @@ LIGHTS = [
 
 
 def _add_target(context, ob, offset):
-    cursor = context.scene.cursor.location.copy()
     tgt = bpy.data.objects.new(ob.name + ".Target", None)
     tgt.empty_display_type = "CUBE"
     tgt.empty_display_size = 0.1
     context.view_layer.active_layer_collection.collection.objects.link(tgt)
-    tgt.location = cursor
-    ob.location = cursor + Vector(offset)
+    tgt.location = -Vector(offset)
+    ob.location = (0, 0, 0)
     con = ob.constraints.new("TRACK_TO")
     con.target = tgt
     con.track_axis = "TRACK_NEGATIVE_Z"
@@ -607,13 +606,9 @@ class MAX_OT_create_light(Operator):
         data = bpy.data.lights.new(name, ltype)
         data.energy = {"POINT": 1000, "SPOT": 1000, "SUN": 3, "AREA": 300}[ltype]
         ob = new_object(context, name, data)
-        ob.location = context.scene.cursor.location
+        ob.location = (0, 0, 0)
         if k.startswith("TARGET"):
             _add_target(context, ob, (3, -3, 4))
-        elif k.startswith("FREE"):
-            ob.location.z += 4
-        else:
-            ob.location.z += 2
         return {"FINISHED"}
 
 
@@ -634,7 +629,7 @@ class MAX_OT_create_camera(Operator):
         if self.target:
             _add_target(context, ob, (6, -6, 4))
         else:
-            ob.location = context.scene.cursor.location + Vector((0, -8, 2))
+            ob.location = (0, 0, 0)
             ob.rotation_euler = (math.radians(85), 0, 0)
         if context.scene.camera is None:
             context.scene.camera = ob
@@ -662,7 +657,7 @@ class MAX_OT_create_helper(Operator):
         label, dtype = {k: (n, t) for k, n, t in HELPERS}[self.kind]
         ob = new_object(context, max_name(label.split()[0]), None)
         ob.empty_display_type = dtype
-        ob.location = context.scene.cursor.location
+        ob.location = (0, 0, 0)
         return {"FINISHED"}
 
 

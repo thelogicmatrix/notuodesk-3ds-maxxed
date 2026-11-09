@@ -5,7 +5,7 @@ import math
 import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 from bpy.types import Operator
-from mathutils import Euler, Quaternion
+from mathutils import Euler, Matrix, Quaternion
 
 from . import theme
 
@@ -597,11 +597,33 @@ class MAX_OT_object_cmd(Operator):
             elif c == "CENTER_PIVOT":
                 bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
             elif c == "PIVOT_TO_WORLD":
-                cursor = context.scene.cursor
-                saved = cursor.location.copy()
-                cursor.location = (0, 0, 0)
-                bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
-                cursor.location = saved
+                # Move the origin without borrowing or moving Blender's cursor.
+                children = {child: child.matrix_world.copy() for ob in sel for child in ob.children}
+                for ob in sel:
+                    old = ob.matrix_world.copy()
+                    new = old.copy()
+                    new.translation = (0, 0, 0)
+                    if ob.data is not None and hasattr(ob.data, "transform"):
+                        if ob.data.users > 1:
+                            ob.data = ob.data.copy()
+                        if ob.type == "FONT":
+                            # Native Text origins stay on the text's local XY plane.
+                            shift = old.inverted_safe().translation
+                            shift.z = 0
+                            new = old @ Matrix.Translation(shift)
+                            ob.data.offset_x -= shift.x
+                            ob.data.offset_y -= shift.y
+                        elif ob.type in {"MESH", "CURVE", "SURFACE", "LATTICE"}:
+                            transform = new.inverted_safe() @ old
+                            ob.data.transform(transform, shape_keys=True)
+                        else:
+                            ob.data.transform(new.inverted_safe() @ old)
+                    else:
+                        continue
+                    ob.matrix_world = new
+                for child, matrix in children.items():
+                    if child not in sel:
+                        child.matrix_world = matrix
             elif c == "OBJECT_TO_PIVOT":
                 bpy.ops.object.origin_set(type="GEOMETRY_ORIGIN", center="BOUNDS")
             elif c == "HIDE_SEL":
@@ -1154,6 +1176,9 @@ def _configure_viewport(context, window, area, quad=True):
     sh.wireframe_color_type = "OBJECT"
     space.overlay.show_text = False           # only our [+] [Perspective] labels
     space.overlay.show_wireframes = False
+    space.overlay.show_cursor = False         # Max has no 3D cursor
+    from .cursor_policy import reset_scene
+    reset_scene(window.scene)
     for r in area.regions:
         if r.type == "UI":
             try:
@@ -1407,7 +1432,18 @@ class MAX_OT_restore(Operator):
         return {"FINISHED"}
 
 
+class MAX_OT_block_cursor(Operator):
+    """Swallow Blender's Shift+right-click 3D cursor placement (Max has no 3D cursor)"""
+    bl_idname = "max.block_cursor"
+    bl_label = "Block 3D Cursor"
+    bl_options = {"INTERNAL"}
+
+    def invoke(self, context, event):
+        return {"FINISHED"}
+
+
 classes = (
+    MAX_OT_block_cursor,
     MAX_OT_subobject, MAX_OT_set_view, MAX_OT_zoom_extents, MAX_OT_toggle, MAX_OT_expert_mode,
     MAX_OT_select_all, MAX_OT_delete, MAX_OT_select_by_name, MAX_OT_clone, MAX_OT_edit_poly,
     MAX_OT_object_cmd, MAX_OT_camera_from_view, MAX_OT_open_editor, MAX_OT_transform_typein,

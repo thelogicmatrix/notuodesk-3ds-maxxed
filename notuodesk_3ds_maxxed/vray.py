@@ -206,7 +206,6 @@ class MAX_OT_vray_light(Operator):
 
     def execute(self, context):
         _object_mode(context)
-        cur = context.scene.cursor.location
         k = self.kind
         if k == "DOME":
             world, nt = _world(context)
@@ -224,7 +223,7 @@ class MAX_OT_vray_light(Operator):
             ob.empty_display_type = "SPHERE"
             ob.empty_display_size = 0.5
             ob["max_vray_dome"] = 1
-            ob.location = cur
+            ob.location = (0, 0, 0)
             _link(context, ob)
             self.report({"INFO"}, "Dome light: world lighting set" + (" from HDRI" if self.filepath else ""))
             return {"FINISHED"}
@@ -233,7 +232,7 @@ class MAX_OT_vray_light(Operator):
             data.energy = 4.0
             data.angle = math.radians(0.53)
             ob = _link(context, bpy.data.objects.new(data.name, data))
-            ob.location = cur + type(cur)((0, 0, 10))
+            ob.location = (0, 0, 0)
             ob.rotation_euler = (math.radians(45), 0, math.radians(30))
             world, nt = _world(context)
             bg = _world_output(nt)
@@ -264,7 +263,7 @@ class MAX_OT_vray_light(Operator):
             data.spot_size = math.radians(90)
             data.spot_blend = 0.6
         ob = _link(context, bpy.data.objects.new(data.name, data))
-        ob.location = cur + type(cur)((0, 0, 3))
+        ob.location = (0, 0, 0)
         ob["max_vray_light"] = k
         return {"FINISHED"}
 
@@ -313,7 +312,7 @@ class MAX_OT_vray_camera(Operator):
         cam.sensor_width = 36.0
         cam.max_vray.enabled = True
         ob = _link(context, bpy.data.objects.new(name, cam))
-        ob.location = context.scene.cursor.location + type(context.scene.cursor.location)((0, -10, 2))
+        ob.location = (0, 0, 0)
         ob.rotation_euler = (math.radians(85), 0, 0)
         if context.scene.camera is None:
             context.scene.camera = ob
@@ -351,7 +350,7 @@ class MAX_OT_vray_plane(Operator):
         s = 5000.0
         me.from_pydata([(-s, -s, 0), (s, -s, 0), (s, s, 0), (-s, s, 0)], [], [(0, 1, 2, 3)])
         ob = _link(context, bpy.data.objects.new(max_name("VRayPlane"), me))
-        ob.location = (0, 0, context.scene.cursor.location.z)
+        ob.location = (0, 0, 0)
         ob.color = (0.6, 0.6, 0.6, 1)
         return {"FINISHED"}
 
