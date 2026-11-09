@@ -1,7 +1,9 @@
 """xView mesh checks, cached highlights and viewport result actions."""
 
 from dataclasses import dataclass, field
-from math import frexp, isfinite
+from array import array
+from math import floor, frexp, isfinite
+from itertools import product
 from time import perf_counter
 
 import bmesh
@@ -9,7 +11,7 @@ import bpy
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, PointerProperty
 from mathutils import Vector
-from mathutils.kdtree import KDTree
+from mathutils.geometry import tessellate_polygon
 
 
 # Autodesk 2026 xView Menu / Using xView. Both text and flagged geometry are green.
@@ -29,16 +31,13 @@ CHECKS = (
 )
 LABELS = {key: label for key, label, _ in CHECKS}
 DOMAINS = {key: domain for key, _, domain in CHECKS}
-CONFIGURABLE = {"OVERLAPPING_VERTICES", "OVERLAPPING_FACES", "T_VERTICES"}
+CONFIGURABLE = {"OVERLAPPING_VERTICES", "OVERLAPPING_FACES"}
 GREEN = (0.0, 1.0, 0.0, 1.0)
-_cache = {}
-_dirty = set()
+_states = {}
 _handles = []
 _hits = {}
-_settings_key = None
-_selection_key = None
-_status = ""
 _last_view = ((0.0, 0.0, 1.0), None)
+STEP_BUDGET = .008
 
 
 @dataclass
@@ -50,9 +49,62 @@ class Result:
     triangles: list = field(default_factory=list)
     seconds: float = 0.0
     batches: object = None
-    orientation: list = field(default_factory=list)
-    face_triangles: dict = field(default_factory=dict)
+    orientation: object = field(default_factory=lambda: array('d'))
+    face_triangles: object = field(default_factory=lambda: array('d'))
+    face_ranges: object = field(default_factory=lambda: array('i'))
     views: dict = field(default_factory=dict)
+    selection_safe: bool = True
+    complete: bool = False
+    revision: int = 0
+
+
+@dataclass
+class State:
+    cache: dict = field(default_factory=dict)
+    jobs: dict = field(default_factory=dict)
+    view_jobs: dict = field(default_factory=dict)
+    dirty: set = field(default_factory=set)
+    watched: dict = field(default_factory=dict)
+    key: object = None
+    status: str = ""
+    changed: bool = False
+    requested_views: dict = field(default_factory=dict)
+
+
+class Job:
+    def __init__(self, ob, check, tolerance, view, depsgraph):
+        self.view = view
+        self.result = Result(DOMAINS[check], set())
+        self.steps = _analyze_steps(ob, check, tolerance, view, depsgraph, self.result)
+
+    def close(self):
+        self.steps.close()
+
+    def advance(self, deadline):
+        while perf_counter() < deadline:
+            try:
+                next(self.steps)
+            except StopIteration:
+                self.result.complete = True
+                return True
+        return False
+
+
+def _orientation_steps(source, view, result):
+    direction = Vector(view[0])
+    origin = Vector(view[1]) if view[1] is not None else None
+    for k in range(0, len(source.orientation), 7):
+        i = int(source.orientation[k])
+        normal = Vector(source.orientation[k+1:k+4])
+        center = Vector(source.orientation[k+4:k+7])
+        if normal.dot(origin-center if origin is not None else direction) < 0:
+            result.indices.add(i)
+            start, end = source.face_ranges[i*2:i*2+2]
+            for j in range(start, end, 3):
+                result.triangles.append(Vector(source.face_triangles[j:j+3]))
+                yield
+            result.revision += 1
+        yield
 
 
 def _cross(a, b, c):
@@ -84,203 +136,344 @@ def _intersection_area(a, b):
                    for i in range(1, len(poly)-1))) * 0.5
 
 
-def _bounds_pairs(tris, padding):
-    """Size-bucketed KD trees also find coplanar containment and crossing faces."""
-    bounds = [(tuple(min(p[k] for p in triangle)-padding for k in range(3)),
-               tuple(max(p[k] for p in triangle)+padding for k in range(3))) for _, triangle in tris]
-    centers, radii, groups = [], [], {}
-    for i, (_, triangle) in enumerate(tris):
-        center = sum(triangle, Vector())/3
-        radius = max((p-center).length for p in triangle) + padding*2
-        centers.append(center)
-        radii.append(radius)
-        groups.setdefault(frexp(radius)[1], []).append(i)
-    trees = []
-    for indices in groups.values():
-        kd = KDTree(len(indices))
-        for i in indices:
-            kd.insert(centers[i], i)
-        kd.balance()
-        trees.append((kd, max(radii[i] for i in indices)))
-    for i, center in enumerate(centers):
-        a = bounds[i]
-        for tree, radius in trees:
-            for _, j, _ in tree.find_range(center, radii[i]+radius+1e-7):
-                if j <= i:
-                    continue
-                b = bounds[j]
-                overlap = [min(a[1][k], b[1][k])-max(a[0][k], b[0][k]) for k in range(3)]
-                # Positive area needs positive extent along at least two axes.
-                if min(overlap) >= 0 and sum(v > 2*padding+1e-12 for v in overlap) >= 2:
-                    yield i, j
+def _triangle_overlap(a, b, tolerance, uv):
+    if uv:
+        aa, bb = a, b
+    else:
+        normal = (a[1]-a[0]).cross(a[2]-a[0])
+        other = (b[1]-b[0]).cross(b[2]-b[0])
+        if normal.length_squared < 1e-24 or other.length_squared < 1e-24:
+            return False
+        normal.normalize()
+        other.normalize()
+        if abs(normal.dot(other)) < .99999:
+            return False
+        if max(abs(normal.dot(p-a[0])) for p in b) > tolerance + 1e-7:
+            return False
+        drop = max(range(3), key=lambda k: abs(normal[k]))
+        axes = [k for k in range(3) if k != drop]
+        aa = [Vector((p[axes[0]], p[axes[1]])) for p in a]
+        bb = [Vector((p[axes[0]], p[axes[1]])) for p in b]
+    return _intersection_area(aa, bb) > 1e-12
 
 
-def _face_overlaps(tris, tolerance, uv=False):
-    """Bounding-box broad phase, then positive-area coplanar intersection."""
-    if not tris:
-        return set()
-    found = set()
-    for i, j in _bounds_pairs(tris, 0 if uv else tolerance*.5):
-        if tris[i][0] == tris[j][0]:
-            continue
-        fi, a = tris[i]
-        fj, b = tris[j]
-        if fi in found and fj in found:
-            continue
-        if uv:
-            aa, bb = a, b
-        else:
-            normal = (a[1]-a[0]).cross(a[2]-a[0])
-            other = (b[1]-b[0]).cross(b[2]-b[0])
-            if normal.length_squared < 1e-24 or other.length_squared < 1e-24:
-                continue
-            normal.normalize()
-            other.normalize()
-            if abs(normal.dot(other)) < .99999:
-                continue
-            if max(abs(normal.dot(p-a[0])) for p in b) > tolerance + 1e-7:
-                continue
-            drop = max(range(3), key=lambda k: abs(normal[k]))
-            axes = [k for k in range(3) if k != drop]
-            aa = [Vector((p[axes[0]], p[axes[1]])) for p in a]
-            bb = [Vector((p[axes[0]], p[axes[1]])) for p in b]
-        if _intersection_area(aa, bb) > 1e-12:
-            found.update((fi, fj))
-    return found
+def _triangle_indices(points):
+    if len(points) == 3:
+        return ((0, 1, 2),)
+    triangles = tessellate_polygon([points]) if len(points) > 3 else ()
+    if not triangles or isinstance(triangles[0][0], int):
+        return triangles
+    # Accept both index-returning and vector-returning Blender tessellators.
+    lookup = {tuple(p): i for i, p in enumerate(points)}
+    return (tuple(lookup[tuple(p)] for p in tri) for tri in triangles)
 
 
-def analyze(ob, check, tolerance=.001, view_direction=(0, 0, 1), view_origin=None):
-    """Check the editable cage, in world units, without changing its selection."""
-    started = perf_counter()
-    owned = ob.mode != "EDIT"
-    bm = bmesh.new() if owned else bmesh.from_edit_mesh(ob.data)
-    if owned:
-        bm.from_mesh(ob.data)
+def _triangles(points):
+    return (tuple(points[i] for i in tri) for tri in _triangle_indices(points))
+
+
+def _clear_evaluated(evaluated):
     try:
-        bm.verts.ensure_lookup_table()
-        bm.edges.ensure_lookup_table()
-        bm.faces.ensure_lookup_table()
-        for seq in (bm.verts, bm.edges, bm.faces):
-            seq.index_update()
-        world = ob.matrix_world
-        coords = [world @ v.co for v in bm.verts]
-        ids = set()
-        orientation = []
-        domain = DOMAINS[check]
-        if check == "OPEN_EDGES":
-            ids = {e.index for e in bm.edges if not e.hide and len(e.link_faces) == 1}
-        elif check == "MULTIPLE_EDGES":
-            ids = {e.index for e in bm.edges if not e.hide and
-                   (len(e.link_faces) > 2 or (len(e.link_faces) == 2 and not e.is_contiguous))}
-        elif check == "ISOLATED_VERTICES":
-            ids = {v.index for v in bm.verts if not v.hide and not v.link_edges and not v.link_faces}
-        elif check in {"OVERLAPPING_VERTICES", "T_VERTICES"}:
-            kd = KDTree(len(coords))
-            for i, co in enumerate(coords):
-                kd.insert(co, i)
-            kd.balance()
-            if check == "OVERLAPPING_VERTICES":
-                for v in bm.verts:
-                    if not v.hide:
-                        for _, j, _ in kd.find_range(coords[v.index], tolerance):
-                            if j != v.index and not bm.verts[j].hide:
-                                ids.update((v.index, j))
-            else:
-                # Max documents vertices sharing three edges. Include unwelded
-                # geometric T-junctions too, using the requested distance tolerance.
-                ids = {v.index for v in bm.verts if not v.hide and len(v.link_edges) == 3}
-                for edge in bm.edges:
-                    if edge.hide:
-                        continue
-                    a, b = (coords[v.index] for v in edge.verts)
-                    delta = b-a
-                    length = delta.length
-                    if length <= 2*tolerance:
-                        continue
-                    ends = {v.index for v in edge.verts}
-                    for co, j, _ in kd.find_range((a+b)*.5, length*.5+tolerance):
-                        if j in ends or j in ids or bm.verts[j].hide or not bm.verts[j].link_edges:
-                            continue
-                        t = (co-a).dot(delta) / delta.length_squared
-                        if tolerance/length < t < 1-tolerance/length and (co-a-t*delta).length <= tolerance:
-                            ids.add(j)
-        elif check == "FACE_ORIENTATION":
-            direction = Vector(view_direction)
-            origin = Vector(view_origin) if view_origin is not None else None
-            for face in bm.faces:
-                if face.hide or len(face.verts) < 3:
-                    continue
-                points = [coords[v.index] for v in face.verts]
-                # Newell normal handles concave polygons and mirrored transforms.
-                normal = sum((points[i].cross(points[(i+1) % len(points)])
-                              for i in range(len(points))), Vector())
-                toward_eye = origin - sum(points, Vector())/len(points) if origin is not None else direction
-                orientation.append((face.index, normal, sum(points, Vector())/len(points)))
-                if normal.dot(toward_eye) < 0:
-                    ids.add(face.index)
-        elif check == "OVERLAPPING_FACES":
-            triangles = [(loops[0].face.index, [coords[l.vert.index] for l in loops])
-                         for loops in bm.calc_loop_triangles() if not loops[0].face.hide]
-            ids = _face_overlaps(triangles, tolerance)
+        evaluated.to_mesh_clear()
+    except ReferenceError:
+        # File load / undo can dispose the evaluated object before load_post.
+        pass
+
+
+def _mesh_overlap_steps(ob, check, tolerance, depsgraph, result):
+    """Compact numeric snapshots avoid Python GC pauses on large overlap jobs."""
+    started = perf_counter()
+    evaluated = None
+    uv = check == "OVERLAPPED_UVW"
+    coords, tri_coords, bounds = array('d'), array('d'), array('d')
+    # Each display triangle stores face, three original vertex IDs and selection.
+    triangles, levels = array('i'), {}
+    try:
+        yield
+        editing = ob.mode == "EDIT"
+        world = ob.matrix_world.copy()
+        preserve = editing and bpy.context.tool_settings.mesh_select_mode[2]
+        if editing:
+            data = bmesh.from_edit_mesh(ob.data)
+            data.verts.ensure_lookup_table()
+            data.verts.index_update()
+            data.faces.index_update()
+            vertices, faces = data.verts, data.faces
+            layer = data.loops.layers.uv.active
         else:
-            uv_layer = bm.loops.layers.uv.active
-            if check == "MISSING_UVW":
-                ids = {f.index for f in bm.faces if not f.hide and
-                       (uv_layer is None or any(not all(isfinite(v) for v in l[uv_layer].uv) for l in f.loops))}
-            elif uv_layer is not None:
-                if check == "FLIPPED_UVW":
-                    for face in bm.faces:
-                        if face.hide:
-                            continue
-                        uvs = [l[uv_layer].uv.copy() for l in face.loops]
-                        if len(uvs) >= 3 and sum(_cross(uvs[0], uvs[i], uvs[i+1])
-                                                  for i in range(1, len(uvs)-1)) < -1e-12:
-                            ids.add(face.index)
-                elif check == "OVERLAPPED_UVW":
-                    triangles = [(loops[0].face.index, [Vector((*l[uv_layer].uv, 0)) for l in loops])
-                                 for loops in bm.calc_loop_triangles() if not loops[0].face.hide
-                                 and all(all(isfinite(v) for v in l[uv_layer].uv) for l in loops)]
-                    ids = _face_overlaps(triangles, 0, uv=True)
-        result = Result(domain, ids)
-        result.orientation = orientation
-        selection_mode = bpy.context.tool_settings.mesh_select_mode
-        preserve_selection = ob.mode == "EDIT" and selection_mode[("VERT", "EDGE", "FACE").index(domain)]
-        elems = {"VERT": bm.verts, "EDGE": bm.edges, "FACE": bm.faces}[domain]
-        drawn = {i for i in ids if not preserve_selection or not elems[i].select}
-        if check == "FACE_ORIENTATION":
-            for loops in bm.calc_loop_triangles():
-                if not preserve_selection or not loops[0].face.select:
-                    result.face_triangles.setdefault(loops[0].face.index, []).extend(coords[l.vert.index] for l in loops)
-        if domain == "VERT":
-            result.points = [coords[i] for i in sorted(drawn)]
-        elif domain == "EDGE":
-            result.lines = [coords[v.index] for i in sorted(drawn) for v in bm.edges[i].verts]
-        elif drawn:
-            result.triangles = [coords[l.vert.index] for loops in bm.calc_loop_triangles()
-                                if loops[0].face.index in drawn for l in loops]
+            if any(m.show_viewport for m in ob.modifiers):
+                evaluated = ob.evaluated_get(depsgraph or bpy.context.evaluated_depsgraph_get())
+                data = evaluated.to_mesh()
+                result.selection_safe = False
+            else:
+                data = ob.data
+            vertices, faces = data.vertices, data.polygons
+            layer = data.uv_layers.active
+        yield
+        for v in vertices:
+            coords.extend(world @ v.co)
+            yield
+        for face in faces:
+            if face.hide or (uv and layer is None):
+                yield
+                continue
+            loops = tuple(face.loops) if editing else tuple(data.loops[i] for i in face.loop_indices)
+            vi = tuple(l.vert.index if editing else l.vertex_index for l in loops)
+            points = [Vector(coords[i*3:i*3+3]) for i in vi]
+            local_tris = _triangle_indices(points)
+            uvs = ([l[layer].uv.copy() for l in loops] if editing else
+                   [layer.data[l.index].uv.copy() for l in loops]) if uv else None
+            for local in local_tris:
+                source = [Vector((*uvs[i], 0)) for i in local] if uv else [points[i] for i in local]
+                if not all(all(isfinite(v) for v in p) for p in source):
+                    yield
+                    continue
+                triangles.extend((face.index, *(vi[i] for i in local), int(preserve and face.select)))
+                for p in source:
+                    tri_coords.extend(p)
+                yield
+            yield
+        vertices = faces = data = layer = None
+        if evaluated is not None:
+            _clear_evaluated(evaluated)
+            evaluated = None
+        padding = 0 if uv else tolerance*.5
+        tri_levels = array('i')
+        for i in range(len(triangles)//5):
+            p = tri_coords[i*9:i*9+9]
+            lo = tuple(min(p[k], p[k+3], p[k+6])-padding for k in range(3))
+            hi = tuple(max(p[k], p[k+3], p[k+6])+padding for k in range(3))
+            bounds.extend((*lo, *hi))
+            size = max(max(hi[k]-lo[k] for k in range(3)), 1e-12)
+            level = frexp(size)[1]
+            levels[level] = max(levels.get(level, 0), size)
+            tri_levels.append(level)
+            yield
+        grids = {}
+        for i in range(len(triangles)//5):
+            a = bounds[i*6:i*6+6]
+            level = tri_levels[i]
+            cell_size = levels[level]
+            cell = tuple(floor((a[k]+a[k+3])*.5/cell_size) for k in range(3))
+            if level not in grids:
+                grids[level] = ({}, list(cell), list(cell))
+            grid, lower, upper = grids[level]
+            grid.setdefault(cell, array('i')).append(i)
+            for k in range(3):
+                lower[k] = min(lower[k], cell[k])
+                upper[k] = max(upper[k], cell[k])
+            yield
+        found = result.indices
+        for i in range(len(triangles)//5):
+            fi = triangles[i*5]
+            a = bounds[i*6:i*6+6]
+            for level, (grid, lower, upper) in grids.items():
+                if level < tri_levels[i]:
+                    continue
+                cell_size = levels[level]
+                cell = tuple(floor((a[k]+a[k+3])*.5/cell_size) for k in range(3))
+                ranges = [range(max(lower[k], cell[k]-1), min(upper[k], cell[k]+1)+1) for k in range(3)]
+                for key in product(*ranges):
+                    for j in grid.get(key, ()):
+                        fj = triangles[j*5]
+                        if ((level != tri_levels[i] or j > i) and fi != fj
+                                and not (fi in found and fj in found)):
+                            b = bounds[j*6:j*6+6]
+                            extent = [min(a[k+3], b[k+3])-max(a[k], b[k]) for k in range(3)]
+                            if min(extent) >= 0 and sum(v > 2*padding+1e-12 for v in extent) >= 2:
+                                aa = [Vector(tri_coords[i*9+k:i*9+k+3]) for k in (0,3,6)]
+                                bb = [Vector(tri_coords[j*9+k:j*9+k+3]) for k in (0,3,6)]
+                                if _triangle_overlap(aa, bb, tolerance, uv):
+                                    found.update((fi, fj))
+                        yield
+                    yield
+            yield
+        for i in range(len(triangles)//5):
+            fi, a, b, c, selected = triangles[i*5:i*5+5]
+            if fi in found and not selected:
+                for vi in (a,b,c):
+                    result.triangles.append(Vector(coords[vi*3:vi*3+3]))
+                result.revision += 1
+            yield
         result.seconds = perf_counter()-started
-        return result
     finally:
-        if owned:
-            bm.free()
+        if evaluated is not None:
+            _clear_evaluated(evaluated)
 
 
-def _oriented(result, view):
-    if not result.orientation:
-        return result
-    if view not in result.views:
-        direction, origin = Vector(view[0]), Vector(view[1]) if view[1] is not None else None
-        ids = {i for i, normal, center in result.orientation
-               if normal.dot(origin-center if origin is not None else direction) < 0}
-        filtered = Result("FACE", ids, triangles=[p for i in sorted(ids) for p in result.face_triangles.get(i, ())])
-        if len(result.views) >= 8:
-            result.views.clear()
-        result.views[view] = filtered
-    return result.views[view]
+def _analyze_steps(ob, check, tolerance, view, depsgraph, result):
+    """Read evaluated geometry or the live cage in bounded, cancellable steps."""
+    if check in {"OVERLAPPING_FACES", "OVERLAPPED_UVW"}:
+        yield from _mesh_overlap_steps(ob, check, tolerance, depsgraph, result)
+        return
+    started = perf_counter()
+    evaluated = None
+    try:
+        yield
+        editing = ob.mode == "EDIT"
+        world = ob.matrix_world.copy()
+        preserve = editing and bpy.context.tool_settings.mesh_select_mode[
+            ("VERT", "EDGE", "FACE").index(result.domain)]
+        if editing:
+            data = bmesh.from_edit_mesh(ob.data)
+            for seq in (data.verts, data.edges, data.faces):
+                seq.ensure_lookup_table()
+                seq.index_update()
+                yield
+            vertices, edges, faces = data.verts, data.edges, data.faces
+            layer = data.loops.layers.uv.active
+        else:
+            if any(m.show_viewport for m in ob.modifiers):
+                evaluated = ob.evaluated_get(depsgraph or bpy.context.evaluated_depsgraph_get())
+                data = evaluated.to_mesh()
+                result.selection_safe = False
+            else:
+                data = ob.data
+            vertices, edges, faces = data.vertices, data.edges, data.polygons
+            layer = data.uv_layers.active
+        yield
+        coords = array('d')
+        hidden, selected = bytearray(), bytearray()
+        for v in vertices:
+            coords.extend(world @ v.co)
+            hidden.append(v.hide)
+            selected.append(v.select)
+            yield
+        n = len(hidden)
+        degree = array('I', [0])*n
+        ends, counts, first = array('I'), array('I'), array('I')
+        edge_hidden, edge_selected, winding = bytearray(), bytearray(), bytearray()
+        topology = check in {"OPEN_EDGES", "MULTIPLE_EDGES", "ISOLATED_VERTICES", "T_VERTICES"}
+        if topology:
+            for e in edges:
+                a, b = (v.index for v in e.verts) if editing else e.vertices
+                ends.extend((a,b))
+                degree[a] += 1
+                degree[b] += 1
+                edge_hidden.append(e.hide)
+                edge_selected.append(e.select)
+                counts.append(0)
+                first.append(0)
+                winding.append(0)
+                yield
+        direction = Vector(view[0])
+        origin = Vector(view[1]) if view[1] is not None else None
+        face_check = check in {"FACE_ORIENTATION", "MISSING_UVW", "FLIPPED_UVW"}
+        if face_check or check in {"OPEN_EDGES", "MULTIPLE_EDGES", "T_VERTICES"}:
+            for face in faces:
+                loops = tuple(face.loops) if editing else tuple(data.loops[i] for i in face.loop_indices)
+                if topology:
+                    for loop in loops:
+                        edge = loop.edge.index if editing else loop.edge_index
+                        a = loop.vert.index if editing else loop.vertex_index
+                        if counts[edge] == 0:
+                            first[edge] = a
+                        elif counts[edge] == 1:
+                            winding[edge] = first[edge] == a
+                        counts[edge] += 1
+                    yield
+                    continue
+                # Save only numeric face ranges, not millions of nested containers.
+                result.face_ranges.extend((len(result.face_triangles), len(result.face_triangles)))
+                if face.hide:
+                    yield
+                    continue
+                vi = tuple(loop.vert.index if editing else loop.vertex_index for loop in loops)
+                points = [Vector(coords[i*3:i*3+3]) for i in vi]
+                bad = False
+                if check == "FACE_ORIENTATION":
+                    normal = sum((points[k].cross(points[(k+1) % len(points)])
+                                  for k in range(len(points))), Vector())
+                    center = sum(points, Vector())/len(points)
+                    result.orientation.extend((face.index, *normal, *center))
+                    bad = normal.dot(origin-center if origin is not None else direction) < 0
+                else:
+                    uvs = ([loop[layer].uv.copy() for loop in loops] if editing else
+                           [layer.data[loop.index].uv.copy() for loop in loops]) if layer else None
+                    if check == "MISSING_UVW":
+                        bad = uvs is None or any(not all(isfinite(v) for v in uv) for uv in uvs)
+                    elif uvs is not None and len(uvs) >= 3:
+                        bad = sum(_cross(uvs[0], uvs[k], uvs[k+1]) for k in range(1, len(uvs)-1)) < -1e-12
+                if bad:
+                    result.indices.add(face.index)
+                if not (preserve and face.select) and (bad or check == "FACE_ORIENTATION"):
+                    for triangle in _triangles(points):
+                        if check == "FACE_ORIENTATION":
+                            for p in triangle:
+                                result.face_triangles.extend(p)
+                        if bad:
+                            result.triangles.extend(triangle)
+                            result.revision += 1
+                        yield
+                result.face_ranges[-1] = len(result.face_triangles)
+                yield
+        vertices = edges = faces = data = layer = None
+        if evaluated is not None:
+            _clear_evaluated(evaluated)
+            evaluated = None
+        ids = result.indices
+        if check in {"OPEN_EDGES", "MULTIPLE_EDGES"}:
+            for i, count in enumerate(counts):
+                bad = count == 1 if check == "OPEN_EDGES" else count > 2 or (count == 2 and winding[i])
+                if not edge_hidden[i] and bad:
+                    ids.add(i)
+                    if not (preserve and edge_selected[i]):
+                        for vi in ends[i*2:i*2+2]:
+                            result.lines.append(Vector(coords[vi*3:vi*3+3]))
+                        result.revision += 1
+                yield
+        elif check in {"ISOLATED_VERTICES", "T_VERTICES"}:
+            closed = bytearray([1])*n
+            if check == "T_VERTICES":
+                for i, count in enumerate(counts):
+                    if count != 2:
+                        for vi in ends[i*2:i*2+2]:
+                            closed[vi] = 0
+                    yield
+            for i in range(n):
+                if not hidden[i] and (degree[i] == 0 if check == "ISOLATED_VERTICES" else
+                                      degree[i] == 3 and closed[i]):
+                    ids.add(i)
+                yield
+        elif check == "OVERLAPPING_VERTICES":
+            grid = {}
+            for i in range(n):
+                if not hidden[i]:
+                    co = Vector(coords[i*3:i*3+3])
+                    key = tuple(floor(v/tolerance) for v in co)
+                    for delta in product((-1, 0, 1), repeat=3):
+                        for j in grid.get(tuple(key[k]+delta[k] for k in range(3)), ()):
+                            if (co-Vector(coords[j*3:j*3+3])).length <= tolerance:
+                                ids.update((i,j))
+                            yield
+                        yield
+                    grid.setdefault(key, array('I')).append(i)
+                yield
+        if result.domain == "VERT":
+            for i in ids:
+                if not (preserve and selected[i]):
+                    result.points.append(Vector(coords[i*3:i*3+3]))
+                    result.revision += 1
+                yield
+        result.seconds = perf_counter()-started
+    finally:
+        if evaluated is not None:
+            _clear_evaluated(evaluated)
+
+
+def analyze(ob, check, tolerance=.01, view_direction=(0, 0, 1), view_origin=None):
+    """Blocking analysis for scripts. UI entry points use refresh's bounded jobs."""
+    result = Result(DOMAINS[check], set())
+    for _ in _analyze_steps(ob, check, tolerance, (view_direction, view_origin), None, result):
+        pass
+    result.complete = True
+    return result
 
 
 def select_results(context, results):
     """Select exact base-mesh elements in Edit Poly, across checked objects."""
+    if any(not result.selection_safe or not result.complete for result in results.values()):
+        return False
     objects = [context.view_layer.objects.get(name) for name in results]
     objects = [ob for ob in objects if ob is not None and ob.type == "MESH" and not ob.hide_get()]
     if not objects:
@@ -315,89 +508,197 @@ def select_results(context, results):
     return True
 
 
+def _cancel(state, name):
+    for key in tuple(state.view_jobs):
+        if key[0] == name:
+            state.view_jobs.pop(key).close()
+    job = state.jobs.pop(name, None)
+    if job is not None:
+        job.close()
+
+
 def clear_cache(*_args):
-    global _settings_key, _selection_key
-    _cache.clear()
-    _dirty.clear()
+    for state in _states.values():
+        for job in (*state.jobs.values(), *state.view_jobs.values()):
+            job.close()
+    _states.clear()
     _hits.clear()
-    _settings_key = _selection_key = None
+
+
+def state_for(context):
+    key = (context.scene.as_pointer(), context.view_layer.as_pointer())
+    return _states.setdefault(key, State())
+
+
+def _settings(settings, context):
+    return (settings.check, settings.tolerance, settings.selected_only,
+            tuple(context.tool_settings.mesh_select_mode))
+
+
+def cached_results(context, view=None):
+    """Read only this scene/layer/check generation. Never start work in drawing."""
+    state = state_for(context)
+    settings = context.scene.max_xview
+    if settings.check == "NONE" or state.key != _settings(settings, context):
+        return {}
+    view = view or _last_view
+    if settings.check == "FACE_ORIENTATION" and context.region and context.region_data:
+        state.requested_views[context.region.as_pointer()] = view
+    results = {name: entry[1] for name, entry in state.cache.items()}
+    for name, job in state.jobs.items():
+        if name not in results:
+            results[name] = job.result
+    if settings.check == "FACE_ORIENTATION":
+        return {name: result.views.get(view, Result("FACE", set(), selection_safe=result.selection_safe))
+                for name, result in results.items()}
+    return results
 
 
 def _redraw(context=None):
     context = context or bpy.context
     for win in context.window_manager.windows:
+        if context.scene != win.scene or context.view_layer != win.view_layer:
+            continue
         for area in win.screen.areas:
             if area.type == "VIEW_3D":
                 area.tag_redraw()
 
 
 def _changed(self, context):
-    clear_cache()
+    # Keep other windows' scene/layer results intact.
+    for key, state in _states.items():
+        if key[0] == self.id_data.as_pointer():
+            state.changed = True
     _redraw(context)
+
+
+def _get_tolerance(self):
+    return self.face_tolerance if self.check == "OVERLAPPING_FACES" else self.vertex_tolerance
+
+
+def _set_tolerance(self, value):
+    if self.check == "OVERLAPPING_FACES":
+        self.face_tolerance = value
+    else:
+        self.vertex_tolerance = value
 
 
 class MAX_PG_xview(bpy.types.PropertyGroup):
     check: EnumProperty(name="xView", items=[("NONE", "Hide", "Hide xView")]+
                         [(key, label, "") for key, label, _ in CHECKS], default="NONE", update=_changed)
     selected_only: BoolProperty(name="Selected Only", default=True, update=_changed)
-    # Autodesk's public help does not publish a numeric default. See README.
-    tolerance: FloatProperty(name="Tolerance", default=.001, min=0.0000001, precision=6,
-                             description="Maximum distance in Blender world units", update=_changed)
+    # Autodesk 2026 SDK CheckerImplementations.h, independent mTolerance members.
+    vertex_tolerance: FloatProperty(name="Tolerance", default=.01, min=.0000001, precision=6,
+                                    description="Maximum distance in Blender world units", update=_changed)
+    face_tolerance: FloatProperty(name="Tolerance", default=.01, min=.0000001, precision=6,
+                                  description="Maximum distance in Blender world units", update=_changed)
+    tolerance: FloatProperty(name="Tolerance", get=_get_tolerance, set=_set_tolerance,
+                             min=.0000001, precision=6)
     see_through: BoolProperty(name="See-Through", default=True, update=lambda s, c: _redraw(c))
-    auto_update: BoolProperty(name="Auto Update", default=True)
+    auto_update: BoolProperty(name="Auto Update", default=True, update=lambda s, c: _redraw(c))
     display_on_top: BoolProperty(name="Display On Top", default=False, update=lambda s, c: _redraw(c))
 
 
-def refresh(context=None, force=False, view=None):
-    """Recompute only dirty checked objects. Draw callbacks never analyze meshes."""
-    global _settings_key, _selection_key, _status
+def refresh(context=None, force=False, view=None, budget=STEP_BUDGET):
+    """Schedule, cancel and advance jobs within one shared main-thread budget."""
+    deadline = perf_counter()+max(0., budget)
     context = context or bpy.context
     settings = context.scene.max_xview
+    state = state_for(context)
+    key = _settings(settings, context)
+    changed = state.changed
+    state.changed = False
+    if key != state.key:
+        for name in tuple(state.jobs):
+            _cancel(state, name)
+        for job in state.view_jobs.values():
+            job.close()
+        state.view_jobs.clear()
+        state.cache.clear()
+        state.key = key
+        changed = True
     if settings.check == "NONE":
-        clear_cache()
+        state.watched.clear()
+        state.dirty.clear()
         return {}
     view = view or _last_view
-    key = (context.scene.as_pointer(), context.view_layer.as_pointer(), settings.check,
-           settings.tolerance, settings.selected_only, tuple(context.tool_settings.mesh_select_mode))
-    objects = [ob for ob in context.view_layer.objects if ob.type == "MESH" and ob.visible_get()
-               and (not settings.selected_only or ob.select_get())]
-    selection = tuple((ob.name, ob.as_pointer(), ob.data.as_pointer(), ob.mode) for ob in objects)
-    if key != _settings_key:
-        _cache.clear()
-        _settings_key = key
-    if selection != _selection_key:
-        names = {ob.name for ob in objects}
-        for name in list(_cache):
-            if name not in names:
-                del _cache[name]
-        _selection_key = selection
-    _status = "" if objects else ("No selection" if settings.selected_only else "Unsupported object type")
+    visible = [ob for ob in context.view_layer.objects if ob.visible_get(view_layer=context.view_layer)
+               and (not settings.selected_only or ob.select_get(view_layer=context.view_layer))]
+    objects = [ob for ob in visible if ob.type == "MESH"]
+    status = "" if objects else ("Unsupported object type" if visible else "No selection")
+    changed |= status != state.status
+    state.status = status
+    names = {ob.name for ob in objects}
+    for name in tuple(state.cache):
+        if name not in names:
+            _cancel(state, name)
+            del state.cache[name]
+            changed = True
+    for name in tuple(state.jobs):
+        if name not in names or name in state.dirty or force:
+            _cancel(state, name)
+            changed = True
+    state.watched = {ob.name: (ob.as_pointer(), ob.data.as_pointer(), ob.mode) for ob in objects}
     for ob in objects:
-        entry = _cache.get(ob.name)
-        signature = (ob.as_pointer(), ob.data.as_pointer(), ob.mode)
-        if force or entry is None or entry[0] != signature or (settings.auto_update and ob.name in _dirty):
-            result = analyze(ob, settings.check, settings.tolerance, *view)
-            _cache[ob.name] = (signature, result)
-            _dirty.discard(ob.name)
-    return {name: _oriented(entry[1], view) if settings.check == "FACE_ORIENTATION" else entry[1]
-            for name, entry in _cache.items()}
+        entry = state.cache.get(ob.name)
+        signature = state.watched[ob.name]
+        if ob.name not in state.jobs and (force or entry is None or entry[0] != signature or
+                                         (settings.auto_update and ob.name in state.dirty)):
+            _cancel(state, ob.name)
+            state.jobs[ob.name] = Job(ob, settings.check, settings.tolerance, view, None)
+            state.dirty.discard(ob.name)
+            changed = True
+    for name in tuple(state.jobs):
+        if perf_counter() >= deadline:
+            break
+        job = state.jobs[name]
+        previous = job.result.revision
+        if job.advance(deadline):
+            state.cache[name] = (state.watched[name], job.result)
+            if settings.check == "FACE_ORIENTATION":
+                job.result.views[job.view] = Result("FACE", job.result.indices, triangles=job.result.triangles,
+                                               selection_safe=job.result.selection_safe, complete=True)
+            del state.jobs[name]
+            changed = True
+        elif job.result.revision != previous:
+            changed = True
+    if settings.check == "FACE_ORIENTATION":
+        requested = set(state.requested_views.values()) | {view}
+        for name, (_, result) in state.cache.items():
+            for requested_view in requested:
+                vk = (name, requested_view)
+                if requested_view not in result.views and vk not in state.view_jobs:
+                    job = Job.__new__(Job)
+                    job.result = Result("FACE", set(), selection_safe=result.selection_safe)
+                    job.steps = _orientation_steps(result, requested_view, job.result)
+                    state.view_jobs[vk] = job
+        for vk in tuple(state.view_jobs):
+            if perf_counter() >= deadline:
+                break
+            job = state.view_jobs[vk]
+            if job.advance(deadline):
+                source = state.cache[vk[0]][1]
+                if len(source.views) >= 8:
+                    source.views.clear()
+                source.views[vk[1]] = job.result
+                del state.view_jobs[vk]
+                changed = True
+    if changed:
+        _redraw(context)
+    return cached_results(context, view)
 
 
 @persistent
 def _depsgraph(scene, depsgraph):
-    if not _cache:
-        return
-    watched = {signature[0]: name for name, (signature, _) in _cache.items()}
-    meshes = {}
-    for name, (signature, _) in _cache.items():
-        meshes.setdefault(signature[1], []).append(name)
-    for update in depsgraph.updates:
-        original = update.id.original
-        ptr = original.as_pointer()
-        if isinstance(original, bpy.types.Mesh):
-            _dirty.update(meshes.get(ptr, ()))
-        elif isinstance(original, bpy.types.Object) and ptr in watched and (update.is_updated_geometry or update.is_updated_transform):
-            _dirty.add(watched[ptr])
+    for state in _states.values():
+        for update in depsgraph.updates:
+            original = update.id.original
+            ptr = original.as_pointer()
+            for name, signature in state.watched.items():
+                if ((isinstance(original, bpy.types.Mesh) and ptr == signature[1]) or
+                    (isinstance(original, bpy.types.Object) and ptr == signature[0] and
+                     (update.is_updated_geometry or update.is_updated_transform))):
+                    state.dirty.add(name)
 
 
 @persistent
@@ -408,10 +709,25 @@ def _on_load(*_args):
 def _tick():
     if not hasattr(bpy.types.Scene, "max_xview"):
         return None
-    if bpy.context.scene.max_xview.check != "NONE":
-        refresh()
-        _redraw()
-    return .2
+    deadline = perf_counter()+STEP_BUDGET
+    seen, busy = set(), False
+    for win in bpy.context.window_manager.windows:
+        key = (win.scene.as_pointer(), win.view_layer.as_pointer())
+        if key in seen:
+            continue
+        seen.add(key)
+        with bpy.context.temp_override(window=win, scene=win.scene, view_layer=win.view_layer):
+            refresh(budget=max(0., deadline-perf_counter()))
+            state = state_for(bpy.context)
+            busy |= bool(state.jobs or state.view_jobs)
+    # Remove closed scenes/layers without waking or redrawing idle viewports.
+    valid = {(s.as_pointer(), v.as_pointer()) for s in bpy.data.scenes for v in s.view_layers}
+    for key in tuple(_states):
+        if key not in valid:
+            state = _states.pop(key)
+            for job in (*state.jobs.values(), *state.view_jobs.values()):
+                job.close()
+    return .001 if busy else .2
 
 
 def _visible(context, name):
@@ -438,16 +754,22 @@ def _draw_geometry():
         gpu.state.line_width_set(3.0)
         shader.bind()
         shader.uniform_float("color", GREEN)
-        for name, (_, result) in _cache.items():
+        for name, result in cached_results(context, _view(context)).items():
             if not _visible(context, name):
                 continue
-            if context.scene.max_xview.check == "FACE_ORIENTATION":
-                result = _oriented(result, _view(context))
             if result.batches is None:
-                result.batches = [batch_for_shader(shader, kind, {"pos": coords})
-                                  for kind, coords in (("POINTS", result.points), ("LINES", result.lines),
-                                                       ("TRIS", result.triangles)) if coords]
-            for batch in result.batches:
+                result.batches = []
+            # Upload at most one small batch per draw. Partial results append only.
+            counts = [sum(n for k, n, _ in result.batches if k == kind)
+                      for kind in ("POINTS", "LINES", "TRIS")]
+            for kind, coords, count in zip(("POINTS", "LINES", "TRIS"),
+                                            (result.points, result.lines, result.triangles), counts):
+                if len(coords) > count:
+                    chunk = coords[count:count+1536]
+                    result.batches.append((kind, len(chunk), batch_for_shader(shader, kind, {"pos": chunk})))
+                    context.area.tag_redraw()
+                    break
+            for _, _, batch in result.batches:
                 batch.draw(shader)
     finally:
         gpu.state.depth_test_set(old_depth)
@@ -477,19 +799,26 @@ def _draw_text():
         return
     _last_view = _view(context)
     scale = context.preferences.system.ui_scale
-    font, x = 0, 12*scale
+    font = 0
+    left, right = 0, region.width
+    for side in context.area.regions:
+        if side.type in {"UI", "TOOLS"} and side.width > 1:
+            if side.alignment == "RIGHT":
+                right = min(right, side.x-region.x)
+            elif side.alignment == "LEFT":
+                left = max(left, side.x+side.width-region.x)
     blf.size(font, 13*scale)
-    count = sum(len((_oriented(result, _last_view) if settings.check == "FACE_ORIENTATION" else result).indices)
-                for name, (_, result) in _cache.items() if _visible(context, name))
+    count = sum(len(result.indices)
+                for name, result in cached_results(context, _last_view).items() if _visible(context, name))
     unit = {"VERT": "Vertices", "EDGE": "Edges", "FACE": "Faces"}[DOMAINS[settings.check]]
-    text = f"{LABELS[settings.check]}: {_status or str(count)+' '+unit}"
+    text = f"[ {LABELS[settings.check]}: {state_for(context).status or str(count)+' '+unit} ]"
     top = region.height
     area = context.area
     if region.y + region.height >= area.y + area.height - 2:
         for header in area.regions:
             if header.type in {"HEADER", "TOOL_HEADER"} and header.height > 1 and header.y >= region.y + region.height//2:
                 top -= header.height
-    y = top - 44*scale if settings.display_on_top else 43*scale
+    y = top - 44*scale if settings.display_on_top else 85*scale
     rects = []
 
     def line(label, action, px, py):
@@ -500,12 +829,31 @@ def _draw_text():
         rects.append((action, px, py-4*scale, px+width, py+height+4*scale))
         return width
 
-    line(text, "MENU", x, y)
+    if state_for(context).jobs or state_for(context).view_jobs:
+        text += " (Updating...)"
+    def centered(label, action, py):
+        width, _ = blf.dimensions(font, label)
+        return line(label, action, (left+right-width)*.5, py)
+
+    centered(text, "MENU", y)
     y -= 21*scale
     if settings.check in CONFIGURABLE:
-        x += line("Click Here To Configure", "CONFIGURE", x, y) + 18*scale
-    x += line("Select Results", "SELECT", x, y) + 18*scale
-    line("Hide", "HIDE", x, y)
+        centered("Click Here To Configure", "CONFIGURE", y)
+        y -= 21*scale
+    if not settings.auto_update:
+        centered("Click Here To Update", "UPDATE", y)
+        y -= 21*scale
+    # Requested shortcuts live below Max's stock result and configuration rows.
+    results = cached_results(context, _last_view)
+    safe = all(result.selection_safe for result in results.values())
+    if safe:
+        width = blf.dimensions(font, "Select Results")[0]+18*scale+blf.dimensions(font, "Hide")[0]
+        x = (left+right-width)*.5
+        x += line("Select Results", "SELECT", x, y)+18*scale
+        line("Hide", "HIDE", x, y)
+    else:
+        centered("Select Results unavailable (evaluated modifiers)", "MENU", y)
+        centered("Hide", "HIDE", y-21*scale)
     _hits[region.as_pointer()] = rects
 
 
@@ -521,6 +869,8 @@ def click(context, event):
                 bpy.ops.max.xview_configure("INVOKE_DEFAULT")
             elif action == "SELECT":
                 bpy.ops.max.xview_select()
+            elif action == "UPDATE":
+                bpy.ops.max.xview_update()
             else:
                 context.scene.max_xview.check = "NONE"
             return True
@@ -553,17 +903,55 @@ class MAX_OT_xview_select(bpy.types.Operator):
     def execute(self, context):
         view = _view(context) if context.region_data is not None else None
         results = refresh(context, force=True, view=view)
+        if state_for(context).jobs or state_for(context).view_jobs:
+            self._scene = context.scene
+            self._layer = context.view_layer
+            self._view = view
+            self._timer = context.window_manager.event_timer_add(.03, window=context.window)
+            context.window_manager.modal_handler_add(self)
+            return {"RUNNING_MODAL"}
+        return self._select(context, results)
+
+    def _select(self, context, results):
+        if any(not r.selection_safe for r in results.values()):
+            self.report({"WARNING"}, "Select Results unavailable for evaluated modifiers. Enter Edit Poly to check the cage")
+            return {"CANCELLED"}
         if not results or not any(r.indices for r in results.values()):
             self.report({"INFO"}, "No results")
             return {"CANCELLED"}
         select_results(context, results)
         return {"FINISHED"}
 
+    def modal(self, context, event):
+        if event.type in {"ESC", "RIGHTMOUSE"} or context.scene != self._scene or context.view_layer != self._layer:
+            context.window_manager.event_timer_remove(self._timer)
+            return {"CANCELLED"}
+        if event.type == "TIMER":
+            results = refresh(context, view=self._view)
+            if not state_for(context).jobs and not state_for(context).view_jobs:
+                context.window_manager.event_timer_remove(self._timer)
+                return self._select(context, results)
+        return {"PASS_THROUGH"}
+
+
+class MAX_OT_xview_update(bpy.types.Operator):
+    bl_idname = "max.xview_update"
+    bl_label = "Click Here To Update"
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.max_xview.check != "NONE"
+
+    def execute(self, context):
+        refresh(context, force=True)
+        _redraw(context)
+        return {"FINISHED"}
+
 
 class MAX_OT_xview_configure(bpy.types.Operator):
     bl_idname = "max.xview_configure"
     bl_label = "xView Configuration"
-    tolerance: FloatProperty(name="Tolerance", min=.0000001, precision=6, default=.001)
+    tolerance: FloatProperty(name="Tolerance", min=.0000001, precision=6, default=.01)
 
     @classmethod
     def poll(cls, context):
@@ -602,6 +990,8 @@ class MAX_MT_xview(bpy.types.Menu):
                          icon="CHECKMARK" if settings.check == key else "BLANK1").check = key
         lay.separator()
         lay.operator("max.xview_select", text="Select Results")
+        if not settings.auto_update:
+            lay.operator("max.xview_update", text="Click Here To Update")
         lay.separator()
         for prop in ("selected_only", "see_through", "auto_update", "display_on_top"):
             lay.prop(settings, prop)
@@ -611,7 +1001,8 @@ class MAX_MT_xview(bpy.types.Menu):
             lay.operator("max.xview_check", text="Hide").check = "NONE"
 
 
-classes = (MAX_PG_xview, MAX_OT_xview_check, MAX_OT_xview_select, MAX_OT_xview_configure, MAX_MT_xview)
+classes = (MAX_PG_xview, MAX_OT_xview_check, MAX_OT_xview_select, MAX_OT_xview_update,
+           MAX_OT_xview_configure, MAX_MT_xview)
 
 
 def register():

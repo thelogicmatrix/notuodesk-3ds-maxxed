@@ -70,9 +70,11 @@ Choose **Views > xView**, **[+] > xView** or **[Standard] > xView**. One check r
 
 xView checks Face Orientation, Overlapping Faces, Open Edges, Multiple Edges, Isolated Vertices, Overlapping Vertices, T-Vertices, Missing UVW Coordinates, Flipped UVW Faces and Overlapped UVW Faces. Green points, lines or faces mark the results in Object mode and Edit Poly. Selected sub-objects keep their normal selection colour.
 
-Click the viewport result line to open the menu. **Select Results** enters the matching Edit Poly level and selects the flagged elements. **Hide** turns off the check. **Click Here To Configure** opens the Tolerance dialog for overlapping vertices, overlapping faces and T-Vertices.
+Click the centred, bracketed viewport result to open the menu. **Select Results** enters the matching Edit Poly level and selects the flagged elements. **Hide** turns off the check. **Click Here To Configure** opens the Tolerance dialog for overlapping vertices or overlapping faces. With Auto Update off, **Click Here To Update** refreshes without changing mode or selection.
 
-**Selected Only**, **See-Through** and **Auto Update** start on. **Display On Top** starts off. Tolerance starts at **0.001 Blender world units**. Results and GPU batches stay cached until a checked mesh changes. Unrelated object edits do not rerun the check.
+**Selected Only**, **See-Through** and **Auto Update** start on. **Display On Top** starts off. Overlapping Vertices and Overlapping Faces each store their own tolerance, initially **0.01 Blender world units**. This maps one Blender world unit to one Max system unit, without assigning a physical unit. The default comes from Autodesk's 2026 SDK.
+
+Checks run in cancellable timer jobs with an 8 ms work budget. The previous result stays visible with an Updating message while a checked mesh changes. New results can appear in pieces. Results belong to their scene and view layer. Unrelated object edits do not rerun the check.
 
 ## Opening 3ds Max files
 
@@ -164,9 +166,9 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
-- xView checks the editable mesh before modifiers, using the active UV map. It does not inspect the evaluated modifier result. Cross-object coincidences are not checked.
-- xView's 0.001 tolerance is a chosen default. Autodesk's public 2026 help does not state its numeric default. T-Vertices includes both three-edge vertices and unwelded vertices within tolerance of another edge. Overlapping Faces also finds edge-only crossings that Max's documented check misses.
-- Large xView face-overlap checks can pause Blender during recomputation. Auto Update can be switched off. Other checks and unchanged cached results are much cheaper.
+- xView checks the evaluated modifier result in Object Mode and the editable cage in Edit Poly, using the active UV map. Select Results is unavailable in Object Mode when a viewport modifier is enabled, because evaluated indices may not identify base-mesh elements. Enter Edit Poly to check and select the cage. Cross-object coincidences are not checked.
+- T-Vertices requires three incident edges with faces on both sides, as in Autodesk's 2026 SDK. It has no Tolerance dialog or unwelded near-edge extension. Overlapping Faces also finds edge-only crossings that Max's documented check misses.
+- Large xView checks finish over multiple timer ticks. Edits cancel and restart the snapshot, so continuous edits can postpone a finished result. Python scans yield, but Blender's native modifier evaluation and mesh extraction can take longer than the timer budget.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
