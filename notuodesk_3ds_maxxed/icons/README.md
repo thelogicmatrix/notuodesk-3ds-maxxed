@@ -71,3 +71,9 @@ No new controls or tool behavior are introduced. The existing quad menus have
 no built-in icon arguments to replace. Material previews remain live Blender
 previews. Blender's native material preview-type, viewport shading and overlay
 buttons retain their built-in enum icons.
+
+`edit_mode` depicts a mesh and pencil for Blender's modifier edit-mode toggle.
+`modifier_list` depicts list rows and a dropdown arrow for the Modifier List
+menu. `show_end_result` and `configure_modifier_sets` remain unused assets for
+their corresponding Max controls. Motion uses overlapping discs and motion
+trails. The 2D, 2.5D and 3D snap icons share a compact magnet and large numerals.

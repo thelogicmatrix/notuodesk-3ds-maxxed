@@ -158,7 +158,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
-- The icons are original GPL artwork with Max's visual vocabulary, not Autodesk's icon artwork. Icons are supplied for toolbar and stack controls that this version does not draw, including Pin Stack, Bind to Space Warp, Window/Crossing, Spinner Snap, Layer Explorer and Ribbon. This does not add those controls. Blender still draws its own material preview-type buttons and viewport shading and overlay buttons.
+- The icons are original GPL artwork with Max's visual vocabulary, not Autodesk's icon artwork. Icons are supplied for toolbar and stack controls that this version does not draw, including Pin Stack, Show End Result, Configure Modifier Sets, Bind to Space Warp, Window/Crossing, Spinner Snap, Layer Explorer and Ribbon. This does not add those controls. The modifier's edit-mode toggle has a mesh-and-pencil icon. The Modifier List menu has a list-and-dropdown icon. Blender still draws its own material preview-type buttons and viewport shading and overlay buttons.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.

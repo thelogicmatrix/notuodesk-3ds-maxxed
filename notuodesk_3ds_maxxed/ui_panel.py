@@ -152,7 +152,7 @@ class MAX_PT_command_panel(Panel):
             row = layout.row(align=True)
             row.operator_context = "INVOKE_DEFAULT"
             row.operator("max.modifier_search", text="Modifier List", **max_icons.ui("search", "VIEWZOOM"))
-            row.menu("MAX_MT_modifier_list", text="", **max_icons.ui("configure_modifier_sets", "COLLAPSEMENU"))
+            row.menu("MAX_MT_modifier_list", text="", **max_icons.ui("modifier_list", "COLLAPSEMENU"))
 
             col = layout.column(align=True)
             col.template_list("MAX_UL_stack", "", ob, "modifiers", ob, "max_stack_index",
@@ -167,7 +167,7 @@ class MAX_PT_command_panel(Panel):
             row = layout.row(align=True)
             row.alignment = "LEFT"
             if active:
-                row.prop(active, "show_in_editmode", text="", **max_icons.ui("show_end_result", "EDITMODE_HLT"))
+                row.prop(active, "show_in_editmode", text="", **max_icons.ui("edit_mode", "EDITMODE_HLT"))
                 row.prop(active, "show_on_cage", text="", **max_icons.ui("editable_poly", "MESH_DATA"))
                 row.operator("object.make_single_user", text="", **max_icons.ui("make_unique", "DUPLICATE")).object = True
                 row.operator("object.modifier_remove", text="", **max_icons.ui("remove_modifier", "TRASH")).modifier = active.name
