@@ -7,6 +7,7 @@ CAP = '.max_symmetry_cap'
 CUT = '.max_symmetry_cut'
 NEAR = '.max_symmetry_near'
 EPS = 1e-5
+REVISION = 2
 
 
 class Builder(G):
@@ -65,10 +66,24 @@ class Builder(G):
         self._set(n, 'Mesh', self.transform(geo, scale=scale))
         return n.outputs[0]
 
+    def tolerance(self, geo):
+        bounds = self.node('GeometryNodeBoundBox')
+        self._set(bounds, 'Geometry', geo)
+        extent = self.m('MAXIMUM', self.vm('LENGTH', bounds.outputs['Max'], out=1),
+                        self.vm('LENGTH', bounds.outputs['Min'], out=1))
+        # Float positions and radial rotations lose absolute precision as
+        # coordinates grow. Only cut-tagged vertices use this tolerance.
+        return self.m('MAXIMUM', EPS, self.m('MULTIPLY', extent, 1e-6))
+
     def clip(self, geo, normal, distance, open_boundary=True):
         """Half-space cut with an explicit mask of the cut's seam vertices."""
         pos = self.position()
         signed = self.vm('DOT_PRODUCT', pos, normal, out=1)
+        tolerance = self.tolerance(geo)
+        limits = self.node('GeometryNodeAttributeStatistic', data_type='FLOAT', domain='POINT')
+        self._set(limits, 'Geometry', geo)
+        self._set(limits, 'Attribute', signed)
+        retained = self.m('GREATER_THAN', limits.outputs['Min'], -1e-12)
         near = self.m('LESS_THAN', self.m('ABSOLUTE', signed), distance)
         projected = self.vm('SUBTRACT', pos, self.vm('MULTIPLY', normal, self.combine(signed, signed, signed)))
         snap = self.node('GeometryNodeSetPosition')
@@ -76,7 +91,7 @@ class Builder(G):
         self._set(snap, 'Selection', near)
         self._set(snap, 'Position', projected)
         # Preserve an existing open seam on the exact cutting plane as well.
-        seam = self.either(self.attr(CUT), self.m('LESS_THAN', self.m('ABSOLUTE', signed), EPS))
+        seam = self.either(self.attr(CUT), self.m('LESS_THAN', self.m('ABSOLUTE', signed), tolerance))
         geo = self.store(snap.outputs[0], CUT, seam)
         bounds = self.node('GeometryNodeBoundBox')
         self._set(bounds, 'Geometry', geo)
@@ -104,8 +119,11 @@ class Builder(G):
         # Tag the boundary on the newly cut result, including an original
         # vertex already on that boundary. Keep this provenance through every
         # later reflection and rotation. Uncut geometry never gets this tag.
-        cut_vertices = self.m('LESS_THAN', self.m('ABSOLUTE', signed), EPS)
+        cut_vertices = self.m('LESS_THAN', self.m('ABSOLUTE', signed), tolerance)
         marked = self.store(cut.outputs['Mesh'], CUT, self.either(self.attr(CUT), cut_vertices))
+        # Switch evaluates only the chosen geometry input. An open source
+        # wholly inside the retained half-space needs no solid intersection.
+        marked = self.switch(retained, geo, marked)
         if not open_boundary:
             return marked
         return self.remove_caps(marked)
@@ -123,13 +141,14 @@ class Builder(G):
         self._set(n, 'Geometry', geo)
         self._set(n, 'Selection', self.switch(self.g('Proximity'), proximity_selection, self.attr(CUT), 'BOOLEAN'))
         self._set(n, 'Distance', self.switch(self.g('Proximity'), self.g('Weld Threshold'),
-                                            self.m('MINIMUM', self.g('Weld Threshold'), EPS), 'FLOAT'))
+                                            self.m('MINIMUM', self.g('Weld Threshold'), self.tolerance(geo)), 'FLOAT'))
         return self.switch(self.g('Weld'), n.outputs[0], geo)
 
 
 def build(token):
     g = Builder('Symmetry')
     g.ng[MARKER] = token
+    g.ng['max_symmetry_revision'] = REVISION
     for name, kind, default in (
             ('Axes', 'VECTOR', (1, 0, 0)), ('Flips', 'VECTOR', (0, 0, 0)),
             ('Slice', 'BOOL', True), ('Slice Threshold', 'FLOAT', .01),
@@ -173,8 +192,9 @@ def build(token):
     # A second Boolean can interpolate a point attribute from the cutter's
     # face at the first boundary. Reassert both exact cut boundaries before
     # making any copies, rather than proximity-welding the entire segment.
-    boundary = g.either(g.m('LESS_THAN', g.m('ABSOLUTE', g.xyz(g.position())[1]), EPS),
-                        g.m('LESS_THAN', g.m('ABSOLUTE', g.vm('DOT_PRODUCT', g.position(), normal, out=1)), EPS))
+    tolerance = g.tolerance(source)
+    boundary = g.either(g.m('LESS_THAN', g.m('ABSOLUTE', g.xyz(g.position())[1]), tolerance),
+                        g.m('LESS_THAN', g.m('ABSOLUTE', g.vm('DOT_PRODUCT', g.position(), normal, out=1)), tolerance))
     sector = g.store(sector, CUT, g.either(g.attr(CUT), boundary))
     radial = g.switch(g.g('Slice'), sector, radial)
     band = g.either(g.m('LESS_THAN', g.m('ABSOLUTE', g.xyz(g.position())[1]), g.g('Weld Threshold')),

@@ -263,6 +263,14 @@ def reconcile():
                     plane = _new_plane(ob, mod, token, Matrix([values[i:i+4] for i in range(0, 16, 4)]))
                 if mod.type == 'MIRROR':
                     mod = _upgrade(ob, mod)
+                elif mod.node_group.get('max_symmetry_revision', 0) < symmetry_nodes.REVISION:
+                    # Node graphs persist in .blend files. Rebuild older
+                    # engines so existing scenes receive numerical/perf fixes.
+                    values = {key: getattr(settings(mod), key) for key in _INPUTS}
+                    mod.node_group = symmetry_nodes.build(mod.node_group[symmetry_nodes.MARKER])
+                    mod.node_group.nodes['Mirror frame'].inputs['Object'].default_value = plane
+                    for key, value in values.items():
+                        setattr(settings(mod), key, value)
                 used.add(plane)
                 live_tokens.add(plane['token'])
                 _remember(ob, mod)
