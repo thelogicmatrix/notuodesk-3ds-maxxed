@@ -142,6 +142,7 @@ def apply_layout(context, quad=False):
             continue
         if area.type == 'VIEW_3D':
             space = area.spaces.active
+            _set(space.overlay, 'show_text', False)
             _set(space, 'show_region_toolbar', False)
             _set(space, 'show_region_tool_header', False)
             _set(space, 'show_region_ui', True)

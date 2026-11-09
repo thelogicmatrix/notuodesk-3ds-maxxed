@@ -52,7 +52,17 @@ def label_regions(context):
         return []
     scale = max(.5, context.preferences.system.ui_scale)
     blf.size(0, max(9, round(12 * scale)))
-    x, y = 8 * scale, region.height - 22 * scale
+    top = region.y + region.height
+    # Overlay headers occupy WINDOW pixels after a split. Quad regions share
+    # the area's header, so reserve it only where it intersects this region.
+    for header in context.area.regions:
+        if (header.type in {'HEADER', 'TOOL_HEADER'} and header.width > 1 and header.height > 1
+                and header.x < region.x + region.width and header.x + header.width > region.x
+                and region.y < header.y < top):
+            top = header.y
+    x, y = 8 * scale, top - region.y - 22 * scale
+    if y - 3 * scale < 0:
+        return []
     shading = context.space_data.shading
     quality = ('High Quality' if shading.type in {'MATERIAL', 'RENDERED'} else
                'Performance' if not shading.show_shadows and not shading.show_cavity else 'Standard')
