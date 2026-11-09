@@ -405,16 +405,23 @@ class MAX_OT_create_shape(Operator):
     radius: bpy.props.FloatProperty(name="Radius", default=1.0, min=0.001)
     sides: IntProperty(name="Sides", default=6, min=3, max=64)
 
+    def invoke(self, context, event):
+        if self.kind == "LINE":
+            return bpy.ops.max.line("INVOKE_DEFAULT")
+        return self.execute(context)
+
     def execute(self, context):
+        if self.kind == "LINE":
+            self.report({"WARNING"}, "Use interactive Line or Line Keyboard Entry")
+            return {"CANCELLED"}
+        MAX_OT_create._session += 1
         if context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
         k, r = self.kind, self.radius
         label = dict((a, b) for a, b, _ in SHAPES)[k]
         name = max_name(label)
         tau = 2 * math.pi
-        if k == "LINE":
-            _poly_curve(context, name, [(-r, 0, 0), (r, 0, 0)], False)
-        elif k == "RECTANGLE":
+        if k == "RECTANGLE":
             _poly_curve(context, name, [(-r, -r * .6, 0), (r, -r * .6, 0), (r, r * .6, 0), (-r, r * .6, 0)], True)
         elif k in {"CIRCLE", "ELLIPSE"}:
             bpy.ops.curve.primitive_bezier_circle_add(radius=r, location=context.scene.cursor.location)

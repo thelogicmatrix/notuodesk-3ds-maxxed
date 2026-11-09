@@ -26,6 +26,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import line_tool
 
 
 _prefs_cache = [None]
@@ -142,7 +143,7 @@ HOTKEY_CHEATSHEET = (
 _classes = (
     (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
-    + ui_menus.classes
+    + ui_menus.classes + line_tool.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
@@ -182,6 +183,7 @@ def register():
     mtl_editor.register_props()
     turbosmooth.register_props()
     ffd.register_props()
+    line_tool.register_props()
     ui_menus.register_draw()
     max_import.register_menus()
     overlay.register()
@@ -201,6 +203,7 @@ def unregister():
     max_import.unregister_menus()
     ui_menus.unregister_draw()
     wm = bpy.types.WindowManager
+    line_tool.unregister_props()
     ffd.unregister_props()
     turbosmooth.unregister_props()
     mtl_editor.unregister_props()
