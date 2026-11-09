@@ -66,7 +66,7 @@ Loose edges are exported. FBX represents object transforms as translation, rotat
 Before production edits, the new public-operator tests failed on the posed Armature-before-TurboSmooth fixture by 0.15108180046081543 Blender units. Evaluation failure left both source rigs in REST. The additional geometry regressions caught four lost loose edges and parent-inverse shape changes. Logs are `fix-round-4-red.log` and `fix-round-4-all-red.log` in the sandbox outputs.
 
 ```text
-Ran 27 tests in 5.008s
+Ran 27 tests in 4.328s
 OK
 VERIFIED posed Armature before TurboSmooth: both operators and animation settings match current evaluated pose
 VERIFIED evaluation failure: both public operators restore source rig, data, modifiers and scene state
@@ -78,9 +78,9 @@ The baked matrix retains Mesh, Curve, Text, Surface and Metaball cases, modifier
 
 Geometry comparisons require matching vertex and face counts and bidirectional nearest world-space vertex distances below 0.00002 Blender units. The loose-edge regression also checks edge counts. Corner normals match corresponding positions in both directions within 0.0001. These comparisons do not measure full surface distance or prove Max-side appearance.
 
-The independent round-3 review scripts were copied into `outputs/fix-round-4-review/` and adapted to the baked-only public API. Their geometry sweep reports `PROBE_COMPLETE 32 32`. Their restoration sweep covers success, a real unwritable output, and injected evaluation failure through both operators. The injection targets the wrapper as well as native FBX because the wrapper now evaluates mesh geometry first. The original review scripts and results remain unchanged.
+The independent round-3 review scripts were copied into `outputs/fix-round-4-review/` and adapted to the baked-only public API. Their geometry sweep reports `PROBE_COMPLETE 32 32`. Their restoration sweep covers success, a real unwritable output, and injected evaluation failure through both operators. The injection targets the wrapper as well as native FBX because the wrapper now evaluates mesh geometry first. It reports `RESTORE_COMPLETE 36 36`, with 12 successful exports and 24 actual failures. The original review scripts and results remain unchanged.
 
-All 17 copied Max scenes were re-imported in this round. Their audit JSON matches round 3 exactly. The copied 3World reference comparison is unchanged. Outputs are `fix-round-4-final.log`, `fix-round-4-max-scenes.json`, `fix-round-4-reference/`, `fix-round-4-probe.log` and `fix-round-4-restoration.log`.
+All 17 copied Max scenes were re-imported in this round. Their audit JSON matches round 3 exactly. The copied 3World reference comparison is unchanged. Outputs are `fix-round-4-final.log`, `fix-round-4-max-scenes.json`, `fix-round-4-reference/`, `fix-round-4-probe.log` and `fix-round-4-restoration.log`. The extension build also passes and writes `outputs/fix-round-4-build/notuodesk_3ds_maxxed-1.8.0.zip`, without a version change.
 
 ## Commands
 
