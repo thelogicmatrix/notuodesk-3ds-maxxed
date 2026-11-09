@@ -9,6 +9,8 @@ import bpy
 from bpy.props import BoolProperty, FloatProperty, IntProperty, StringProperty
 from mathutils import Matrix
 
+from . import extended_primitives
+
 # kind: (label, icon, base style for click-drag, has height stage)
 PRIMITIVES = {
     "BOX": ("Box", "MESH_CUBE", "RECT", True),
@@ -21,6 +23,7 @@ PRIMITIVES = {
     "PYRAMID": ("Pyramid", "MARKER", "RECT", True),
     "PLANE": ("Plane", "MESH_PLANE", "RECT", False),
 }
+PRIMITIVES.update(extended_primitives.PRIMITIVES)
 
 # 3ds Max default segment counts
 DEFAULTS = {
@@ -73,6 +76,8 @@ def _ring(bm, r, z, segs):
 
 
 def build_bmesh(kind, p):
+    if kind in extended_primitives.PRIMITIVES:
+        return extended_primitives.build_bmesh(kind, p)
     bm = bmesh.new()
     h = p.height
     ah = abs(h) if abs(h) > 1e-6 else 1e-6
@@ -150,10 +155,19 @@ def rebuild(ob):
     if p.vcount and len(me.vertices) != p.vcount:
         p.kind = ""          # mesh was edited: it is an Editable Poly now
         return False
+    if p.kind in extended_primitives.PRIMITIVES:
+        guarded = _guard[0]
+        _guard[0] = True
+        try:
+            extended_primitives.constrain(p)
+        finally:
+            _guard[0] = guarded
     bm = build_bmesh(p.kind, p)
     bm.to_mesh(me)
     bm.free()
     me.update()
+    if p.kind in extended_primitives.PRIMITIVES:
+        extended_primitives.mapping(ob)
     p.vcount = len(me.vertices)
     return True
 
@@ -187,6 +201,9 @@ class MaxPrimParams(bpy.types.PropertyGroup):
     smooth: BoolProperty(name="Smooth", default=True, update=_update)
 
 
+MaxPrimParams.__annotations__.update(extended_primitives.property_definitions(_update))
+
+
 def set_params(ob, kind, **values):
     """Assign parameters without triggering a rebuild for each one, then rebuild once."""
     p = ob.max_prim
@@ -194,7 +211,9 @@ def set_params(ob, kind, **values):
     try:
         p.kind = kind
         p.vcount = 0
-        for k, v in {**DEFAULTS.get(kind, {}), **values}.items():
+        defaults = (extended_primitives.defaults(kind) if kind in extended_primitives.PRIMITIVES
+                    else DEFAULTS.get(kind, {}))
+        for k, v in {**defaults, **values}.items():
             setattr(p, k, v)
     finally:
         _guard[0] = False

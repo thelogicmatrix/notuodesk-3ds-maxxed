@@ -63,6 +63,16 @@ Press **M**, or choose **Rendering › Material Editor**. It opens as a narrow f
 
 <br clear="right">
 
+## Extended Primitives
+
+Choose **Create > Geometry > Extended Primitives** in the Command Panel. It has Hedra, ChamferBox, OilTank, Spindle, Gengon, Prism, Torus Knot, ChamferCyl, Capsule, L-Ext and C-Ext.
+
+Drag the footprint, release, then click to set height. ChamferBox, ChamferCyl and Gengon have a final Fillet step. OilTank and Spindle finish with Cap Height. L-Ext and C-Ext finish with wall width. Hedra needs only the radius drag. Torus Knot uses its second step for Cross Section Radius. Prism starts with an isosceles triangle. The tool stays active for the next object until you right-click.
+
+The objects keep their parameters in **Create > Parameters** and **Modify > Parameters**, including segment counts, Smooth and Generate Mapping Coords. Editing or collapsing an object makes it an Editable Poly, as with Standard Primitives. OilTank, Spindle and Capsule have Overall/Centers height options. Torus Knot has Knot/Circle base curves, winding numbers, warp, eccentricity, twist and lumps.
+
+Parameter names and segment defaults follow [Autodesk's Extended Primitives reference](https://help.autodesk.com/cloudhelp/2015/ENU/3DSMax/files/GUID-BF868DCF-12E3-431C-A73B-C16C0FD67C98.htm). Types whose Max constructor starts with zero dimensions start at one Blender unit here. ChamferBox, Capsule, Hedra and Prism keep their documented nonzero dimensions. Click-drag creation replaces these dimensions with the size you draw.
+
 ## Opening 3ds Max files
 
 ![A 3ds Max 2015 character opened with File › Open 3ds Max File](docs/open-max-file.png)
@@ -152,6 +162,10 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, labels, random colors) under **Preferences › Add-ons › NotuoDesk 3ds Maxxed**.
 
 ## Known differences from 3ds Max
+
+- Extended Primitives do not include RingWave or Hose. Creation uses the default Corners, Center or Isosceles method. Alternate creation methods and Slice controls are not included.
+- Hedra uses reflection-generated polyhedra. Star1, Star2 and axis scaling approximate Max's shapes. Its facet topology and the other primitives' triangulation can differ from Max. OilTank and Spindle use Blender's bevel for Blend.
+- Generate Mapping Coords on Extended Primitives uses box projection. It does not reproduce Max's UV layouts. Torus Knot uses whole-number winding, twist, warp and lump counts, and Smooth is an on/off setting. Real-World Map Size and mapping offset/tiling controls are not included.
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
