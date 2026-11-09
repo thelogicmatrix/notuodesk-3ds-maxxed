@@ -50,6 +50,9 @@ class MAX_PG_spline(PropertyGroup):
 
 
 class MAX_PG_line(PropertyGroup):
+    shape_kind: EnumProperty(name="Shape Creator", default="NONE", items=[
+        ("NONE", "None", "No shape creator chosen"),
+    ] + [(kind, label, "") for kind, label, icon in create.SHAPES])
     initial_type: EnumProperty(name="Initial Type", items=TYPES[:2], default="CORNER")
     drag_type: EnumProperty(name="Drag Type", items=TYPES, default="BEZIER")
     x: FloatProperty(name="X", subtype="DISTANCE")
@@ -282,6 +285,7 @@ class MAX_OT_line(Operator):
         self.region = None
         self.handler = bpy.types.SpaceView3D.draw_handler_add(self.draw_preview, (), "WINDOW", "POST_VIEW")
         MAX_OT_line.active = self
+        context.window_manager.max_line.shape_kind = "LINE"
         context.window_manager.max_create_cat = "SHAPES"
         context.window_manager.modal_handler_add(self)
         self.status(context)
@@ -435,8 +439,8 @@ def spline_poll(context):
 
 def line_poll(context):
     wm = context.window_manager
-    ob = context.active_object
-    return (wm.max_cmd_tab == "CREATE" and wm.max_create_cat == "SHAPES") or bool(ob and ob.get("max_line"))
+    return (wm.max_cmd_tab == "CREATE" and wm.max_create_cat == "SHAPES"
+            and wm.max_line.shape_kind == "LINE")
 
 
 def spline_settings(context):
@@ -448,15 +452,38 @@ def spline_settings(context):
 
 def draw_rendering(layout, context):
     p = spline_settings(context)
-    for field in ("renderer", "viewport", "thickness", "sides", "angle"):
-        layout.prop(p, field)
+    col = layout.column(align=True)
+    col.use_property_split = False
+    col.use_property_decorate = False
+    col.prop(p, "renderer")
+    col.prop(p, "viewport")
+    col.separator(factor=0.4)
+    for field, label in (("thickness", "Radial Thickness"), ("sides", "Sides"), ("angle", "Angle")):
+        _spinner(col, p, field, label)
+
+
+def _spinner(layout, values, prop, label):
+    row = layout.row(align=True)
+    row.use_property_split = False
+    row.use_property_decorate = False
+    row.scale_y = 0.85
+    split = row.split(factor=0.48, align=True)
+    caption = split.row(align=True)
+    caption.alignment = "RIGHT"
+    caption.label(text=label + ":")
+    field = split.row(align=True)
+    field.alignment = "LEFT"
+    field.ui_units_x = 5.0
+    field.prop(values, prop, text="")
 
 
 def draw_interpolation(layout, context):
     p = spline_settings(context)
-    col = layout.column()
+    col = layout.column(align=True)
+    col.use_property_split = False
+    col.use_property_decorate = False
     col.enabled = not p.adaptive
-    col.prop(p, "steps")
+    _spinner(col, p, "steps", "Steps")
     col.prop(p, "optimize")
     layout.prop(p, "adaptive")
     if p.adaptive:
@@ -465,16 +492,23 @@ def draw_interpolation(layout, context):
 
 def draw_method(layout, context):
     p = context.window_manager.max_line
-    layout.label(text="Initial Type")
-    layout.prop(p, "initial_type", expand=True)
-    layout.label(text="Drag Type")
-    layout.prop(p, "drag_type", expand=True)
+    for prop, label, types in (("initial_type", "Initial Type", TYPES[:2]),
+                               ("drag_type", "Drag Type", TYPES)):
+        layout.label(text=label)
+        row = layout.row(align=True)
+        row.alignment = "CENTER"
+        row.emboss = "NONE"
+        for key, name, description in types:
+            icon = "RADIOBUT_ON" if getattr(p, prop) == key else "RADIOBUT_OFF"
+            row.prop_enum(p, prop, key, text=name, icon=icon)
 
 
 def draw_keyboard(layout, context):
     p = context.window_manager.max_line
+    col = layout.column(align=True)
     for field in ("x", "y", "z"):
-        layout.prop(p, field)
+        _spinner(col, p, field, field.upper())
+    layout.separator(factor=0.4)
     layout.operator("max.line_keyboard", text="Add Point").action = "ADD"
     row = layout.row(align=True)
     row.operator("max.line_keyboard", text="Close").action = "CLOSE"

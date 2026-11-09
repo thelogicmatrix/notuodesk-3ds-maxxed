@@ -414,6 +414,7 @@ class MAX_OT_create_shape(Operator):
         if self.kind == "LINE":
             self.report({"WARNING"}, "Use interactive Line or Line Keyboard Entry")
             return {"CANCELLED"}
+        context.window_manager.max_line.shape_kind = self.kind
         MAX_OT_create._session += 1
         if context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")

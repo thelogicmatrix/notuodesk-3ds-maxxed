@@ -409,7 +409,7 @@ from . import line_tool
 rollout("Rendering", {"CREATE", "MODIFY"}, 4, closed=True)(when(line_tool.spline_poll)(line_tool.draw_rendering))
 rollout("Interpolation", {"CREATE", "MODIFY"}, 5, closed=True)(when(line_tool.spline_poll)(line_tool.draw_interpolation))
 rollout("Creation Method", {"CREATE"}, 6)(when(line_tool.line_poll)(line_tool.draw_method))
-rollout("Keyboard Entry", {"CREATE", "MODIFY"}, 7, closed=True)(when(line_tool.line_poll)(line_tool.draw_keyboard))
+rollout("Keyboard Entry", {"CREATE"}, 7, closed=True)(when(line_tool.line_poll)(line_tool.draw_keyboard))
 
 @rollout("Material", {"MODIFY"}, 9, closed=True)
 @when(lambda c: c.active_object is not None and c.active_object.type in {"MESH", "CURVE", "FONT", "SURFACE", "META"})

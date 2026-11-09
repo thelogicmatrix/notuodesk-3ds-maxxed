@@ -16,6 +16,32 @@ settings = bpy.context.window_manager.max_line
 assert settings.initial_type == "CORNER"
 assert settings.drag_type == "BEZIER"
 
+from notuodesk_3ds_maxxed import create, line_tool, ui_panel
+
+wm = bpy.context.window_manager
+method_panel = next(p for p in ui_panel.ROLLOUTS if p.__name__ == "MAX_PT_draw_method")
+keyboard_panel = next(p for p in ui_panel.ROLLOUTS if p.__name__ == "MAX_PT_draw_keyboard")
+
+
+def line_panels():
+    return method_panel.poll(bpy.context), keyboard_panel.poll(bpy.context)
+
+
+# Choosing Shapes alone must not expose a creator's controls.
+wm.max_cmd_tab = "CREATE"
+wm.max_create_cat = "SHAPES"
+assert line_panels() == (False, False), "Line rollouts leaked before choosing Line"
+settings.shape_kind = "LINE"
+assert line_panels() == (True, True)
+for kind, label, icon in create.SHAPES:
+    if kind == "LINE":
+        continue
+    settings.shape_kind = "LINE"
+    assert bpy.ops.max.create_shape(kind=kind) == {"FINISHED"}
+    assert settings.shape_kind == kind, (kind, settings.shape_kind)
+    assert line_panels() == (False, False), (kind, "Line rollouts leaked")
+print("LINE_TEST creator_visibility no_choice=hidden other_shapes=8_hidden tracked=True", flush=True)
+
 
 def add(co):
     settings.x, settings.y, settings.z = co
@@ -33,6 +59,21 @@ assert not sp.use_cyclic_u
 assert [tuple(p.co) for p in sp.bezier_points] == [(1, 2, 3), (4, 2, 3), (4, 6, 5)]
 assert all(p.handle_left_type == p.handle_right_type == "VECTOR" for p in sp.bezier_points)
 print("LINE_TEST keyboard open count=3 positions=exact handles=VECTOR cyclic=False", flush=True)
+
+# A selected Line must not override the chosen creator or category.
+assert ob.get("max_line")
+settings.shape_kind = "RECTANGLE"
+assert line_panels() == (False, False), "Selected Line overrode Rectangle creator"
+settings.shape_kind = "LINE"
+assert line_panels() == (True, True)
+wm.max_create_cat = "GEOMETRY"
+assert line_panels() == (False, False), "Line rollouts leaked into Geometry"
+wm.max_cmd_tab = "MODIFY"
+assert line_panels() == (False, False), "Creator controls leaked into Modify"
+wm.max_cmd_tab = "CREATE"
+wm.max_create_cat = "SHAPES"
+assert line_panels() == (True, True)
+print("LINE_TEST creator_visibility selected_line_no_override=True Geometry=hidden Modify=hidden Line=visible", flush=True)
 
 settings.initial_type = "SMOOTH"
 closed = add((0, 0, 0))

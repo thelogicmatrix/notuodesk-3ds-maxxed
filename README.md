@@ -127,6 +127,8 @@ Right-click finishes the current spline and leaves Line active for another. Righ
 
 **Keyboard Entry** adds points at world X, Y and Z coordinates. **Add Point** continues the current Line, **Close** joins its ends and **Finish** leaves it open. Both need at least two points.
 
+Line's **Creation Method** and **Keyboard Entry** appear only while Line is the chosen Shapes creator. Choosing another shape or switching to Geometry hides them, even with a Line selected. Creation Method uses circle radio buttons. Keyboard Entry, Rendering and Interpolation use compact labelled spinners.
+
 Spline objects have **Rendering** and **Interpolation** rollouts in Create and Modify. Radial Thickness is the diameter. Sides and Angle control the radial cross-section. Enable In Renderer and Enable In Viewport work independently. Blender curves keep the editable vertices, with a Geometry Nodes modifier for the radial mesh. Steps sets subdivisions between vertices. Optimize skips subdivisions on straight segments in the generated mesh.
 
 ## Hotkeys
