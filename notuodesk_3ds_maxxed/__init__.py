@@ -174,7 +174,8 @@ def _unlock_quads_once():
 
 def register():
     for cls in _classes:
-        bpy.utils.register_class(cls)
+        if not max_rotate.retained_class(cls):
+            bpy.utils.register_class(cls)
     wm = bpy.types.WindowManager
     wm.max_cmd_tab = EnumProperty(name="Command Panel", items=ui_panel.TABS, default="CREATE")
     wm.max_create_cat = EnumProperty(name="Category", items=ui_panel.CREATE_CATS, default="GEOMETRY")
@@ -202,6 +203,7 @@ def register():
 
 
 def unregister():
+    max_gizmos.cancel_all()
     _prefs_cache[0] = None
     keymap.unregister_keymaps()
     overlay.unregister()
@@ -221,4 +223,5 @@ def unregister():
         if hasattr(wm, prop):
             delattr(wm, prop)
     for cls in reversed(_classes):
-        bpy.utils.unregister_class(cls)
+        if not max_rotate.defer_unregister(cls):
+            bpy.utils.unregister_class(cls)

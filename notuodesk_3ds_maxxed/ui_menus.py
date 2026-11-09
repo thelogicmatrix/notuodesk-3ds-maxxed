@@ -398,6 +398,7 @@ class MAX_MT_customize(Menu):
         lay = self.layout
         lay.operator_context = "INVOKE_DEFAULT"
         lay.operator("screen.userpref_show", text="Preferences...")
+        lay.operator("max.gizmo_preferences", text="Gizmos Preferences...")
         lay.operator("preferences.addon_show", text="Hotkeys (3ds Maxxed)...").module = __package__
         lay.separator()
         lay.operator("max.apply", text="Apply 3ds Max Look (reset layout)")
@@ -537,7 +538,7 @@ def draw_main_toolbar(self, context):
 
     slot = context.scene.transform_orientation_slots[0]
     from . import max_rotate
-    if tool == "max.rotate":
+    if tool in {"max.rotate", "max.snap_move", "max.poly_move", "max.snap_scale"}:
         max_rotate.draw_managers(lay, context)
     else:
         sub = lay.row(align=True)

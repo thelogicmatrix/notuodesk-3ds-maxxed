@@ -797,11 +797,12 @@ class MAX_OT_transform_typein(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.active_object is not None
+        from . import max_rotate
+        return context.active_object is not None or bool(max_rotate._typein_windows)
 
     def invoke(self, context, event):
-        from . import snaps
-        if snaps._tool(context) == "max.rotate":
+        from . import snaps, max_rotate
+        if snaps._tool(context) == "max.rotate" or max_rotate._typein_windows:
             return bpy.ops.max.rotate_typein("INVOKE_DEFAULT")
         return context.window_manager.invoke_popup(self, width=320)
 

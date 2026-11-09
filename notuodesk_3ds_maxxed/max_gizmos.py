@@ -4,7 +4,7 @@ import math
 
 import bpy
 from bpy_extras import view3d_utils
-from mathutils import Matrix, Vector
+from mathutils import Euler, Matrix, Vector
 
 COLORS = ((1.0, .08, .045, 1), (.18, .95, .055, 1), (.12, .28, 1.0, 1))
 YELLOW = (1.0, .92, .0, 1)
@@ -15,24 +15,47 @@ _hover = {}
 _draw_handle = None
 
 
+def tripod_color(axis, locked):
+    return COLORS["XYZ".index(axis)] if axis in locked else GREY
+
+
+def plane_corners(operation, inner, outer):
+    if operation == "MOVE":
+        return ((0, 0), (outer, 0), (outer, outer), (0, outer))
+    return ((inner, 0), (outer, 0), (0, outer), (0, inner))
+
+
 def kind(context):
     from . import snaps
     return {"max.rotate": "ROTATE", "max.snap_move": "MOVE", "max.poly_move": "MOVE", "max.snap_scale": "SCALE"}.get(snaps._tool(context))
 
 
-def _center(context):
+def _center(context, operation="ROTATE"):
+    from . import max_rotate
+    return max_rotate.transform_center(context, operation)
+
+
+def centers(context, operation):
     from . import max_rotate
     s = max_rotate.settings(context)
-    ob = context.active_object
-    if s.center == "COORDINATE":
-        return max_rotate._coordinate_center(context, ob)
-    if context.mode == "EDIT_MESH":
-        from .snaps import _selection_center
-        return _selection_center(context)
-    if s.center == "PIVOT" and ob:
-        return ob.matrix_world.translation.copy()
-    points = [max_rotate._geometric_center(o) for o in context.selected_objects]
-    return sum(points, Vector()) / max(1, len(points))
+    if s.multiple_gizmos and (max_rotate.center_mode(context,operation) == "PIVOT" or max_rotate.reference_name(context,operation) == "LOCAL") and context.mode == "OBJECT":
+        return [ob.matrix_world.translation.copy() for ob in context.selected_objects]
+    return [_center(context,operation)]
+
+
+def geometries(context):
+    operation = kind(context)
+    if not operation:
+        return []
+    if context.region.as_pointer() in _active:
+        return [geometry(context)]
+    return [geometry(context,operation,center=center) for center in centers(context,operation)]
+
+
+def pick_geometry(context, co):
+    candidates = [data for data in geometries(context) if data is not None]
+    hits = [data for data in candidates if hit_test(data,co) != "OFF"]
+    return min(hits or candidates,key=lambda data:(data["xy"]-co).length_squared) if candidates else None
 
 
 def geometry(context, operation=None, center=None, basis=None):
@@ -43,7 +66,7 @@ def geometry(context, operation=None, center=None, basis=None):
     if not rv or not operation:
         return None
     state = _active.get(region.as_pointer())
-    center = center if center is not None else (getattr(state,"display_center",state.gizmo_pivot) if state else _center(context))
+    center = center if center is not None else (getattr(state,"display_center",state.gizmo_pivot) if state else _center(context, operation))
     basis = basis if basis is not None else (getattr(state,"display_basis",state.orientation) if state else
               max_rotate.reference_basis(context) if operation == "ROTATE" else snaps.orientation_basis(context))
     project = lambda p: view3d_utils.location_3d_to_region_2d(region, rv, p)
@@ -51,7 +74,8 @@ def geometry(context, operation=None, center=None, basis=None):
     if xy is None:
         return None
     ui = context.preferences.system.ui_scale
-    radius = min(region.width, region.height) * .12 * max_rotate.settings(context).size
+    prefs = max_rotate.settings(context)
+    radius = min(region.width, region.height) * .12 * prefs.size * getattr(prefs,operation.lower()+"_size") / 100
     radius = max(36*ui, radius)
     world_radius = (view3d_utils.region_2d_to_location_3d(region, rv, xy+Vector((radius, 0)), center)-center).length
     view_basis = rv.view_rotation.to_matrix()
@@ -76,10 +100,14 @@ def geometry(context, operation=None, center=None, basis=None):
                 if (p-center).dot(view_n) >= -world_radius*.025 or abs(axis.dot(view_n)) > .995:
                     line(handle, [p, q], COLORS[i], worlds=[p, q])
             end = project(center + axis*world_radius*.34)
-            if end is not None:
-                data["lines"].append((handle, [xy, end], COLORS[i], 1))
-                data["labels"].append(("XYZ"[i], end+Vector((3*ui, 2*ui)), GREY))
+            if end is not None and prefs.show_tripod:
+                color = tripod_color(handle, max_rotate.constraint(context, operation))
+                data["lines"].append(("TRIPOD_"+handle, [xy, end], color, 1))
+                if prefs.show_labels:
+                    data["labels"].append((handle, end+Vector((3*ui, 2*ui)), color))
         for handle, size, color in (("FREE", 1, GREY), ("VIEW", 1.18, GREY)):
+            if (handle == "FREE" and not prefs.free_rotation) or (handle == "VIEW" and not prefs.screen_handle):
+                continue
             points = [center + world_radius*size*(view_basis.col[0]*math.cos(j*math.tau/128) +
                           view_basis.col[1]*math.sin(j*math.tau/128)) for j in range(129)]
             line(handle, points, color, 1, worlds=points)
@@ -91,39 +119,53 @@ def geometry(context, operation=None, center=None, basis=None):
             if p is None:
                 continue
             endpoints.append(p)
-            data["lines"].append((key, [xy, p], COLORS[i], 1.5))
+            color = tripod_color(key, max_rotate.constraint(context, operation))
+            short = project(center+axis*world_radius*.34)
+            if short is not None:
+                data["lines"].append(("TRIPOD_"+key, [xy, short], color, 1))
+                data["lines"].append((key, [short, p], COLORS[i], 1.25))
             direction = p-xy
             if direction.length > 1e-5:
                 direction.normalize()
                 side = Vector((-direction.y, direction.x))
                 if operation == "MOVE":
-                    arrow = [p, p-direction*17*ui+side*4*ui, p-direction*17*ui-side*4*ui]
-                    data["faces"].append((key, arrow, COLORS[i]))
+                    # Project a shaded cone around the world axis, not a flat arrow.
+                    u = axis.orthogonal().normalized()*world_radius*.035
+                    v = axis.cross(u).normalized()*world_radius*.035
+                    base = center+axis*world_radius*.78
+                    ring = [project(base+u*math.cos(j*math.tau/8)+v*math.sin(j*math.tau/8)) for j in range(8)]
+                    for j in range(8):
+                        if ring[j] is not None and ring[(j+1)%8] is not None:
+                            shade = .6+.4*j/7
+                            data["faces"].append((key,[p,ring[j],ring[(j+1)%8]],tuple(c*shade for c in COLORS[i][:3])+(1,)))
                 else:
-                    r = 3*ui
-                    data["faces"].append((key, [p+Vector(t) for t in ((-r,-r),(r,-r),(r,r),(-r,r))], COLORS[i]))
-                data["labels"].append((key, p+direction*8*ui-Vector((3*ui, 3*ui)), COLORS[i]))
+                    # Max Scale uses small point ends, not square box caps.
+                    dot = [p+Vector((math.cos(j*math.tau/8),math.sin(j*math.tau/8)))*2*ui for j in range(8)]
+                    data["faces"].append((key,dot,COLORS[i]))
+                if prefs.show_labels:
+                    data["labels"].append((key, p+direction*8*ui-Vector((3*ui, 3*ui)), COLORS[i]))
         for i, j, key in ((0,1,"XY"), (1,2,"YZ"), (2,0,"ZX")):
+            if operation == "MOVE" and not prefs.plane_handles:
+                continue
             a, b = basis.col[i]*world_radius, basis.col[j]*world_radius
-            if operation == "MOVE":
-                points = [center+a*.22+b*.22, center+a*.48+b*.22,
-                          center+a*.48+b*.48, center+a*.22+b*.48]
-            else:
-                points = [center+a*.35, center+a*.78, center+b*.78, center+b*.35]
+            inner = prefs.uniform_handle/100
+            outer = prefs.plane_offset/100 if operation == "MOVE" else inner+prefs.two_axis_handle/100
+            points = [center+a*x+b*y for x,y in plane_corners(operation,inner,outer)]
             poly = [project(p) for p in points]
             if all(p is not None for p in poly):
                 data["faces"].append((key, poly, (.5,.5,.5,.06)))
                 if operation == "MOVE":
-                    for edge,(a,b) in enumerate(zip(poly,poly[1:]+poly[:1])):
-                        data["lines"].append((key,[a,b],COLORS[i if edge%2 == 0 else j],1))
+                    # Only the connected outside corner is additional geometry.
+                    data["lines"].append((key,poly[1:3],COLORS[j],1))
+                    data["lines"].append((key,poly[2:4],COLORS[i],1))
                 else:
-                    data["lines"].append((key, poly+[poly[0]], COLORS[i], 1))
+                    data["lines"].append((key, poly+[poly[0]], GREY, 1))
         if operation == "MOVE":
             r = 5*ui
             poly = [xy+Vector(t) for t in ((-r,-r),(r,-r),(r,r),(-r,r))]
         else:
-            poly = [project(center+axis*world_radius*.35) for axis in basis.col]
-        if all(p is not None for p in poly):
+            poly = [project(center+axis*world_radius*prefs.uniform_handle/100) for axis in basis.col]
+        if all(p is not None for p in poly) and (operation != "MOVE" or prefs.screen_move):
             data["faces"].append(("CENTER", poly, (.55,.55,.55,.08)))
             data["lines"].append(("CENTER", poly+[poly[0]], GREY, 1.25))
     return data
@@ -155,6 +197,10 @@ def hit_test(data, co):
                 return handle
     choices = []
     for handle, points, color, width in data["lines"]:
+        if handle.startswith("TRIPOD_"):
+            if data["operation"] == "ROTATE":
+                continue
+            handle = handle[-1]
         for a, b in zip(points, points[1:]):
             distance = segment_distance(co, a, b)
             if distance < 7*data["ui"]:
@@ -164,7 +210,7 @@ def hit_test(data, co):
                 choices.append((distance, handle))
     if choices:
         return min(choices)[1]
-    if data["operation"] == "ROTATE" and (co-data["xy"]).length < data["radius"]:
+    if data["operation"] == "ROTATE" and "FREE" in data["rings"] and (co-data["xy"]).length < data["radius"]:
         return "FREE"
     return "OFF"
 
@@ -191,6 +237,7 @@ def begin(context, operator, operation, pivot, orientation, handle):
     operator.gizmo_pivot = pivot.copy()
     operator.orientation = orientation.copy()
     operator.handle = handle
+    operator._owner_context = (context.window, context.area, context.region)
     _active[context.region.as_pointer()] = operator
 
 
@@ -201,14 +248,23 @@ def finish(region):
 
 def pie_triangles(data, state):
     """Filled projected triangles, including complete turns before the remainder."""
-    if not hasattr(state, "angle_data") or state.handle not in {"X","Y","Z","VIEW"}:
+    from . import max_rotate
+    if not max_rotate.settings(bpy.context).show_pie or not hasattr(state, "angle_data"):
         return [], 0
-    index = 2 if state.handle == "VIEW" else "XYZ".index(state.handle)
-    angle = state.angle_data[index]
+    if state.handle == "FREE":
+        rotation = Euler(state.angle_data,"XYZ").to_quaternion()
+        angle = rotation.angle
+        axis = state.orientation @ rotation.axis
+        radial = axis.orthogonal().normalized()*data["world_radius"]
+    elif state.handle in {"X","Y","Z","VIEW"}:
+        index = 2 if state.handle == "VIEW" else "XYZ".index(state.handle)
+        angle = state.angle_data[index]
+        axis = state.view_basis.col[2] if state.handle == "VIEW" else state.orientation.col[index]
+        radial = state.radial.normalized()*data["world_radius"]
+    else:
+        return [], 0
     if abs(angle) < 1e-7:
         return [], 0
-    axis = state.view_basis.col[2] if state.handle == "VIEW" else state.orientation.col[index]
-    radial = state.radial.normalized()*data["world_radius"]
     if state.handle == "VIEW":
         radial *= 1.18
     turns = int(abs(angle)/math.tau)
@@ -241,10 +297,16 @@ def _draw():
     context = bpy.context
     if not context.area or context.area.type != "VIEW_3D" or not context.region_data:
         return
-    if not context.space_data.show_gizmo or not context.selected_objects:
+    for data in geometries(context):
+        if data:
+            _draw_geometry(data)
+
+
+def _draw_geometry(data):
+    context = bpy.context
+    if not context.area or context.area.type != "VIEW_3D" or not context.region_data:
         return
-    data = geometry(context)
-    if not data:
+    if not context.space_data.show_gizmo or not context.selected_objects:
         return
     import blf
     import gpu
@@ -283,13 +345,13 @@ def _draw():
         # an inactive plane cannot paint over the locked yellow axis.
         for handle, points, color, width in sorted(data["lines"],key=lambda item:len(item[0]) == 1):
             gpu.state.line_width_set(width*data["ui"])
-            draw("LINE_STRIP", points, YELLOW if selected(handle) else color)
+            draw("LINE_STRIP", points, color if handle.startswith("TRIPOD_") else YELLOW if selected(handle) else color)
         for text, xy, color in data["labels"]:
             blf.size(0, 11*data["ui"])
             blf.position(0, xy.x, xy.y, 0)
-            blf.color(0, *(YELLOW if selected(text) else color))
+            blf.color(0, *(YELLOW if data["operation"] != "ROTATE" and selected(text) else color))
             blf.draw(0, text)
-        if state and hasattr(state, "angle_data"):
+        if state and hasattr(state, "angle_data") and max_rotate.settings(context).angle_data:
             # The tangent stays fixed throughout Linear Roll, as in Max.
             t, p = state.tangent, state.start_co
             gpu.state.line_width_set(data["ui"])
@@ -316,7 +378,7 @@ class MAX_GT_max_transform(bpy.types.Gizmo):
     def test_select(self, context, location):
         if not context.space_data.show_gizmo:
             return -1
-        handle = hit_test(geometry(context), Vector(location))
+        handle = hit_test(pick_geometry(context,Vector(location)), Vector(location))
         key = context.region.as_pointer()
         if _hover.get(key) != handle:
             _hover[key] = handle
@@ -349,7 +411,7 @@ class MAX_OT_gizmo_drag(bpy.types.Operator):
 
     def invoke(self, context, event):
         operation = kind(context)
-        hit = hit_test(geometry(context), Vector((event.mouse_region_x,event.mouse_region_y)))
+        hit = hit_test(pick_geometry(context,Vector((event.mouse_region_x,event.mouse_region_y))), Vector((event.mouse_region_x,event.mouse_region_y)))
         if operation == "ROTATE":
             return bpy.ops.max.rotate("INVOKE_DEFAULT", handle=hit)
         return bpy.ops.max.snap_transform("INVOKE_DEFAULT", kind=operation, from_gizmo=True,
@@ -363,10 +425,33 @@ def register():
     global _draw_handle
     if not bpy.app.background:
         _draw_handle = bpy.types.SpaceView3D.draw_handler_add(_draw, (), "WINDOW", "POST_PIXEL")
+    if cancel_all not in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.append(cancel_all)
+
+
+@bpy.app.handlers.persistent
+def cancel_all(*_):
+    """Restore transactions while their operators and properties still exist."""
+    for owner in list(_active.values()):
+        context = getattr(owner, "_owner_context", None)
+        if context:
+            window, area, region = context
+            with bpy.context.temp_override(window=window, area=area, region=region):
+                owner._finish(bpy.context, True)
+        else:
+            owner.tx.cancel()
+            if owner.clone:
+                owner.clone.cancel()
+            owner._closed = True
+    _active.clear()
+    _hover.clear()
 
 
 def unregister():
     global _draw_handle
+    cancel_all()
+    if cancel_all in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.remove(cancel_all)
     if _draw_handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_draw_handle, "WINDOW")
         _draw_handle = None

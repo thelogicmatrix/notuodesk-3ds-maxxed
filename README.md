@@ -135,9 +135,11 @@ E selects Linear Roll rotation. Drag an axis ring along its tangent, at 0.5 degr
 
 During an axis drag, a translucent slice shows the direction and amount of rotation. Its colour follows the axis, as in Autodesk's red X example. Complete turns overlap. Yellow tangent guides and the live X/Y/Z angle readout follow the stepped angle. Right-click or Esc restores the starting transform. A completed rotation uses one undo step. Shift-drag opens Clone Options or Clone Part of Mesh.
 
-Rotate's toolbar has View, Screen, World, Local, Parent and Pick reference systems and the Use Center controls. Pivot Point Center rotates each object about its own pivot. F12 opens Rotate Transform Type-In with exact offsets. Angle Snap does not round typed offsets.
+The transform toolbar offers View, Screen, World, Local, Parent, Grid, Working, Gimbal, Local Aligned and Pick reference systems. Pick accepts a viewport click or H and remembers four objects. Use Center is an icon flyout. Local disables it and uses individual pivots. F12 toggles a floating Rotate Transform Type-In window. Absolute fields and Offset fields update the viewport live. Offset fields reset to zero after each edit. Angle Snap does not round typed values.
 
-Move has arrowheads and planar squares. Scale has box ends, planar regions and a uniform centre triangle. The Scale flyout also offers Non-Uniform Scale and Squash. Picking an axis or plane keeps that constraint for later drags on the selection. F5, F6 and F7 select X, Y and Z. F8 cycles XY, YZ and ZX. Max stores these locks separately for each transform and for Object and sub-object modes. Locked handles remain yellow. With positional snaps on, Move respects the lock only when Use Axis Constraints in Snaps is on. Plus and minus change the shared gizmo size. X hides or shows all three.
+Move has projected cone arrowheads and connected plane corners. Scale has point ends and nested triangular handles. The small centre tripods are muted, with colour on the locked axes. Rotate's rings retain their drawing. The Scale flyout also offers Non-Uniform Scale and Squash. Picking an axis or plane keeps that constraint for later drags on the selection. F5, F6 and F7 select X, Y and Z. F8 cycles XY, YZ and ZX. Max stores these locks separately for each transform and for Object and sub-object modes. Locked handles remain yellow. With positional snaps on, Move respects the lock only when Use Axis Constraints in Snaps is on. Plus and minus change the shared gizmo size. X hides or shows all three.
+
+Customize > Gizmos Preferences controls labels, multiple object gizmos, relative tool sizes, plane handles, the Rotate tripod, free rotation, screen handle, pie slice and angle data. Linear Roll remains the default. Circular Crank uses a circular drag and switches to Linear Roll for nearly edge-on rings. Legacy R4 offers axis-directed dragging. Constant keeps reference coordinates across tools. Disabling the add-on cancels live previews, including Shift clones and Edit Mesh changes.
 
 ## Hotkeys
 
@@ -185,11 +187,11 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
-- Rotate uses Linear Roll. Free rotation maps the drag into reference Euler components rather than a verified copy of Max's virtual-trackball algorithm. Circular Crank and Legacy R4 are unavailable.
-- Gizmo colours, proportions and slice transparency follow Autodesk's documentation images. Exact GPU antialiasing and undocumented opacity values are not guaranteed. Gizmo Preferences other than size are not exposed. Only the active object's gizmo is drawn for a multiple selection.
-- Rotate Transform Type-In has exact offsets and read-only absolute World values. It is a Blender popup rather than Max's modeless dialog. It does not have editable absolute coordinates or live spinner application. Reference systems and Use Center controls on the Rotate toolbar do not replace Move and Scale's existing coordinate controls.
+- Free rotation uses a virtual sphere whose grabbed position affects the rotation. Angle Snap quantizes its reference Euler components. Max's internal trackball, free-snap rounding and Legacy R4 sensitivity have not been compared against a running Max instance. Local Aligned uses the object's frame. Max's per-sub-object normal interpretation and animated controllers remain unverified.
+- Gizmo colours, proportions and slice transparency follow Autodesk's documentation images. Exact GPU antialiasing and undocumented opacity values are estimates. Multiple gizmos cover individual object pivots. Independent sub-object tripods are not implemented.
+- Rotate Transform Type-In and Gizmos Preferences use floating Blender editor windows. Their controls occupy the sidebar, and Blender supplies the frame and canvas. Absolute sub-object rotation uses the object's frame. Local sub-object Type-In exposes offsets only.
 - Rotate deliberately ignores geometry snap targets, including Max's documented ability to use a snapped point as a rotation pivot. This keeps Angle Snap independent of S.
-- Without the separate cloning module, Shift-drag uses a local fallback. Reference clones share mesh data like instances. Clone Part of Mesh does not implement the full integrated cloning dialog behaviour.
+- Shift-drag reuses the shared cloning module when installed. The standalone fallback provides Copy, Instance, a one-way Reference geometry dependency, mesh separation/naming and Edge/Border extension. Its dialog frame and hierarchy controller options differ from the shared module.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 
 ## Updating
