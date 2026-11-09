@@ -19,6 +19,10 @@ class ThemeTests(unittest.TestCase):
         theme.apply()
         self.assertFalse(cursor.show_cursor)
         self.assertGreater(view.vertex_select[0], .9)
+        selected = prefs.themes[0].user_interface.wcol_list_item.inner_sel
+        self.assertGreater(selected[0], .6)
+        self.assertGreater(selected[1], .4)
+        self.assertLess(selected[2], .15)
         self.assertFalse(prefs.view.show_tooltips_python)
         self.assertEqual(prefs.view.ui_scale, scale)
         theme.restore()

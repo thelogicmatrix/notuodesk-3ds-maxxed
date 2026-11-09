@@ -67,6 +67,10 @@ def apply(context=None):
                 _remember(widget, 'inner', (.25, .25, .25, 1.))
                 _remember(widget, 'inner_sel', (.16, .40, .60, 1.))
                 _remember(widget, 'text', (.88, .88, .88, 1.))
+        # mode_feedback owns the stack state. Its active row needs the yellow
+        # list-selection category while ordinary tool buttons stay blue.
+        _remember(ui.wcol_list_item, 'inner_sel', (.75, .60, .08, 1.))
+        _remember(ui.wcol_list_item, 'text_sel', (.07, .06, .02, 1.))
     for window in context.window_manager.windows:
         for area in window.screen.areas:
             if area.type == 'VIEW_3D':
