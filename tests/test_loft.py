@@ -11,7 +11,7 @@ import bpy
 from mathutils import Vector
 
 addon_utils.enable('notuodesk_3ds_maxxed', default_set=True)
-from notuodesk_3ds_maxxed import loft
+from notuodesk_3ds_maxxed import loft, line_tool
 
 
 def curve(name, coords, cyclic=False):
@@ -599,7 +599,12 @@ class LoftTests(unittest.TestCase):
 
     def test_existing_create_shapes(self):
         for kind in ('LINE', 'RECTANGLE', 'CIRCLE', 'ELLIPSE', 'ARC', 'NGON', 'STAR', 'HELIX'):
-            bpy.ops.max.create_shape(kind=kind)
+            if kind == 'LINE':
+                line_tool.add_point(bpy.context, (-1, 0, 0), 'CORNER')
+                line_tool.add_point(bpy.context, (1, 0, 0), 'CORNER')
+                self.assertTrue(line_tool.finish_line(bpy.context))
+            else:
+                self.assertEqual(bpy.ops.max.create_shape(kind=kind), {'FINISHED'})
             ob = loft.make_loft(bpy.context, self.path, bpy.context.active_object)
             self.assertGreater(len(evaluated(ob)[0]), 0, kind)
         print('LOFT Create sources: Line, Rectangle, Circle, Ellipse, Arc, NGon, Star, Helix verified', flush=True)
