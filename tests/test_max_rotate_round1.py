@@ -83,6 +83,18 @@ class ReviewRegressions(unittest.TestCase):
                   faces=[],rings={'FREE':[]},xy=Vector((0,0)),radius=100,ui=1)
         self.assertEqual(g.hit_test(data,Vector((10,0))),'FREE')
 
+    def test_coincident_axis_ring_wins_over_free_trackball_outline(self):
+        # In an orthographic principal view the axis ring and trackball outline
+        # project to the same circle, with subpixel floating-point differences.
+        for gap, expected in ((0, 'Z'), (.2, 'Z'), (2, 'FREE')):
+            data = dict(operation='ROTATE', lines=[
+                ('Z', [Vector((-50,100+gap)), Vector((50,100+gap))], g.COLORS[2], 1),
+                ('FREE', [Vector((-50,100)), Vector((50,100))], g.GREY, 1)],
+                faces=[], rings={'FREE': []}, xy=Vector((0,0)), radius=100, ui=1)
+            self.assertEqual(g.hit_test(data, Vector((10,100))), expected)
+            self.assertEqual(g.hit_test(data, Vector((0,20))), 'FREE')
+            self.assertEqual(g.hit_test(data, Vector((0,130))), 'OFF')
+
     def test_R5_connected_move_and_nested_scale_handles(self):
         self.assertTrue(hasattr(g, 'plane_corners'), 'Move corners must connect to the axes')
         move = g.plane_corners('MOVE', .3, .6)

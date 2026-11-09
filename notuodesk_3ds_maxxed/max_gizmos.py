@@ -209,7 +209,15 @@ def hit_test(data, co):
                     continue
                 choices.append((distance, handle))
     if choices:
-        return min(choices)[1]
+        nearest = min(choices)
+        if data['operation'] == 'ROTATE' and nearest[1] == 'FREE':
+            # A principal-view axis circle can coincide with the Free outline.
+            # Prefer the axis for subpixel ties, leaving the inner disk free.
+            axes = [choice for choice in choices if choice[1] in {'X', 'Y', 'Z'}
+                    and choice[0] <= nearest[0] + .5 * data['ui']]
+            if axes:
+                return min(axes)[1]
+        return nearest[1]
     if data["operation"] == "ROTATE" and "FREE" in data["rings"] and (co-data["xy"]).length < data["radius"]:
         return "FREE"
     return "OFF"
