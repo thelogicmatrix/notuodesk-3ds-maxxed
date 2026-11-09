@@ -135,7 +135,8 @@ def build_bmesh(kind, p):
     if h < 0 and kind in {"BOX", "PYRAMID", "CYLINDER", "CONE", "TUBE"}:
         bmesh.ops.scale(bm, verts=bm.verts, vec=(1, 1, -1))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    if p.smooth:
+    # Box, Pyramid and Plane have no Smooth option in Max and are always flat-shaded
+    if p.smooth and kind not in {"BOX", "PYRAMID", "PLANE"}:
         for f in bm.faces:
             # smooth round surfaces only, keep caps / boxes flat
             f.smooth = smooth_all or abs(f.normal.z) < 0.7
