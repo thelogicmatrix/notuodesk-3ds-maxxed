@@ -123,11 +123,11 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 
 S toggles positional snaps. The toolbar flyout chooses 2D, 2.5D or 3D. Grid Points is the initial snap type. Grid snapping is magnetic: points stay free outside the 20-pixel Snap Radius. Primitive bases and heights use the same rule, so they no longer jump in whole-unit increments.
 
-With snaps on, W, E and R select tools that drag from a picked snap base. Move a box by its corner onto another corner, or move selected Editable Poly vertices onto unselected vertices in the same mesh or another object. Rotate and Scale use the picked point as their center. A cyan marker shows the target and a rubber band connects it to the base. Release commits. Right-click cancels the drag.
+With snaps on, W, E and R select tools that drag from a picked snap base. Move a box by its corner onto another corner, or move selected Editable Poly vertices onto unselected vertices in the same mesh or another object. Rotate and Scale use the picked point as their center. Axis and plane gizmos follow the selected reference coordinate system. A cyan marker shows the target and a rubber band connects it to the base. Release commits. Right-click cancels the drag.
 
 Right-click a snap toolbar button for **Grid and Snap Settings**. Its Snaps, Options, Home Grid and User Grids tabs use Max's labels. The available targets are Grid Points, Pivot, Perpendicular on straight segments, Bounding Box, Vertex, Endpoint, Edge/Segment, Midpoint, Face, Center Face and Grid Lines. Unsupported settings are greyed out with a reason. Snap settings live in the add-on preferences, as Max stores them in its user settings rather than the scene file.
 
-Shift+right-click opens the snap quad. Standard chooses a one-shot override. None disables snaps for the next action, and Last repeats the previous override. Alt+S cycles through enabled snap types. The regular checkboxes return after the action. A controls Angle Snap, initially 5 degrees. Ctrl+Shift+P controls Percent Snap, initially 10 percent. Spinner Snap quantizes changed primitive parameter fields in the Command Panel. Grid Spacing and Major Lines map to Blender's grid overlay controls.
+Shift+right-click opens the snap quad, including during a transform or primitive creation. Release the left button, choose an override, then press it again to resume the current drag. Standard chooses a one-shot override. None disables snaps for the next action, and Last repeats the previous override. Alt+S cycles through enabled snap types. The regular checkboxes return after the action. A controls Angle Snap, initially 5 degrees. Ctrl+Shift+P controls Percent Snap, initially 10 percent. Spinner Snap quantizes changed primitive parameter fields in the Command Panel. Grid Spacing and Major Lines map to Blender's grid overlay controls. 2D accepts geometry on the active construction plane and rejects off-plane targets.
 
 ## Hotkeys
 
@@ -166,7 +166,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
-- Grid and Snap Settings is a floating Blender dialog rather than a separate modeless Max window. Closing a dialog opened from a toolbar right-click can leave Blender's button context menu underneath. Right-click or Esc dismisses that menu.
+- Grid and Snap Settings stays open in a separate, modeless Blender editor window. The controls occupy its sidebar. Blender supplies the window frame, canvas and sidebar tabs. Use the panel's X or the window's close button. Toolbar right-click opens it directly without a button context menu underneath.
 - Tangent snaps, NURBS snaps, user grids and AutoGrid are unavailable. Blender controls the visible grid extent and its adaptive subdivision. Those controls are disabled in the dialog.
 - Spinner Snap applies to primitive float fields in the Command Panel, including typed edits. It does not change every Blender spinner. Curve segments use evaluated geometry, so curved-segment snaps follow Blender's tessellation.
 - Use the add-on's toolbar, Edit menu, quad menu or W/E/R for the shared magnetic transform tools. Transforms invoked directly through Blender's own operators retain Blender's snapping behavior. The snap tools support object mode and Editable Poly mesh levels.

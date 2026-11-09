@@ -326,7 +326,11 @@ class MAX_OT_create(Operator):
     def modal(self, context, event):
         if self.session != MAX_OT_create._session:   # another Create button was pressed
             self._cancel_object()
+            snaps.clear_preview()
             return {"FINISHED"}
+
+        if snaps.override_event(self, context, event, dragging=self.state == "BASE"):
+            return {"RUNNING_MODAL"}
 
         if event.type in {"RIGHTMOUSE", "ESC"} and event.value == "PRESS":
             if self.state != "WAIT":

@@ -52,6 +52,28 @@ near(snap((1.04, 1, 0)), (1, 1, 0))
 near(snap((1.11, 1, 0)), (1.11, 1, 0))
 print("SNAPS magnetic grid PASS far=1.300000 near=1.000000 preview=1.110000", flush=True)
 
+# Skewed projective views can put a different integer intersection closer
+# than the world-space rounded point. Compare against an exhaustive oracle.
+saved_rv = rv
+rv = SimpleNamespace(perspective_matrix=Matrix(((.18, .14, 0, 0), (.01, .08, 0, 0),
+                                                (0, 0, .1, 0), (.03, .05, 0, 1))),
+                     is_perspective=True)
+grid = [(Vector((x, y, 0)), screen((x, y, 0))) for x in range(-12, 13) for y in range(-12, 13)]
+count = 0
+for x, y in ((-4, -1), (-2, 3), (1, 1), (3, -2)):
+    for dx, dy in ((0, 19), (19, 0), (-17, 8), (8, -17)):
+        co = screen((x, y, 0)) + Vector((dx, dy))
+        # Invert the plane's homography to recover the free cursor point.
+        h = Matrix(((.18, .14, 0), (.01, .08, 0), (.03, .05, 1)))
+        raw = h.inverted() @ Vector((co.x / 500 - 1, co.y / 500 - 1, 1))
+        raw = Vector((raw.x / raw.z, raw.y / raw.z, 0))
+        want, distance = min(((p, (xy-co).length) for p, xy in grid if xy is not None), key=lambda pair: pair[1])
+        got = snaps.snap_point(bpy.context, region, rv, co, raw, plane)
+        near(got, want if distance <= s.snap_radius else raw)
+        count += 1
+rv = saved_rv
+print("SNAPS projective grid exhaustive nearest PASS cases=" + str(count), flush=True)
+
 # Height snapping uses the same function, including a screen-space metric
 # when the creation height axis points straight at the viewer.
 near(snap((0, 0, 1.3), axis=Vector((0, 0, 1)), pixels_per_unit=200), (0, 0, 1.3))
@@ -75,6 +97,14 @@ near(snap((1.01, 1, 0)), (1, 1, 0))
 s.mode = "3D"
 near(snap((1.01, 1, 0)), (1, 1, 3))
 print("SNAPS 2D 2.5D 3D PASS", flush=True)
+s.mode = "2D"
+ob.data.vertices[0].co.z = 0
+bpy.context.view_layer.update()
+near(snap((1.04, 1, 0)), (1, 1, 0))
+ob.data.vertices[0].co.z = 3
+bpy.context.view_layer.update()
+s.mode = "3D"
+print("SNAPS 2D on-plane vertex accepted PASS", flush=True)
 ob.hide_select = True
 ob["max_frozen_color"] = [1, 1, 1, 1]
 s.snap_frozen = False

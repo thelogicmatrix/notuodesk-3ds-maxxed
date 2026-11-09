@@ -5,7 +5,7 @@ import math
 import bmesh
 import bpy
 from bpy.app.handlers import persistent
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty
+from bpy.props import BoolProperty, BoolVectorProperty, EnumProperty, FloatProperty, IntProperty
 from bpy_extras import view3d_utils
 from mathutils import Matrix, Vector
 from mathutils.geometry import intersect_line_plane, intersect_point_line
@@ -28,7 +28,10 @@ _preview = {}
 _handle = None
 _spinner_busy = False
 _spinner_values = {}
-_context_pending = False
+_settings_windows = set()
+_button_guards = set()
+_guard_generation = 0
+_quad_open = False
 
 
 def settings(context):
@@ -66,6 +69,7 @@ def _grid(self, context):
 
 
 class MaxSnapSettings(bpy.types.PropertyGroup):
+    tab: EnumProperty(items=TABS, default="SNAPS", options={"SKIP_SAVE"})
     mode: EnumProperty(name="Snaps Toggle", items=MODES, default="3D")
     grid_points: BoolProperty(name="Grid Points", default=True)
     pivot: BoolProperty(name="Pivot")
@@ -96,6 +100,9 @@ class MaxSnapSettings(bpy.types.PropertyGroup):
     major_lines: IntProperty(name="Major Lines every Nth Grid Line", default=10, min=2, max=100, update=_grid)
     grid_extent: IntProperty(name="Perspective View Grid Extent", default=7, min=1, max=1000)
     inhibit_subdivision: BoolProperty(name="Inhibit Grid Subdivision Below Grid Spacing", default=True)
+    inhibit_resize: BoolProperty(name="Inhibit Perspective View Grid Resize")
+    grid_update: EnumProperty(items=[("ACTIVE", "Active Viewport", ""), ("ALL", "All Viewports", "")], default="ALL")
+    shape_angle: BoolProperty(name="Enable Shape Angle Constraints")
     activate_grids: BoolProperty(name="Activate grids when creating")
     autogrid_space: EnumProperty(items=[("WORLD", "World space", ""), ("OBJECT", "Object space", "")])
     override: EnumProperty(name="Snap Override", items=[("NONE", "Override OFF", ""), ("OFF", "None", "")] + [(k, n, "") for k, n in TYPES],
@@ -144,6 +151,70 @@ def _edge_point(region, rv3d, co, a, b):
     if abs(den) > 1e-10:
         t = t * wa / den
     return a.lerp(b, t)
+
+
+def _grid_points(region, rv3d, co, anchor, u, v, spacing, radius):
+    """Search the grid under the pixel disk, not just the rounded world point."""
+    # The grid plane maps to the screen through a 3x3 homography. Inverting
+    # the preview square bounds every intersection inside its pixel disk.
+    m = rv3d.perspective_matrix
+    a = m @ u.to_4d()
+    b = m @ v.to_4d()
+    c = m @ anchor.to_4d()
+    # Directions must have w=0 before projection.
+    a -= m.col[3]
+    b -= m.col[3]
+    h = Matrix(((a.x, b.x, c.x), (a.y, b.y, c.y), (a.w, b.w, c.w)))
+    if abs(h.determinant()) < 1e-12:
+        return
+    inv = h.inverted()
+    bounds = []
+    for x, y in ((-radius, -radius), (-radius, radius), (radius, -radius), (radius, radius)):
+        p = inv @ Vector(((co[0] + x) * 2 / region.width - 1,
+                          (co[1] + y) * 2 / region.height - 1, 1))
+        if abs(p.z) < 1e-9:
+            return
+        bounds.append(p)
+    # At the horizon the inverse footprint is unbounded. Search the finite
+    # visible portion using samples on both sides of the cursor instead.
+    if min(p.z for p in bounds) * max(p.z for p in bounds) <= 0:
+        bounds = []
+        for i in range(33):
+            angle = i * math.tau / 32
+            p = inv @ Vector(((co[0] + radius * math.cos(angle)) * 2 / region.width - 1,
+                              (co[1] + radius * math.sin(angle)) * 2 / region.height - 1, 1))
+            if p.z > 1e-6:
+                bounds.append(p)
+        if not bounds:
+            return
+    coords = [(p.x / p.z / spacing, p.y / p.z / spacing) for p in bounds]
+    lo = [math.floor(min(p[i] for p in coords)) for i in (0, 1)]
+    hi = [math.ceil(max(p[i] for p in coords)) for i in (0, 1)]
+    # Iterate the shorter grid dimension. On each projected grid line the
+    # closest intersection is one of the two integers beside its closest
+    # continuous point. This avoids a quadratic scan when zoomed far out.
+    swap = hi[0] - lo[0] > hi[1] - lo[1]
+    if swap:
+        u, v = v, u
+        lo.reverse()
+        hi.reverse()
+    for i in range(lo[0], hi[0] + 1):
+        line = anchor + u * (i * spacing)
+        p = m @ line.to_4d()
+        d = m @ v.to_4d() - m.col[3]
+        pa = Vector(((p.x + p.w) * region.width / 2, (p.y + p.w) * region.height / 2, p.w))
+        direction = Vector(((d.x + d.w) * region.width / 2, (d.y + d.w) * region.height / 2, d.w))
+        edge = pa.cross(direction)
+        if edge.x * edge.x + edge.y * edge.y < 1e-12:
+            continue
+        distance = (edge.x * co[0] + edge.y * co[1] + edge.z) / (edge.x * edge.x + edge.y * edge.y)
+        xy = Vector((co[0] - edge.x * distance, co[1] - edge.y * distance))
+        p = inv @ Vector((xy.x * 2 / region.width - 1, xy.y * 2 / region.height - 1, 1))
+        if abs(p.z) < 1e-9:
+            continue
+        t = (p.x if swap else p.y) / p.z / spacing
+        for j in {math.floor(t), math.ceil(t), lo[1], hi[1]}:
+            yield line + v * (j * spacing)
 
 
 def _geometry(context, region, rv3d, co, enabled, objects, base=None, source=False):
@@ -223,7 +294,7 @@ def _geometry(context, region, rv3d, co, enabled, objects, base=None, source=Fal
 
 
 def _pick(context, region, rv3d, co, point, plane, enabled, objects, base=None,
-          axis=None, pixels_per_unit=None, source=False):
+          axis=None, pixels_per_unit=None, source=False, constraint_plane=None):
     s = settings(context)
     origin, n, u, v = _plane(plane)
     plane = (origin, n)
@@ -238,23 +309,29 @@ def _pick(context, region, rv3d, co, point, plane, enabled, objects, base=None,
         if axis is not None:
             axis = Vector(axis).normalized()
             level = point.dot(axis)
-            p = point + axis * (round(level / spacing) * spacing - level)
             if "grid_points" in enabled:
-                candidates.append((p, "grid_points"))
+                for index in {math.floor(level / spacing), math.ceil(level / spacing)}:
+                    candidates.append((point + axis * (index * spacing - level), "grid_points"))
         else:
             if "grid_points" in enabled:
-                candidates.append((anchor + u * au + v * bv, "grid_points"))
+                candidates.extend((q, "grid_points") for q in
+                                  _grid_points(region, rv3d, co, anchor, u, v, spacing, s.preview_radius))
             if "grid_lines" in enabled:
                 candidates.extend(((anchor + u * au + v * b, "grid_lines"),
                                    (anchor + u * a + v * bv, "grid_lines")))
-    if s.mode != "2D" or source:
-        candidates.extend(_geometry(context, region, rv3d, co, enabled, objects, base, source))
+    candidates.extend(_geometry(context, region, rv3d, co, enabled, objects, base, source))
     best, rank = None, (float("inf"), 9)
     for p, kind in candidates:
+        if s.mode == "2D" and not source and not kind.startswith("grid_"):
+            tolerance = 1e-6 * max(1, s.grid_spacing, (p - origin).length)
+            if abs((p - origin).dot(n)) > tolerance:
+                continue
         if s.mode == "2_5D" and not source and not (axis is not None and kind == "grid_points"):
             p = _project(p, plane)
         if axis is not None and base is not None and s.axis_constraints:
             p = base + axis * (p - base).dot(axis)
+        if constraint_plane is not None and s.axis_constraints:
+            p = _project(p, constraint_plane)
         xy = _screen(region, rv3d, p)
         if xy is None:
             continue
@@ -269,12 +346,13 @@ def _pick(context, region, rv3d, co, point, plane, enabled, objects, base=None,
 
 
 def snap_point(context, region, rv3d, co, point, plane, *, exclude=(), base=None,
-               axis=None, pixels_per_unit=None):
+               axis=None, pixels_per_unit=None, constraint_plane=None):
     """Magnetically snap a world point within Snap Radius screen pixels.
 
     `co` is region-relative. `plane` is (world origin, world normal).
     Exclude the object being created or transformed. For height creation pass
     `axis`, and pixels_per_unit when that axis points at the viewer.
+    `constraint_plane` is an optional (world origin, world normal) pair.
     The returned Vector stays unchanged outside the radius. Preview never rounds.
     """
     point = Vector(point)
@@ -289,7 +367,7 @@ def snap_point(context, region, rv3d, co, point, plane, *, exclude=(), base=None
     excluded = set(exclude)
     objects = [ob for ob in context.view_layer.objects if ob not in excluded]
     hit = _pick(context, region, rv3d, co, point, plane, enabled, objects, base,
-                axis, pixels_per_unit)
+                axis, pixels_per_unit, constraint_plane=constraint_plane)
     key = region.as_pointer() if hasattr(region, "as_pointer") else id(region)
     _preview[key] = (hit, Vector(base) if base is not None else None, point.copy())
     return hit[0].copy() if hit and hit[2] <= s.snap_radius else point
@@ -387,6 +465,11 @@ def remember_spinners(params):
 
 @persistent
 def _load_settings(_unused=None):
+    global _guard_generation
+    from . import snap_quad
+    snap_quad.close_all()
+    _guard_generation += 1
+    _button_guards.clear()
     clear_preview()
     _spinner_values.clear()
     if __package__ in bpy.context.preferences.addons:
@@ -394,6 +477,8 @@ def _load_settings(_unused=None):
         for ob in bpy.context.scene.objects:
             if hasattr(ob, "max_prim") and ob.max_prim.kind:
                 remember_spinners(ob.max_prim)
+        if not bpy.app.background and not bpy.app.timers.is_registered(_ensure_button_listeners):
+            bpy.app.timers.register(_ensure_button_listeners, first_interval=.1)
 
 
 def _field(layout, s, prop, label=None):
@@ -435,6 +520,11 @@ def draw_settings(layout, context, tab):
         box.prop(s, "axis_constraints")
         box.prop(s, "rubber_band")
         box = layout.box()
+        box.enabled = False
+        box.label(text="Shape Creation")
+        box.prop(s, "shape_angle")
+        layout.label(text="Shape angle constraints require the Line tool integration", icon="INFO")
+        box = layout.box()
         box.label(text="Spinner Snap")
         _field(box, s, "spinner_increment")
         box.label(text="Primitive parameter fields only", icon="INFO")
@@ -447,7 +537,17 @@ def draw_settings(layout, context, tab):
         row.enabled = False
         _field(row, s, "grid_extent")
         row.prop(s, "inhibit_subdivision")
+        row.prop(s, "inhibit_resize")
+        box = layout.box()
+        box.enabled = False
+        box.label(text="Dynamic Update")
+        for value, label in (("ACTIVE", "Active Viewport"), ("ALL", "All Viewports")):
+            row = box.row()
+            row.emboss = "NONE"
+            row.prop_enum(s, "grid_update", value, text=label,
+                          icon="RADIOBUT_ON" if s.grid_update == value else "RADIOBUT_OFF")
         layout.label(text="Blender controls visible grid extent and subdivision", icon="INFO")
+        layout.label(text="Grid changes update all viewports immediately", icon="INFO")
     else:
         box = layout.box()
         box.enabled = False
@@ -470,20 +570,87 @@ class MAX_OT_snap_settings(bpy.types.Operator):
     tab: EnumProperty(items=TABS, default="SNAPS", options={"SKIP_SAVE"})
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=430)
+        global _quad_open
+        _quad_open = False
+        settings(context).tab = self.tab
+        live = {w.as_pointer() for w in context.window_manager.windows}
+        _settings_windows.intersection_update(live)
+        if _settings_windows:
+            _redraw(context)
+            return {"FINISHED"}
+        # Reuse the native floating preferences window for its usable initial
+        # size, then replace its contents with a dedicated editor sidebar.
+        existing = next(((w, a) for w in context.window_manager.windows for a in w.screen.areas
+                         if a.type == "PREFERENCES"), None)
+        if existing:
+            w, a = existing
+            with context.temp_override(window=w, area=a, region=next(r for r in a.regions if r.type == "WINDOW")):
+                bpy.ops.screen.area_dupli("INVOKE_DEFAULT")
+        else:
+            bpy.ops.screen.userpref_show("INVOKE_DEFAULT")
+        window = next((w for w in context.window_manager.windows if w.as_pointer() not in live), None)
+        if window is None:
+            return {"CANCELLED"}
+        _settings_windows.add(window.as_pointer())
+        area = window.screen.areas[0]
+        area.type = "NODE_EDITOR"
+        space = area.spaces.active
+        space.tree_type = "ShaderNodeTree"
+        space.pin = True
+        space.show_region_ui = True
+        space.show_region_toolbar = False
+        space.show_region_header = False
 
-    def draw(self, context):
-        self.layout.prop(self, "tab", expand=True)
-        draw_settings(self.layout, context, self.tab)
+        def activate():
+            try:
+                if window.as_pointer() not in _settings_windows or area.spaces.active is None:
+                    return
+                # The duplicated area finishes initializing on the next redraw.
+                area.spaces.active.show_region_ui = True
+                area.spaces.active.show_region_toolbar = False
+                area.spaces.active.show_region_header = False
+                area.tag_redraw()
+            except ReferenceError:
+                pass
+        bpy.app.timers.register(activate, first_interval=.1)
+        return {"FINISHED"}
 
     def execute(self, context):
         if context.preferences.use_preferences_save:
             bpy.ops.wm.save_userpref()
         return {"FINISHED"}
 
-    def cancel(self, context):
+
+class MAX_PT_snap_settings(bpy.types.Panel):
+    bl_space_type = "NODE_EDITOR"
+    bl_region_type = "UI"
+    bl_category = "Item"
+    bl_label = "Grid and Snap Settings"
+    bl_options = {"HIDE_HEADER"}
+
+    @classmethod
+    def poll(cls, context):
+        return context.window.as_pointer() in _settings_windows
+
+    def draw(self, context):
+        s = settings(context)
+        row = self.layout.row()
+        row.label(text="Grid and Snap Settings")
+        row.operator("max.snap_settings_close", text="", icon="X")
+        self.layout.prop(s, "tab", expand=True)
+        draw_settings(self.layout, context, s.tab)
+
+
+class MAX_OT_snap_settings_close(bpy.types.Operator):
+    bl_idname = "max.snap_settings_close"
+    bl_label = "Close Grid and Snap Settings"
+
+    def execute(self, context):
+        _settings_windows.discard(context.window.as_pointer())
         if context.preferences.use_preferences_save:
             bpy.ops.wm.save_userpref()
+        bpy.ops.wm.window_close()
+        return {"FINISHED"}
 
 
 class MAX_OT_snap_clear(bpy.types.Operator):
@@ -504,6 +671,8 @@ class MAX_OT_snap_override(bpy.types.Operator):
                               ("LAST", "Last", "")] + [(k, n, "") for k, n in TYPES])
 
     def execute(self, context):
+        global _quad_open
+        _quad_open = False
         s = settings(context)
         kind = s.last_override if self.kind == "LAST" else self.kind
         s.override = kind
@@ -541,41 +710,30 @@ class MAX_MT_snap_standard(bpy.types.Menu):
             row.operator("max.snap_override", text=n).kind = k
 
 
-class MAX_OT_snap_quad(bpy.types.Operator):
-    """One-shot snap override and snap options (Shift+right-click)"""
-    bl_idname = "max.snap_quad"
-    bl_label = "Snaps"
+from .snap_quad import MAX_OT_snap_quad
 
-    def invoke(self, context, event):
-        return context.window_manager.invoke_popup(self, width=390)
 
-    def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
-        s = settings(context)
-        split = self.layout.split(factor=.5)
-        left, right = split.column(), split.column()
-        left.operator("max.snap_settings", text="Grid and Snap Settings...", emboss=False)
-        left.prop(s, "snap_frozen", text="Snaps To Frozen Objects")
-        left.prop(s, "axis_constraints", text="Snaps Use Axis Constraints")
-        left.label(text="snap options")
-        row = right.row()
-        row.enabled = False
-        row.label(text="NURBS (not available)")
-        right.menu("MAX_MT_snap_standard", text="Standard")
-        row = right.row()
-        row.enabled = context.scene.tool_settings.use_snap
-        row.operator("max.snap_override", text="None", emboss=False).kind = "OFF"
-        row = right.row()
-        row.enabled = s.last_override != "NONE"
-        row.operator("max.snap_override", text="Last", emboss=False).kind = "LAST"
-        right.label(text="snap override")
-        right.separator()
-        right.label(text="snap toggles")
-        for k in ("grid_points", "pivot", "vertex", "midpoint", "edge", "face"):
-            right.prop(s, k)
-
-    def execute(self, context):
-        return {"FINISHED"}
+def override_event(operator, context, event, *, dragging=True):
+    """Suspend a live tool for the quad, then resume on a fresh left press."""
+    global _quad_open
+    if event.type == "RIGHTMOUSE" and event.value == "PRESS" and event.shift:
+        operator._snap_quad_wait = True
+        bpy.ops.max.snap_quad("INVOKE_DEFAULT")
+        return True
+    if getattr(operator, "_snap_quad_wait", False):
+        if event.type == "RIGHTMOUSE" and event.value == "RELEASE":
+            return True
+        if _quad_open:
+            return True
+        if event.type in {"RIGHTMOUSE", "ESC"} and event.value == "PRESS":
+            operator._snap_quad_wait = False
+            return False
+        if dragging and not (event.type == "LEFTMOUSE" and event.value == "PRESS"):
+            return True
+        operator._snap_quad_wait = False
+        # This press resumes the existing drag. It must not start a new point.
+        return dragging
+    return False
 
 
 class MAX_MT_snap_modes(bpy.types.Menu):
@@ -592,6 +750,57 @@ def _tool(context):
         return context.workspace.tools.from_space_view3d_mode(context.mode, create=False).idname
     except (AttributeError, KeyError):
         return ""
+
+
+def orientation_basis(context):
+    """World-space axes for the selected reference coordinate system."""
+    slot = context.scene.transform_orientation_slots[0]
+    kind = slot.type
+    ob = context.active_object
+    if slot.custom_orientation is not None:
+        return slot.custom_orientation.matrix.copy().normalized()
+    if kind == "VIEW" and context.region_data:
+        return context.region_data.view_rotation.to_matrix()
+    if kind == "CURSOR":
+        return context.scene.cursor.matrix.to_3x3().normalized()
+    if kind in {"LOCAL", "NORMAL", "GIMBAL"} and ob:
+        local = ob.matrix_world.to_3x3().normalized()
+        if kind == "NORMAL" and ob.mode == "EDIT" and ob.type == "MESH":
+            bm = bmesh.from_edit_mesh(ob.data)
+            normals = [f.normal for f in bm.faces if f.select and not f.hide]
+            if not normals:
+                normals = [v.normal for v in bm.verts if v.select and not v.hide]
+            normal = sum(normals, Vector())
+            if normal.length > 1e-8:
+                z = (ob.matrix_world.to_3x3().inverted_safe().transposed() @ normal).normalized()
+                x = local.col[0] - z * local.col[0].dot(z)
+                if x.length < 1e-8:
+                    x = local.col[1] - z * local.col[1].dot(z)
+                x.normalize()
+                return Matrix((x, z.cross(x), z)).transposed()
+        if kind == "GIMBAL" and ob.rotation_mode not in {"QUATERNION", "AXIS_ANGLE"}:
+            # Euler axes include only the rotations later in the Euler order.
+            axes = []
+            order = ob.rotation_mode
+            for i in range(3):
+                angles = ob.rotation_euler.copy()
+                for component in order[:order.index("XYZ"[i]) + 1]:
+                    angles["XYZ".index(component)] = 0
+                axes.append(angles.to_matrix().col[i].copy())
+            parent = ob.parent.matrix_world.to_3x3().normalized() if ob.parent else Matrix.Identity(3)
+            return parent @ Matrix(axes).transposed()
+        return local
+    return Matrix.Identity(3)
+
+
+def _selection_center(context):
+    points = []
+    if context.mode == "EDIT_MESH":
+        for ob in context.objects_in_mode_unique_data:
+            points.extend(ob.matrix_world @ v.co for v in bmesh.from_edit_mesh(ob.data).verts if v.select and not v.hide)
+    else:
+        points = [ob.matrix_world.translation for ob in context.selected_objects]
+    return sum(points, Vector()) / max(1, len(points))
 
 
 def select_transform(context, kind):
@@ -660,29 +869,63 @@ class MAX_OT_snap_toggle(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def button_context(self, context):
-    global _context_pending
-    op = getattr(context, "button_operator", None)
-    if op and op.bl_rna.identifier == "MAX_OT_snap_toggle":
-        if _context_pending:
-            return
-        tab = "SNAPS" if op.kind == "SNAP" else "OPTIONS"
-        window, area, region = context.window, context.area, context.region
-        _context_pending = True
+class MAX_OT_snap_button_listener(bpy.types.Operator):
+    """Route toolbar RMB before Blender builds its button context menu."""
+    bl_idname = "max.snap_button_listener"
+    bl_label = "Snap Button Listener"
+    bl_options = {"INTERNAL"}
 
-        def open_dialog():
-            global _context_pending
-            try:
-                with bpy.context.temp_override(window=window, area=area, region=region):
-                    bpy.ops.max.snap_settings("INVOKE_DEFAULT", tab=tab)
-            finally:
-                _context_pending = False
-            return None
+    def invoke(self, context, event):
+        self.generation = _guard_generation
+        self.window_key = context.window.as_pointer()
+        if self.window_key in _button_guards:
+            return {"CANCELLED"}
+        _button_guards.add(self.window_key)
+        context.window_manager.modal_handler_add(self)
+        return {"RUNNING_MODAL"}
 
-        bpy.app.timers.register(open_dialog, first_interval=.01)
+    def modal(self, context, event):
+        if self.generation != _guard_generation:
+            return {"CANCELLED"}
+        if event.type != "RIGHTMOUSE" or event.value != "PRESS":
+            return {"PASS_THROUGH"}
+        for area in context.window.screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            for region in area.regions:
+                if region.type != "HEADER" or not (region.x <= event.mouse_x < region.x + region.width
+                        and region.y <= event.mouse_y < region.y + region.height):
+                    continue
+                with context.temp_override(area=area, region=region):
+                    # Blender exposes the hovered operator through Copy Python
+                    # Command, but button_operator only inside the context menu.
+                    # Preserve the clipboard and never let the native menu open.
+                    if not bpy.ops.ui.copy_python_command_button.poll():
+                        return {"PASS_THROUGH"}
+                    clipboard = context.window_manager.clipboard
+                    try:
+                        bpy.ops.ui.copy_python_command_button()
+                        command = context.window_manager.clipboard
+                    finally:
+                        context.window_manager.clipboard = clipboard
+                    if command.startswith("bpy.ops.max.snap_toggle("):
+                        tab = "SNAPS" if "'SNAP'" in command or '"SNAP"' in command else "OPTIONS"
+                        bpy.ops.max.snap_settings("INVOKE_DEFAULT", tab=tab)
+                        return {"RUNNING_MODAL"}
+        return {"PASS_THROUGH"}
+
+
+def _ensure_button_listeners():
+    if not bpy.app.background:
+        for window in bpy.context.window_manager.windows:
+            if window.as_pointer() not in _button_guards and any(a.type == "VIEW_3D" for a in window.screen.areas):
+                with bpy.context.temp_override(window=window):
+                    bpy.ops.max.snap_button_listener("INVOKE_DEFAULT")
 
 
 def draw_toolbar(layout, context):
+    if context.window.as_pointer() not in _button_guards and not bpy.app.timers.is_registered(_ensure_button_listeners):
+        bpy.app.timers.register(_ensure_button_listeners, first_interval=.01)
     s, ts = settings(context), context.scene.tool_settings
     row = layout.row(align=True)
     row.operator("max.snap_toggle", text=dict((k, n) for k, n, _ in MODES)[s.mode],
@@ -700,6 +943,8 @@ class MAX_OT_snap_transform(bpy.types.Operator):
     bl_label = "Snap Transform"
     bl_options = {"REGISTER", "UNDO", "BLOCKING"}
     kind: EnumProperty(items=[("MOVE", "Move", ""), ("ROTATE", "Rotate", ""), ("SCALE", "Scale", "")])
+    constraint_axis: BoolVectorProperty(size=3, default=(False, False, False), options={"SKIP_SAVE"})
+    from_gizmo: BoolProperty(default=False, options={"SKIP_SAVE"})
 
     @classmethod
     def poll(cls, context):
@@ -730,7 +975,8 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 self.matrices.append((ob, ob.matrix_world.copy()))
         s = settings(context)
         enabled = {s.override} if s.override != "NONE" else {k for k, _ in TYPES if getattr(s, k)}
-        center = sum((ob.matrix_world.translation for ob in self.objects), Vector()) / max(1, len(self.objects))
+        center = (_selection_center(context) if self.from_gizmo else
+                  sum((ob.matrix_world.translation for ob in self.objects), Vector()) / max(1, len(self.objects)))
         hit = None
         if context.scene.tool_settings.use_snap or s.override not in {"NONE", "OFF"}:
             cursor = self._ray(self.start_co, self.plane[0], self.n)
@@ -747,18 +993,28 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 return {"CANCELLED"}
         else:
             return {"CANCELLED"}
+        self.orientation = orientation_basis(context)
         self.axis = None
+        self.constraint_normal = None
+        self._set_constraint(self.constraint_axis)
         self.number = ""
         self.pivot = self.base.copy()
         self.reference = center - self.pivot
         self.view_n = self.rv3d.view_rotation @ Vector((0, 0, 1))
         self.drag_n = self.n if s.mode != "3D" else self.view_n
+        if self.constraint_normal is not None:
+            self.drag_n = self.constraint_normal
         self.drag_origin = self._ray(self.start_co, self.base, self.drag_n)
         if self.drag_origin is None:
             return {"CANCELLED"}
         context.window_manager.modal_handler_add(self)
         context.workspace.status_text_set("Snap base picked. Drag to target. X/Y/Z: axis. Right-click: cancel")
         return {"RUNNING_MODAL"}
+
+    def _set_constraint(self, flags):
+        indices = [i for i, enabled in enumerate(flags) if enabled]
+        self.axis = self.orientation.col[indices[0]].normalized() if len(indices) == 1 else None
+        self.constraint_normal = self.orientation.col[indices[0]].cross(self.orientation.col[indices[1]]).normalized() if len(indices) == 2 else None
 
     def _ray(self, co, point, normal):
         origin = view3d_utils.region_2d_to_origin_3d(self.region, self.rv3d, co)
@@ -779,17 +1035,28 @@ class MAX_OT_snap_transform(bpy.types.Operator):
 
     def _update(self, context, co):
         s = settings(context)
-        point = self._ray(co, self.base, self.drag_n)
+        if self.axis is not None and self.kind == "MOVE":
+            from .create import ray_line_height
+            point = self.base + self.axis * ray_line_height(self.region, self.rv3d, co, self.base, self.axis)
+            start = self.base + self.axis * ray_line_height(self.region, self.rv3d, self.start_co, self.base, self.axis)
+        else:
+            point = self._ray(co, self.base, self.drag_n)
+            start = self.drag_origin
         if point is None:
             return
-        raw = self.base + point - self.drag_origin
+        raw = self.base + point - start
+        if self.constraint_normal is not None:
+            raw -= self.constraint_normal * (raw - self.base).dot(self.constraint_normal)
         point = snap_point(context, self.region, self.rv3d, co, raw, self.plane,
                            exclude=[ob for ob in self.objects if ob.mode != "EDIT"],
-                           base=self.base, axis=self.axis)
+                           base=self.base, axis=self.axis,
+                           constraint_plane=(self.base, self.constraint_normal) if self.constraint_normal is not None else None)
         if self.kind == "MOVE":
             delta = point - self.base
-            if self.axis is not None and s.axis_constraints:
+            if self.axis is not None:
                 delta = self.axis * delta.dot(self.axis)
+            if self.constraint_normal is not None:
+                delta -= self.constraint_normal * delta.dot(self.constraint_normal)
             if self.number not in {"", "-", ".", "-."}:
                 delta = (self.axis if self.axis is not None else self.u) * float(self.number)
             mat = Matrix.Translation(delta)
@@ -815,7 +1082,12 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 if self.number not in {"", "-", ".", "-."}:
                     factor = float(self.number) / 100
                 factor = snap_scale(s, factor)
-                mat = Matrix.Scale(factor, 4, self.axis) if self.axis is not None else Matrix.Scale(factor, 4)
+                if self.constraint_normal is not None:
+                    n = self.constraint_normal
+                    mat = Matrix(tuple(tuple((factor if i == j else 0) + (1 - factor) * n[i] * n[j]
+                                             for j in range(3)) for i in range(3))).to_4x4()
+                else:
+                    mat = Matrix.Scale(factor, 4, self.axis) if self.axis is not None else Matrix.Scale(factor, 4)
             mat = Matrix.Translation(self.pivot) @ mat @ Matrix.Translation(-self.pivot)
         self._apply(context, mat)
         context.area.tag_redraw()
@@ -832,6 +1104,8 @@ class MAX_OT_snap_transform(bpy.types.Operator):
 
     def modal(self, context, event):
         co = Vector((event.mouse_region_x, event.mouse_region_y))
+        if override_event(self, context, event):
+            return {"RUNNING_MODAL"}
         if event.value == "PRESS" and event.type == "S":
             if event.alt:
                 bpy.ops.max.snap_cycle()
@@ -846,7 +1120,10 @@ class MAX_OT_snap_transform(bpy.types.Operator):
             return self._finish(context)
         if event.value == "PRESS":
             if event.type in {"X", "Y", "Z"}:
-                self.axis = Vector({"X": (1, 0, 0), "Y": (0, 1, 0), "Z": (0, 0, 1)}[event.type])
+                index = "XYZ".index(event.type)
+                self._set_constraint(tuple((i != index) if event.shift else (i == index) for i in range(3)))
+                self.drag_n = self.constraint_normal if self.constraint_normal is not None else (self.n if settings(context).mode != "3D" else self.view_n)
+                self.drag_origin = self._ray(self.start_co, self.base, self.drag_n)
                 settings(context).axis_constraints = True
             elif event.type == "BACK_SPACE":
                 self.number = self.number[:-1]
@@ -865,7 +1142,7 @@ class MAX_OT_snap_transform(bpy.types.Operator):
 class _SnapTool:
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"
-    bl_widget = None
+    bl_widget = "MAX_GGT_snap_transform"
     bl_options = set()
 
 
@@ -887,7 +1164,84 @@ tools = tuple(_make_tool(name, label, kind, mode) for mode in ("OBJECT", "EDIT_M
                                         ("scale", "Select and Uniform Scale", "SCALE")))
 
 
-classes = (MaxSnapSettings, MAX_OT_snap_settings, MAX_OT_snap_clear, MAX_OT_snap_override,
+class MAX_GGT_snap_transform(bpy.types.GizmoGroup):
+    bl_idname = "MAX_GGT_snap_transform"
+    bl_label = "Snap Transform"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "WINDOW"
+    bl_options = {"3D", "PERSISTENT", "SCALE"}
+
+    @classmethod
+    def poll(cls, context):
+        return _tool(context).startswith("max.snap_") and bool(context.selected_objects)
+
+    def setup(self, context):
+        self.handles = []
+        colors = ((1, .15, .15), (.3, 1, .2), (.2, .5, 1))
+        for kind in ("MOVE", "ROTATE", "SCALE"):
+            for i, color in enumerate(colors):
+                gizmo = self.gizmos.new("GIZMO_GT_dial_3d" if kind == "ROTATE" else "GIZMO_GT_arrow_3d")
+                if kind != "ROTATE":
+                    gizmo.draw_style = "BOX" if kind == "SCALE" else "NORMAL"
+                gizmo.color = color
+                gizmo.alpha = .8
+                gizmo.color_highlight = (1, 1, .2)
+                gizmo.alpha_highlight = 1
+                props = gizmo.target_set_operator("max.snap_transform")
+                props.kind = kind
+                props.from_gizmo = True
+                props.constraint_axis = tuple(j == i for j in range(3))
+                self.handles.append((gizmo, kind, i, False))
+            if kind != "ROTATE":
+                for i, color in enumerate(colors):
+                    gizmo = self.gizmos.new("GIZMO_GT_primitive_3d")
+                    gizmo.draw_style = "PLANE"
+                    gizmo.color = color
+                    gizmo.alpha = .25
+                    gizmo.color_highlight = (1, 1, .2)
+                    gizmo.alpha_highlight = .8
+                    gizmo.scale_basis = .18
+                    gizmo.use_draw_offset_scale = True
+                    props = gizmo.target_set_operator("max.snap_transform")
+                    props.kind = kind
+                    props.from_gizmo = True
+                    props.constraint_axis = tuple(j != i for j in range(3))
+                    self.handles.append((gizmo, kind, i, True))
+        gizmo = self.gizmos.new("GIZMO_GT_move_3d")
+        gizmo.draw_style = "RING_2D"
+        gizmo.color = (1, 1, 1)
+        gizmo.alpha = .7
+        gizmo.color_highlight = (1, 1, .2)
+        gizmo.alpha_highlight = 1
+        gizmo.scale_basis = .15
+        self.center = gizmo
+
+    def draw_prepare(self, context):
+        kind = _tool(context).rsplit("_", 1)[-1].upper()
+        basis = orientation_basis(context)
+        center = _selection_center(context)
+        for gizmo, operation, i, plane in self.handles:
+            gizmo.hide = operation != kind
+            normal = basis.col[i].normalized()
+            if plane:
+                axes = [basis.col[j] for j in range(3) if j != i]
+                normal = axes[0].cross(axes[1]).normalized()
+            matrix = normal.to_track_quat("Z", "Y").to_matrix().to_4x4()
+            matrix.translation = center
+            gizmo.matrix_basis = matrix
+            if plane:
+                # Put plane handles between their two axes, away from the center.
+                a, b = [basis.col[j] for j in range(3) if j != i]
+                local = matrix.to_3x3().inverted_safe() @ ((a + b) * 1.8)
+                gizmo.matrix_offset = Matrix.Translation(local)
+        self.center.matrix_basis = Matrix.Translation(center)
+        props = self.center.target_set_operator("max.snap_transform")
+        props.kind = kind
+        props.from_gizmo = True
+
+
+classes = (MaxSnapSettings, MAX_OT_snap_settings, MAX_PT_snap_settings, MAX_OT_snap_settings_close,
+           MAX_OT_snap_button_listener, MAX_GGT_snap_transform, MAX_OT_snap_clear, MAX_OT_snap_override,
            MAX_OT_snap_cycle, MAX_MT_snap_standard, MAX_OT_snap_quad, MAX_MT_snap_modes,
            MAX_OT_select_transform, MAX_OT_snap_toggle, MAX_OT_snap_transform)
 
@@ -900,12 +1254,22 @@ def register_props():
             bpy.utils.register_tool(tool, separator=False, group=False)
         bpy.app.timers.register(_load_settings, first_interval=1.1)
     bpy.app.handlers.load_post.append(_load_settings)
-    menu = getattr(bpy.types, "UI_MT_button_context_menu", None) or bpy.types.WM_MT_button_context
-    menu.append(button_context)
 
 
 def unregister_props():
-    global _handle
+    global _handle, _guard_generation, _quad_open
+    from . import snap_quad
+    snap_quad.close_all()
+    _guard_generation += 1
+    _quad_open = False
+    _button_guards.clear()
+    for window in list(bpy.context.window_manager.windows):
+        if window.as_pointer() in _settings_windows:
+            with bpy.context.temp_override(window=window):
+                bpy.ops.wm.window_close()
+    _settings_windows.clear()
+    if bpy.app.timers.is_registered(_ensure_button_listeners):
+        bpy.app.timers.unregister(_ensure_button_listeners)
     if _handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_handle, "WINDOW")
         _handle = None
@@ -916,7 +1280,5 @@ def unregister_props():
         bpy.app.timers.unregister(_load_settings)
     if _load_settings in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(_load_settings)
-    menu = getattr(bpy.types, "UI_MT_button_context_menu", None) or bpy.types.WM_MT_button_context
-    menu.remove(button_context)
     _spinner_values.clear()
     clear_preview()
