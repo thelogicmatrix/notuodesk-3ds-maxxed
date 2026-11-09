@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>mtl assign</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<circle cx="11" cy="10" r="7" stroke="#78b7ce" fill="none"/><path d="M14 22 H29 M24 17 L29 22 L24 27" stroke="#dedede" fill="none" stroke-width="2"/><rect x="3" y="22" width="7" height="7" stroke="#dedede" fill="none"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>mtl_assign</title>
+<desc>Checker material assigned to selected object</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<circle cx="6" cy="6" r="4" fill="#d2d4d5" stroke="#d2d4d5" stroke-width="1"/><path d="M3 3 9 9 M3 9 9 3 M2 6 H10 M6 2 V10" fill="none" stroke="#656b6e" stroke-width="1.5"/><path d="M10 5 V11 H13" fill="none" stroke="#50b9bf" stroke-width="2"/><polygon points="10,10 14,10 12,14" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="11" y="13" width="3" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

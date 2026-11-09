@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>weld</title>
+<desc>Weld mesh metaphor</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M2 3 8 8 14 3 M2 13 8 8 14 13" fill="none" stroke="#d2d4d5" stroke-width="1"/><rect x="7" y="7" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><path d="M3 6 5 8 3 10 M13 6 11 8 13 10" fill="none" stroke="#50b9bf" stroke-width="1"/>
+</g>
+</svg>

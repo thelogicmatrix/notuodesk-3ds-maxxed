@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>material editor</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<circle cx="10" cy="10" r="6" stroke="#dedede" fill="none"/><circle cx="23" cy="10" r="6" stroke="#78b7ce" fill="none"/><circle cx="10" cy="23" r="6" stroke="#78b7ce" fill="none"/><circle cx="23" cy="23" r="6" stroke="#dedede" fill="none"/><path d="M7 8 L10 6 M20 21 L23 19" stroke="#dedede" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>material_editor</title>
+<desc>Checker material sphere and settings rows in window</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1.5" y="2.5" width="13" height="11" rx="0" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M1.5 5.5 H14.5 M3 4 H4 M5 4 H6 M7 4 H8" fill="none" stroke="#d2d4d5" stroke-width="1"/><circle cx="5.5" cy="9.5" r="3" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M3.5 7.5 7.5 11.5 M3.5 11.5 7.5 7.5 M2.5 9.5 H8.5 M5.5 6.5 V12.5" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M10 7 H13 M10 9 H13 M10 11 H13" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

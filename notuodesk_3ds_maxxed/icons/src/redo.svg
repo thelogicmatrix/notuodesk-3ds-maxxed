@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>redo</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<g transform="translate(32 0) scale(-1 1)"><path d="M11 5 L4 12 L11 19 M5 12 H19 C31 12 29 27 18 27" stroke="#dedede" fill="none" stroke-width="3"/></g>
+<desc>Broad bent arrow pointing right</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<g transform="translate(16 0) scale(-1 1)"><path d="M6 3 1 7 6 11 V8 H9 C13 8 13 12 9 12 H7 V14 H9 C16 14 16 6 9 6 H6 Z" fill="#d2d4d5" stroke="none" stroke-width="0"/></g>
 </g>
 </svg>

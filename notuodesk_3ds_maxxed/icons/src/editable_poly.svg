@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>editable poly</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M6 5 L26 7 L24 26 L4 24 Z M6 5 L24 26" stroke="#78b7ce" fill="none" stroke-width="2"/><rect x="4" y="3" width="4" height="4" stroke="#78b7ce" fill="#343434"/><rect x="24" y="5" width="4" height="4" stroke="#78b7ce" fill="#343434"/><rect x="22" y="24" width="4" height="4" stroke="#78b7ce" fill="#343434"/><rect x="2" y="22" width="4" height="4" stroke="#78b7ce" fill="#343434"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>editable_poly</title>
+<desc>Editable mesh control cage</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M2.5 5.5 7.5 2.5 13.5 5.5 V11.5 L8.5 14.5 2.5 11.5 Z M2.5 5.5 8.5 8.5 13.5 5.5 M8.5 8.5 V14.5" fill="none" stroke="#8d9295" stroke-width="1"/><rect x="1.5" y="4.5" width="2" height="2" rx="0" fill="#656b6e" stroke="#50b9bf" stroke-width="1"/><rect x="6.5" y="1.5" width="2" height="2" rx="0" fill="#656b6e" stroke="#50b9bf" stroke-width="1"/><rect x="12.5" y="4.5" width="2" height="2" rx="0" fill="#656b6e" stroke="#50b9bf" stroke-width="1"/><rect x="7.5" y="13.5" width="2" height="2" rx="0" fill="#656b6e" stroke="#50b9bf" stroke-width="1"/>
 </g>
 </svg>

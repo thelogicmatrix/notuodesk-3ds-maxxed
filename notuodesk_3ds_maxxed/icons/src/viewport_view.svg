@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>viewport_view</title>
+<desc>Point-of-view menu</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2.5,5 7.5,2 13.5,5.5 8.5,8.5" fill="#a4a9ac" stroke="#d2d4d5" stroke-width="1"/><polygon points="2.5,5 8.5,8.5 8.5,14 2.5,10.5" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><polygon points="8.5,8.5 13.5,5.5 13.5,11 8.5,14" fill="#858b8e" stroke="#d2d4d5" stroke-width="1"/>
+</g>
+</svg>

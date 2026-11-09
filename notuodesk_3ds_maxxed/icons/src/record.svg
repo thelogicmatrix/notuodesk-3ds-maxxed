@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>record</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<circle cx="16" cy="16" r="9" stroke="#df7774" fill="#df7774"/>
+<desc>Auto Key mode button</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="2" y="3" width="12" height="10" rx="0" fill="#df6663" stroke="none" stroke-width="1"/><path d="M4 8 H12 M8 4 V12" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

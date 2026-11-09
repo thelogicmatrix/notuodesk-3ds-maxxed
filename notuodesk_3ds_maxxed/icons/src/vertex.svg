@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>vertex</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M6 6 H26 V26 H6 Z M6 6 L26 26 M26 6 L6 26" stroke="#9a9a9a" fill="none" stroke-width="1.5"/><rect x="4" y="4" width="4" height="4" stroke="#df7774" fill="#df7774"/><rect x="24" y="4" width="4" height="4" stroke="#df7774" fill="#df7774"/><rect x="24" y="24" width="4" height="4" stroke="#df7774" fill="#df7774"/><rect x="4" y="24" width="4" height="4" stroke="#df7774" fill="#df7774"/>
+<desc>Mesh corners highlighted as cyan square vertices</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M2.5 5.5 7.5 2.5 13.5 5.5 V11.5 L8.5 14.5 2.5 11.5 Z M2.5 5.5 8.5 8.5 13.5 5.5 M8.5 8.5 V14.5" fill="none" stroke="#8d9295" stroke-width="1"/><rect x="1.5" y="4.5" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="6.5" y="1.5" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="12.5" y="4.5" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="7.5" y="13.5" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
 </g>
 </svg>

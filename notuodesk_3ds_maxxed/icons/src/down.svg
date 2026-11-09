@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>down</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M7 11 L16 22 L25 11 Z" stroke="#dedede" fill="#dedede" stroke-width="2"/>
+<desc>Small downward triangle</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="3,5 13,5 8,11" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

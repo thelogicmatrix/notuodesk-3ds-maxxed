@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>l_ext</title>
-<g fill="none" stroke="#dedede" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 6 H11 V21 H25 V27 H5 Z M5 6 L9 3 H15 V18 H29 V24 L25 27 M11 6 L15 3 M11 21 L15 18 M25 21 L29 18"/>
+<desc>Extruded L-section</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,3 6,2 6,9 13,9 14,12 10,14 2,11" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M2 3 5 5 V11 L14 12 M5 11 2 11 M5 5 6 2" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

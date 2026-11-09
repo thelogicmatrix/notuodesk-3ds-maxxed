@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>symmetry</title>
+<desc>Mirrored halves separated by a centre plane</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,4 6,6 6,13 2,11" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="10,6 14,4 14,11 10,13" fill="#50b9bf" stroke="none" stroke-width="1"/><path d="M8 1 V15" fill="none" stroke="#d2d4d5" stroke-width="1" stroke-dasharray="2 1"/>
+</g>
+</svg>

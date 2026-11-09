@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>time_config</title>
+<desc>Clock and gold settings wheel</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<circle cx="6.5" cy="6.5" r="5" fill="#d2d4d5" stroke="none" stroke-width="1"/><path d="M6.5 3 V6.5 H10" fill="none" stroke="#656b6e" stroke-width="1.3"/><circle cx="12" cy="12" r="3" fill="none" stroke="#efb83d" stroke-width="1.5"/><path d="M12 8 V10 M12 14 V16 M8 12 H10 M14 12 H16" fill="none" stroke="#efb83d" stroke-width="1"/>
+</g>
+</svg>

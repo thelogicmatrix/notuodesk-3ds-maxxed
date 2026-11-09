@@ -1,0 +1,2846 @@
+{
+  "version": 1,
+  "phase": "integrated",
+  "references": {
+    "toolbar": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-D60DB151-D25D-498D-AF02-410D4237A140.htm",
+      "evidence": "references/toolbar-*.png"
+    },
+    "tabs": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-E3CB809D-94ED-4C30-892B-1D12B8721EA5.htm",
+      "evidence": "references/command-panel-01.png through command-panel-06.png"
+    },
+    "categories": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-6C4B9CF9-DCD6-42A6-A10C-F0E9C6A728AA.htm",
+      "evidence": "references/create-panel-03.png through create-panel-09.png"
+    },
+    "stack": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-80209C3A-C2E4-4541-8738-D1E5ECE16E9C.htm",
+      "evidence": "references/stack-controls-20.png through stack-controls-25.png"
+    },
+    "subobjects": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-409D36AC-1D17-4B24-851D-1C49C7E0B79D.htm",
+      "evidence": "references/subobjects-03.png through subobjects-08.png"
+    },
+    "primitives": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-66152BDE-BA64-423F-8472-C1F0EB409E16.htm",
+      "evidence": "max-ui-reference/images/interface-overview.png, Object Type rollout"
+    },
+    "extended": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-BF868DCF-12E3-431C-A73B-C16C0FD67C98.htm",
+      "evidence": "Object Type button list in Autodesk topic"
+    },
+    "splines": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-F7E74643-39DD-4531-AB62-6832E2B759E1.htm",
+      "evidence": "Object Type button list in Autodesk topic"
+    },
+    "poly": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-8DA624B4-32AB-473A-B5B4-77B8934DAE1B.htm",
+      "evidence": "max-ui-reference/images/quad-default-2026.png and editable-poly.md"
+    },
+    "poly_vertex": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-047B00EC-D4E3-4D05-8FB7-220795D13874.htm",
+      "evidence": "max-ui-reference/editable-poly.md, Edit Vertices"
+    },
+    "poly_edge": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-2C16FF31-BF20-450F-8163-3362A7037603.htm",
+      "evidence": "max-ui-reference/editable-poly.md, Edit Edges"
+    },
+    "poly_face": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-FF7D7633-03AD-4427-821A-65F8AC484CDD.htm",
+      "evidence": "max-ui-reference/editable-poly.md, Edit Polygons and Elements"
+    },
+    "caddy": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-0F0E1E2D-7F99-4EF5-B37C-7F486379CFD0.htm",
+      "evidence": "max-ui-reference/images/caddy-interface-2026.png"
+    },
+    "extrude": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-54BDC012-917F-471E-B083-F15D4FE12251.htm",
+      "evidence": "max-ui-reference/images/caddy-extrude-polygons-2026.png"
+    },
+    "chamfer": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-FB852041-9E26-4F4A-9E17-154CD4CB504A.htm",
+      "evidence": "max-ui-reference/images/caddy-chamfer-2026.png"
+    },
+    "connect": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-57E3DDC9-50D2-4467-93E9-B1B103CEA30D.htm",
+      "evidence": "max-ui-reference/images/caddy-connect-2026.png"
+    },
+    "bridge": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-366DCE9C-FB42-47CB-A1ED-65129C95923E.htm",
+      "evidence": "max-ui-reference/images/caddy-bridge-2026.png"
+    },
+    "inset": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-03A55F03-35D3-4E15-80C5-9A8923569843.htm",
+      "evidence": "max-ui-reference/images/caddy-inset-2026.png"
+    },
+    "hinge": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-27325336-A2B6-42D4-BFE0-40491A72D98B.htm",
+      "evidence": "max-ui-reference/images/caddy-hinge-2026.png"
+    },
+    "smooth": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-44BA6ECC-EA8C-405B-8B52-4ABF9430A11C.htm",
+      "evidence": "references/mesh-smooth-caddy-04.png and mesh-smooth-caddy-06.png"
+    },
+    "relax": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-7E7FC066-7ED7-44B8-858A-5B9426E8715E.htm",
+      "evidence": "references/relax-caddy-04.png through relax-caddy-09.png"
+    },
+    "tessellate": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-EAAAD139-33CD-4809-B03B-237533B6E98C.htm",
+      "evidence": "references/tessellate-caddy-04.png through tessellate-caddy-08.png"
+    },
+    "material": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Lighting-Shading/files/GUID-93E64F78-67A8-4DEA-9BF5-2F9A9098987B.htm",
+      "evidence": "references/material-tools-03.png through material-tools-24.png"
+    },
+    "time": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Animation/files/GUID-818205DD-D58A-495E-BD0C-DC69BDE8DAC2.htm",
+      "evidence": "references/time-00.png and time-02.png through time-14.png"
+    },
+    "viewport": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-F8326C68-F2F9-47F7-AC1D-BA41D7825C7C.htm",
+      "evidence": "max-ui-reference/images/interface-overview.png, bottom-right navigation controls"
+    },
+    "labels": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-BE30312F-5765-4BE1-9890-8CD5CAA4EFE5.htm",
+      "evidence": "max-ui-reference/images/interface-viewport.png"
+    },
+    "symmetry": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modifiers/files/GUID-EB0B7B9B-117D-4CC3-A966-A3E007E0C68A.htm",
+      "evidence": "references/symmetry-02.png through symmetry-04.png"
+    }
+  },
+  "icons": [
+    {
+      "name": "undo",
+      "section": "toolbar",
+      "idea": "Broad bent arrow pointing left",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "undo"
+    },
+    {
+      "name": "redo",
+      "section": "toolbar",
+      "idea": "Broad bent arrow pointing right",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "redo"
+    },
+    {
+      "name": "link",
+      "section": "toolbar",
+      "idea": "Two interlocking objects linked diagonally",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "link"
+    },
+    {
+      "name": "unlink",
+      "section": "toolbar",
+      "idea": "Separated diagonal links with cyan break marks",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "unlink"
+    },
+    {
+      "name": "bind_space_warp",
+      "section": "toolbar",
+      "idea": "Wavy space-warp bands with a binding link",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "bind_space_warp"
+    },
+    {
+      "name": "selection_filter",
+      "section": "toolbar",
+      "idea": "Filter list, All is text in Max",
+      "reference": "toolbar",
+      "presentation": "text-only",
+      "spot": "toolbar",
+      "note": "Keep the All dropdown text. Candidate funnel is reserved, not a replacement for All.",
+      "baseline": "selection_filter"
+    },
+    {
+      "name": "select_object",
+      "section": "toolbar",
+      "idea": "Grey selection tile and yellow pointer",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "select_object"
+    },
+    {
+      "name": "select_by_name",
+      "section": "toolbar",
+      "idea": "Stacked list rows and yellow pointer",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "select_by_name"
+    },
+    {
+      "name": "region_rect",
+      "section": "toolbar",
+      "idea": "Dotted rectangular selection boundary",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "region_rect"
+    },
+    {
+      "name": "region_circle",
+      "section": "toolbar",
+      "idea": "Dotted circular selection boundary",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "region_circle"
+    },
+    {
+      "name": "region_fence",
+      "section": "toolbar",
+      "idea": "Angular fence selection boundary",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "region_fence"
+    },
+    {
+      "name": "window_crossing",
+      "section": "toolbar",
+      "idea": "Dashed window crossed by a filled cyan tile",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "window_crossing"
+    },
+    {
+      "name": "move",
+      "section": "toolbar",
+      "idea": "Solid four-way arrow cross",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "move"
+    },
+    {
+      "name": "rotate",
+      "section": "toolbar",
+      "idea": "Broad clockwise circular arrow",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "rotate"
+    },
+    {
+      "name": "scale",
+      "section": "toolbar",
+      "idea": "Small solid square expanding into dashed square",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "scale"
+    },
+    {
+      "name": "select_place",
+      "section": "toolbar",
+      "idea": "Object placed onto a target surface",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "reference_coords",
+      "section": "toolbar",
+      "idea": "Coordinate axes, dropdown itself shows View text",
+      "reference": "toolbar",
+      "presentation": "text-only",
+      "spot": "toolbar",
+      "note": "Keep the reference coordinate dropdown as text, no leading axis pictogram.",
+      "baseline": "reference_coords"
+    },
+    {
+      "name": "pivot",
+      "section": "toolbar",
+      "idea": "Two objects with cyan pivot crosses",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "pivot"
+    },
+    {
+      "name": "snap_2d",
+      "section": "toolbar",
+      "idea": "Large 2 with small gold magnet at upper right",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "snap_2d"
+    },
+    {
+      "name": "snap_25d",
+      "section": "toolbar",
+      "idea": "Large 2.5 with small gold magnet at upper right",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "snap_25d"
+    },
+    {
+      "name": "snap_3d",
+      "section": "toolbar",
+      "idea": "Large 3 with small gold magnet at upper right",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "snap_3d"
+    },
+    {
+      "name": "snap_off",
+      "section": "toolbar",
+      "idea": "Same 3D snap symbol in disabled state",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "Prefer disabled UI tint of snap_3d in phase 2. This asset is the legacy name.",
+      "baseline": "snap_off"
+    },
+    {
+      "name": "angle_snap",
+      "section": "toolbar",
+      "idea": "Right angle and small gold magnet",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "angle_snap"
+    },
+    {
+      "name": "percent_snap",
+      "section": "toolbar",
+      "idea": "Percent sign and small gold magnet",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "percent_snap"
+    },
+    {
+      "name": "spinner_snap",
+      "section": "toolbar",
+      "idea": "Opposed spinner triangles with gold magnet",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "spinner_snap"
+    },
+    {
+      "name": "named_selection_sets",
+      "section": "toolbar",
+      "idea": "Selection braces and editing pencil",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "Edit button icon-only. Adjacent Create Selection Set combo retains text.",
+      "baseline": "named_selection_sets"
+    },
+    {
+      "name": "mirror",
+      "section": "toolbar",
+      "idea": "Two opposed planes around dotted mirror axis",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "mirror"
+    },
+    {
+      "name": "align",
+      "section": "toolbar",
+      "idea": "Offset objects lined up to common axes",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "align"
+    },
+    {
+      "name": "scene_explorer",
+      "section": "toolbar",
+      "idea": "Scene list in a compact window",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "scene_explorer"
+    },
+    {
+      "name": "layer_explorer",
+      "section": "toolbar",
+      "idea": "Three stacked layers inside a window",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "layer_explorer"
+    },
+    {
+      "name": "ribbon",
+      "section": "toolbar",
+      "idea": "Panel blocks inside a ribbon window",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "ribbon"
+    },
+    {
+      "name": "curve_editor",
+      "section": "toolbar",
+      "idea": "Cyan animation curve in editor window",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "curve_editor"
+    },
+    {
+      "name": "schematic_view",
+      "section": "toolbar",
+      "idea": "Hierarchy bar and large downward cyan arrow",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "schematic_view"
+    },
+    {
+      "name": "material_editor",
+      "section": "toolbar",
+      "idea": "Checker material sphere and settings rows in window",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "material_editor"
+    },
+    {
+      "name": "render_setup",
+      "section": "toolbar",
+      "idea": "Teapot with small gold settings wheel",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "render_setup"
+    },
+    {
+      "name": "rendered_frame",
+      "section": "toolbar",
+      "idea": "Teapot inside rendered frame window",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "rendered_frame"
+    },
+    {
+      "name": "render_production",
+      "section": "toolbar",
+      "idea": "Teapot with small cyan production sparkle",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "",
+      "baseline": "render_production"
+    },
+    {
+      "name": "create",
+      "section": "command_panel",
+      "idea": "Simple filled plus",
+      "reference": "tabs",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "create"
+    },
+    {
+      "name": "modify",
+      "section": "command_panel",
+      "idea": "Curved modifier segment within cyan control cage",
+      "reference": "tabs",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "modify"
+    },
+    {
+      "name": "hierarchy",
+      "section": "command_panel",
+      "idea": "Parent block branching to two cyan children",
+      "reference": "tabs",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "hierarchy"
+    },
+    {
+      "name": "motion",
+      "section": "command_panel",
+      "idea": "Disc with two cyan motion arcs",
+      "reference": "tabs",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "motion"
+    },
+    {
+      "name": "display",
+      "section": "command_panel",
+      "idea": "Solid monitor and short stand",
+      "reference": "tabs",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "display"
+    },
+    {
+      "name": "utilities",
+      "section": "command_panel",
+      "idea": "Open-ended spanner, not a hammer",
+      "reference": "tabs",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "utilities"
+    },
+    {
+      "name": "geometry",
+      "section": "command_panel",
+      "idea": "Filled round geometry category",
+      "reference": "categories",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "geometry"
+    },
+    {
+      "name": "shapes",
+      "section": "command_panel",
+      "idea": "Overlapping outlined circle and filled square",
+      "reference": "categories",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "shapes"
+    },
+    {
+      "name": "lights",
+      "section": "command_panel",
+      "idea": "Filled light bulb and two base bars",
+      "reference": "categories",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "lights"
+    },
+    {
+      "name": "cameras",
+      "section": "command_panel",
+      "idea": "Rectangular camera body and triangular lens",
+      "reference": "categories",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "cameras"
+    },
+    {
+      "name": "helpers",
+      "section": "command_panel",
+      "idea": "Triangular set square with ruler marks",
+      "reference": "categories",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "helpers"
+    },
+    {
+      "name": "space_warps",
+      "section": "command_panel",
+      "idea": "Three wavy horizontal bands",
+      "reference": "categories",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "space_warps"
+    },
+    {
+      "name": "systems",
+      "section": "command_panel",
+      "idea": "Two small meshing gear wheels",
+      "reference": "categories",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "systems"
+    },
+    {
+      "name": "vertex",
+      "section": "command_panel",
+      "idea": "Mesh corners highlighted as cyan square vertices",
+      "reference": "subobjects",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "vertex"
+    },
+    {
+      "name": "edge",
+      "section": "command_panel",
+      "idea": "Two connected edges highlighted on a small mesh",
+      "reference": "subobjects",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "edge"
+    },
+    {
+      "name": "border",
+      "section": "command_panel",
+      "idea": "Closed open-boundary loop highlighted on mesh",
+      "reference": "subobjects",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "border"
+    },
+    {
+      "name": "polygon",
+      "section": "command_panel",
+      "idea": "One polygon highlighted on a small mesh",
+      "reference": "subobjects",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "polygon"
+    },
+    {
+      "name": "element",
+      "section": "command_panel",
+      "idea": "Whole connected mesh element highlighted",
+      "reference": "subobjects",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "element"
+    },
+    {
+      "name": "editable_poly",
+      "section": "command_panel",
+      "idea": "Editable mesh control cage",
+      "reference": "stack",
+      "presentation": "icon plus text",
+      "spot": "command panel",
+      "note": "Stack row retains Editable Poly text. Level buttons are icon-only.",
+      "baseline": "editable_poly"
+    },
+    {
+      "name": "pin_stack",
+      "section": "command_panel",
+      "idea": "Pushpin locking the modifier stack",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "pin_stack"
+    },
+    {
+      "name": "show_end_result",
+      "section": "command_panel",
+      "idea": "Narrow hourglass for result through stack",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "show_end_result"
+    },
+    {
+      "name": "make_unique",
+      "section": "command_panel",
+      "idea": "Forked unique-instance symbol",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "make_unique"
+    },
+    {
+      "name": "remove_modifier",
+      "section": "command_panel",
+      "idea": "Trash can with vertical slats",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "remove_modifier"
+    },
+    {
+      "name": "configure_modifier_sets",
+      "section": "command_panel",
+      "idea": "Modifier list with editing pencil",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "configure_modifier_sets"
+    },
+    {
+      "name": "modifier_list",
+      "section": "command_panel",
+      "idea": "Modifier list is a labelled dropdown",
+      "reference": "stack",
+      "presentation": "text-only",
+      "spot": "command panel",
+      "note": "Keep Modifier List text. Do not append a separate list pictogram to the dropdown.",
+      "baseline": "modifier_list"
+    },
+    {
+      "name": "bulb_on",
+      "section": "command_panel",
+      "idea": "Visible eye for enabled modifier, not a light bulb",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "bulb_on"
+    },
+    {
+      "name": "bulb_off",
+      "section": "command_panel",
+      "idea": "Dim eye for disabled modifier",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "bulb_off"
+    },
+    {
+      "name": "edit_mode",
+      "section": "command_panel",
+      "idea": "Editable cage with pencil, Blender-specific toggle",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "No exact Max control. Keep legacy toggle tooltip explicit.",
+      "baseline": "edit_mode"
+    },
+    {
+      "name": "settings",
+      "section": "command_panel",
+      "idea": "Small inset square settings button",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "settings"
+    },
+    {
+      "name": "up",
+      "section": "command_panel",
+      "idea": "Small upward triangle",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "up"
+    },
+    {
+      "name": "down",
+      "section": "command_panel",
+      "idea": "Small downward triangle",
+      "reference": "stack",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "down"
+    },
+    {
+      "name": "check",
+      "section": "command_panel",
+      "idea": "Check mark for selected menu state",
+      "reference": "labels",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "check"
+    },
+    {
+      "name": "close",
+      "section": "command_panel",
+      "idea": "Small diagonal close cross",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "command panel",
+      "note": "",
+      "baseline": "close"
+    },
+    {
+      "name": "box",
+      "section": "create_objects",
+      "idea": "Simple isometric box",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "box"
+    },
+    {
+      "name": "sphere",
+      "section": "create_objects",
+      "idea": "Latitude and longitude sphere",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "sphere"
+    },
+    {
+      "name": "geosphere",
+      "section": "create_objects",
+      "idea": "Triangular geodesic sphere",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "geosphere"
+    },
+    {
+      "name": "cylinder",
+      "section": "create_objects",
+      "idea": "Vertical cylinder with elliptical cap",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "cylinder"
+    },
+    {
+      "name": "tube",
+      "section": "create_objects",
+      "idea": "Cylinder with open centre",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "tube"
+    },
+    {
+      "name": "cone",
+      "section": "create_objects",
+      "idea": "Frustum cone with separate cap and base",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "cone"
+    },
+    {
+      "name": "torus",
+      "section": "create_objects",
+      "idea": "Thick ring with clear centre hole",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "torus"
+    },
+    {
+      "name": "pyramid",
+      "section": "create_objects",
+      "idea": "Square-based pyramid",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "pyramid"
+    },
+    {
+      "name": "plane",
+      "section": "create_objects",
+      "idea": "Subdivided flat construction plane",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "plane"
+    },
+    {
+      "name": "planeplus",
+      "section": "create_objects",
+      "idea": "Plane plus marker for Nathan's custom PlanePlus",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "PlanePlus is Nathan's third-party tool, not a stock Max icon. Keep PlanePlus text.",
+      "baseline": null
+    },
+    {
+      "name": "teapot",
+      "section": "create_objects",
+      "idea": "Classic teapot primitive",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "hedra",
+      "section": "create_objects",
+      "idea": "Faceted multi-faced hedron",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "hedra"
+    },
+    {
+      "name": "torus_knot",
+      "section": "create_objects",
+      "idea": "Interwoven closed torus knot",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "torus_knot"
+    },
+    {
+      "name": "chamferbox",
+      "section": "create_objects",
+      "idea": "Box with visibly bevelled corners",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "chamferbox"
+    },
+    {
+      "name": "chamfercyl",
+      "section": "create_objects",
+      "idea": "Cylinder with sloping bevel bands",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "chamfercyl"
+    },
+    {
+      "name": "oiltank",
+      "section": "create_objects",
+      "idea": "Tank with shallow convex end caps",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "oiltank"
+    },
+    {
+      "name": "capsule",
+      "section": "create_objects",
+      "idea": "Capsule with hemispherical ends",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "capsule"
+    },
+    {
+      "name": "spindle",
+      "section": "create_objects",
+      "idea": "Spindle with pointed end caps",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "spindle"
+    },
+    {
+      "name": "l_ext",
+      "section": "create_objects",
+      "idea": "Extruded L-section",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "l_ext"
+    },
+    {
+      "name": "c_ext",
+      "section": "create_objects",
+      "idea": "Extruded C-section",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "c_ext"
+    },
+    {
+      "name": "gengon",
+      "section": "create_objects",
+      "idea": "Rounded polygonal prism",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "gengon"
+    },
+    {
+      "name": "prism",
+      "section": "create_objects",
+      "idea": "Triangular prism with depth",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "prism"
+    },
+    {
+      "name": "ringwave",
+      "section": "create_objects",
+      "idea": "Concentric rippled ring",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "hose",
+      "section": "create_objects",
+      "idea": "Corrugated flexible hose",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "spring",
+      "section": "create_objects",
+      "idea": "Helical wire spring",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "damper",
+      "section": "create_objects",
+      "idea": "Piston rod entering damper housing",
+      "reference": "extended",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "line",
+      "section": "create_objects",
+      "idea": "Angled connected spline with square knots",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "line"
+    },
+    {
+      "name": "rectangle",
+      "section": "create_objects",
+      "idea": "Rectangle spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "rectangle"
+    },
+    {
+      "name": "circle",
+      "section": "create_objects",
+      "idea": "Circle spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "circle"
+    },
+    {
+      "name": "ellipse",
+      "section": "create_objects",
+      "idea": "Ellipse spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "ellipse"
+    },
+    {
+      "name": "arc",
+      "section": "create_objects",
+      "idea": "Arc spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "arc"
+    },
+    {
+      "name": "ngon",
+      "section": "create_objects",
+      "idea": "Ngon spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "ngon"
+    },
+    {
+      "name": "star",
+      "section": "create_objects",
+      "idea": "Star spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "star"
+    },
+    {
+      "name": "text",
+      "section": "create_objects",
+      "idea": "Text spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "text"
+    },
+    {
+      "name": "helix",
+      "section": "create_objects",
+      "idea": "Open coiled spline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "helix"
+    },
+    {
+      "name": "donut",
+      "section": "create_objects",
+      "idea": "Donut spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "egg",
+      "section": "create_objects",
+      "idea": "Egg spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "section",
+      "section": "create_objects",
+      "idea": "Section spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "freehand",
+      "section": "create_objects",
+      "idea": "Freehand spline outline",
+      "reference": "splines",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": null
+    },
+    {
+      "name": "omni",
+      "section": "create_objects",
+      "idea": "Radial omnidirectional light",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Create light buttons retain their Max names. No pictogram in the Object Type rollout.",
+      "baseline": "omni"
+    },
+    {
+      "name": "free_spot",
+      "section": "create_objects",
+      "idea": "Untargeted spotlight cone",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Create light buttons retain their Max names. No pictogram in the Object Type rollout.",
+      "baseline": "free_spot"
+    },
+    {
+      "name": "free_direct",
+      "section": "create_objects",
+      "idea": "Parallel directional-light arrows",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Create light buttons retain their Max names. No pictogram in the Object Type rollout.",
+      "baseline": "free_direct"
+    },
+    {
+      "name": "skylight",
+      "section": "create_objects",
+      "idea": "Hemispherical sky dome",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Create light buttons retain their Max names. No pictogram in the Object Type rollout.",
+      "baseline": "skylight"
+    },
+    {
+      "name": "area",
+      "section": "create_objects",
+      "idea": "Rectangular area emitter",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Create light buttons retain their Max names. No pictogram in the Object Type rollout.",
+      "baseline": "area"
+    },
+    {
+      "name": "target_spot",
+      "section": "create_objects",
+      "idea": "Targeted spot with target cross",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "target_spot"
+    },
+    {
+      "name": "target_direct",
+      "section": "create_objects",
+      "idea": "Targeted direct with target cross",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "target_direct"
+    },
+    {
+      "name": "light_spot",
+      "section": "create_objects",
+      "idea": "free spot alias for Blender light data",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Legacy Blender light-data name. Max Object Type controls retain text.",
+      "baseline": "light_spot"
+    },
+    {
+      "name": "light_sun",
+      "section": "create_objects",
+      "idea": "free direct alias for Blender light data",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Legacy Blender light-data name. Max Object Type controls retain text.",
+      "baseline": "light_sun"
+    },
+    {
+      "name": "light_area",
+      "section": "create_objects",
+      "idea": "area alias for Blender light data",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Legacy Blender light-data name. Max Object Type controls retain text.",
+      "baseline": "light_area"
+    },
+    {
+      "name": "dummy",
+      "section": "create_objects",
+      "idea": "Wire-box dummy helper",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "dummy"
+    },
+    {
+      "name": "point",
+      "section": "create_objects",
+      "idea": "Crossed point helper axes",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "point"
+    },
+    {
+      "name": "bone",
+      "section": "create_objects",
+      "idea": "Tapered bone with distinct joints",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Max uses a named object button here. Drawing is reserved for menus or a future approved icon placement.",
+      "baseline": "bone"
+    },
+    {
+      "name": "loft",
+      "section": "create_objects",
+      "idea": "Profile sections following a loft path",
+      "reference": "primitives",
+      "presentation": "text-only",
+      "spot": "Create > Object Type",
+      "note": "Loft is a text button under Compound Objects. This asset replaces the unrelated geometry sphere only where an icon is appropriate.",
+      "baseline": null
+    },
+    {
+      "name": "mtl_get",
+      "section": "material",
+      "idea": "Material sphere entering editor",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "",
+      "baseline": "mtl_get"
+    },
+    {
+      "name": "mtl_assign",
+      "section": "material",
+      "idea": "Checker material assigned to selected object",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "",
+      "baseline": "mtl_assign"
+    },
+    {
+      "name": "mtl_reset",
+      "section": "material",
+      "idea": "Trash can resets material slot",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "",
+      "baseline": "mtl_reset"
+    },
+    {
+      "name": "mtl_select",
+      "section": "material",
+      "idea": "Checker material sphere and selection pointer",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "",
+      "baseline": "mtl_select"
+    },
+    {
+      "name": "mtl_pick",
+      "section": "material",
+      "idea": "Material eyedropper with diagonal stem",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "",
+      "baseline": "mtl_pick"
+    },
+    {
+      "name": "mtl_viewport",
+      "section": "material",
+      "idea": "Checker material tile for viewport display",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "",
+      "baseline": "mtl_viewport"
+    },
+    {
+      "name": "mtl_library",
+      "section": "material",
+      "idea": "Save material into library",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "",
+      "baseline": "mtl_library"
+    },
+    {
+      "name": "mtl_drag",
+      "section": "material",
+      "idea": "Material sphere moved to sibling slot",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "Legacy custom drag action has no exact Max toolbar counterpart. Use tooltip, do not invent a stock Max claim.",
+      "baseline": "mtl_drag"
+    },
+    {
+      "name": "bitmap",
+      "section": "material",
+      "idea": "Image tile with mountains and small light",
+      "reference": "material",
+      "presentation": "icon-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "",
+      "baseline": "bitmap"
+    },
+    {
+      "name": "search",
+      "section": "material",
+      "idea": "Magnifying glass for search",
+      "reference": "material",
+      "presentation": "icon plus text",
+      "spot": "Compact Material Editor toolbar",
+      "note": "Keep Search Modifiers text in the command menu.",
+      "baseline": "search"
+    },
+    {
+      "name": "measure",
+      "section": "material",
+      "idea": "Triangular ruler",
+      "reference": "material",
+      "presentation": "text-only",
+      "spot": "Compact Material Editor toolbar",
+      "note": "Utilities Measure is a named button in Max.",
+      "baseline": "measure"
+    },
+    {
+      "name": "extrude",
+      "section": "editable_poly",
+      "idea": "Extrude mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "bevel",
+      "section": "editable_poly",
+      "idea": "Bevel mesh metaphor",
+      "reference": "poly_face",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "inset",
+      "section": "editable_poly",
+      "idea": "Inset mesh metaphor",
+      "reference": "poly_face",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "outline",
+      "section": "editable_poly",
+      "idea": "Outline mesh metaphor",
+      "reference": "poly_face",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "chamfer",
+      "section": "editable_poly",
+      "idea": "Chamfer mesh metaphor",
+      "reference": "poly_edge",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "connect",
+      "section": "editable_poly",
+      "idea": "Connect mesh metaphor",
+      "reference": "poly_edge",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "bridge",
+      "section": "editable_poly",
+      "idea": "Bridge mesh metaphor",
+      "reference": "poly_edge",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "weld",
+      "section": "editable_poly",
+      "idea": "Weld mesh metaphor",
+      "reference": "poly_vertex",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "target_weld",
+      "section": "editable_poly",
+      "idea": "Target weld mesh metaphor",
+      "reference": "poly_vertex",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "remove",
+      "section": "editable_poly",
+      "idea": "Remove mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "remove_with_verts",
+      "section": "editable_poly",
+      "idea": "Remove with verts mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "break",
+      "section": "editable_poly",
+      "idea": "Break mesh metaphor",
+      "reference": "poly_vertex",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "split",
+      "section": "editable_poly",
+      "idea": "Split mesh metaphor",
+      "reference": "poly_edge",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "cap",
+      "section": "editable_poly",
+      "idea": "Cap mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "flip",
+      "section": "editable_poly",
+      "idea": "Flip mesh metaphor",
+      "reference": "poly_face",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "detach",
+      "section": "editable_poly",
+      "idea": "Detach mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "collapse",
+      "section": "editable_poly",
+      "idea": "Collapse mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "relax",
+      "section": "editable_poly",
+      "idea": "Relax mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "msmooth",
+      "section": "editable_poly",
+      "idea": "Msmooth mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "tessellate",
+      "section": "editable_poly",
+      "idea": "Tessellate mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "make_planar",
+      "section": "editable_poly",
+      "idea": "Make planar mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "slice_plane",
+      "section": "editable_poly",
+      "idea": "Slice plane mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "cut",
+      "section": "editable_poly",
+      "idea": "Cut mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "loop",
+      "section": "editable_poly",
+      "idea": "Loop mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "ring",
+      "section": "editable_poly",
+      "idea": "Ring mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "grow",
+      "section": "editable_poly",
+      "idea": "Grow mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "shrink",
+      "section": "editable_poly",
+      "idea": "Shrink mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "insert_vertex",
+      "section": "editable_poly",
+      "idea": "Insert vertex mesh metaphor",
+      "reference": "poly_edge",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "create_shape",
+      "section": "editable_poly",
+      "idea": "Create shape mesh metaphor",
+      "reference": "poly_edge",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "retriangulate",
+      "section": "editable_poly",
+      "idea": "Retriangulate mesh metaphor",
+      "reference": "poly_face",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "turn",
+      "section": "editable_poly",
+      "idea": "Turn mesh metaphor",
+      "reference": "poly_face",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "edit_triangulation",
+      "section": "editable_poly",
+      "idea": "Edit triangulation mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "hinge",
+      "section": "editable_poly",
+      "idea": "Hinge mesh metaphor",
+      "reference": "poly_face",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "spline_extrude",
+      "section": "editable_poly",
+      "idea": "Spline extrude mesh metaphor",
+      "reference": "poly_face",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "view_align",
+      "section": "editable_poly",
+      "idea": "View align mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "grid_align",
+      "section": "editable_poly",
+      "idea": "Grid align mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "create_poly",
+      "section": "editable_poly",
+      "idea": "Create poly mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "quick_slice",
+      "section": "editable_poly",
+      "idea": "Quick slice mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "slice",
+      "section": "editable_poly",
+      "idea": "Slice mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "reset_plane",
+      "section": "editable_poly",
+      "idea": "Reset plane mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "attach",
+      "section": "editable_poly",
+      "idea": "Attach mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "copy_selection",
+      "section": "editable_poly",
+      "idea": "Copy selection mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "paste_selection",
+      "section": "editable_poly",
+      "idea": "Paste selection mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "select_angle",
+      "section": "editable_poly",
+      "idea": "Select angle mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "open_edges",
+      "section": "editable_poly",
+      "idea": "Open edges mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "delete_isolated",
+      "section": "editable_poly",
+      "idea": "Delete isolated mesh metaphor",
+      "reference": "poly_vertex",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "remove_unused_map",
+      "section": "editable_poly",
+      "idea": "Remove unused map mesh metaphor",
+      "reference": "poly_vertex",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "hide_sel",
+      "section": "editable_poly",
+      "idea": "Hide sel mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "hide_unsel",
+      "section": "editable_poly",
+      "idea": "Hide unsel mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "unhide",
+      "section": "editable_poly",
+      "idea": "Unhide mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "swift_loop",
+      "section": "editable_poly",
+      "idea": "Swift loop mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "planar_x",
+      "section": "editable_poly",
+      "idea": "Planar x mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "planar_y",
+      "section": "editable_poly",
+      "idea": "Planar y mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "planar_z",
+      "section": "editable_poly",
+      "idea": "Planar z mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "ring_shift_up",
+      "section": "editable_poly",
+      "idea": "Ring shift up mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "ring_shift_down",
+      "section": "editable_poly",
+      "idea": "Ring shift down mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "loop_shift_up",
+      "section": "editable_poly",
+      "idea": "Loop shift up mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "loop_shift_down",
+      "section": "editable_poly",
+      "idea": "Loop shift down mesh metaphor",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Editable Poly rollout and quad command",
+      "note": "Max uses text at this spot. Keep the command label. Drawing is reserved, not authority to add a leading icon.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_distance",
+      "section": "caddies",
+      "idea": "Measured separation between two ends",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'distance'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_height",
+      "section": "caddies",
+      "idea": "Vertical extrusion-height gauge",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'height'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_type",
+      "section": "caddies",
+      "idea": "Grouped mesh patches for extrusion mode",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'type'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bias",
+      "section": "caddies",
+      "idea": "Local normal or shifted centre bias",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'bias'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_width",
+      "section": "caddies",
+      "idea": "Opposed arrows measuring base width or pinch",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'width'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_weld",
+      "section": "caddies",
+      "idea": "Points converging at weld threshold",
+      "reference": "poly_vertex",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'weld'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_segments",
+      "section": "caddies",
+      "idea": "Mesh divided into several segments",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'segments'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_open",
+      "section": "caddies",
+      "idea": "Open chamfer centre",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'open'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_tension",
+      "section": "caddies",
+      "idea": "Curved edge with endpoint tension",
+      "reference": "tessellate",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'tension'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_taper",
+      "section": "caddies",
+      "idea": "Narrow top widening to a broad base",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'taper'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_smooth",
+      "section": "caddies",
+      "idea": "Rounded subdivided surface for smoothing",
+      "reference": "smooth",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'smooth'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_twist",
+      "section": "caddies",
+      "idea": "Crossing twisted boundary strips",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'twist'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_relax",
+      "section": "caddies",
+      "idea": "Smoothed profile between mesh points",
+      "reference": "relax",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'relax'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_hold",
+      "section": "caddies",
+      "idea": "Pinned boundary points on a subdivided mesh",
+      "reference": "relax",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'hold'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_pick",
+      "section": "caddies",
+      "idea": "Circular pick target",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'pick'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_material",
+      "section": "caddies",
+      "idea": "Alternating material regions",
+      "reference": "smooth",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'material'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer",
+      "section": "caddies",
+      "idea": "Bevelled corner amount",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Caddy field label",
+      "note": "poly_caddies.LABELS kind 'chamfer'. Field name belongs in hover title or tooltip, numeric value stays visible.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_amount",
+      "section": "caddies",
+      "idea": "Measured separation between two ends (amount)",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy amount",
+      "note": "Exact pending branch field key 'amount'. Maps to kind 'distance'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_extrusion_type",
+      "section": "caddies",
+      "idea": "Grouped mesh patches for extrusion mode (extrusion type)",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy extrusion type",
+      "note": "Exact pending branch field key 'extrusion_type'. Maps to kind 'type'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bevel_type",
+      "section": "caddies",
+      "idea": "Grouped mesh patches for extrusion mode (bevel type)",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy bevel type",
+      "note": "Exact pending branch field key 'bevel_type'. Maps to kind 'type'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_local_bias",
+      "section": "caddies",
+      "idea": "Local normal or shifted centre bias (local bias)",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy local bias",
+      "note": "Exact pending branch field key 'local_bias'. Maps to kind 'bias'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_base_width",
+      "section": "caddies",
+      "idea": "Opposed arrows measuring base width or pinch (base width)",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Caddy base width",
+      "note": "Exact pending branch field key 'base_width'. Maps to kind 'width'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_threshold",
+      "section": "caddies",
+      "idea": "Points converging at weld threshold (threshold)",
+      "reference": "poly_vertex",
+      "presentation": "icon-only",
+      "spot": "Caddy threshold",
+      "note": "Exact pending branch field key 'threshold'. Maps to kind 'weld'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_tess_tension",
+      "section": "caddies",
+      "idea": "Curved edge with endpoint tension (tess tension)",
+      "reference": "tessellate",
+      "presentation": "icon-only",
+      "spot": "Caddy tess tension",
+      "note": "Exact pending branch field key 'tess_tension'. Maps to kind 'tension'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_twist1",
+      "section": "caddies",
+      "idea": "Crossing twisted boundary strips (twist1)",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Caddy twist1",
+      "note": "Exact pending branch field key 'twist1'. Maps to kind 'twist'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_twist2",
+      "section": "caddies",
+      "idea": "Crossing twisted boundary strips (twist2)",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Caddy twist2",
+      "note": "Exact pending branch field key 'twist2'. Maps to kind 'twist'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_selection",
+      "section": "caddies",
+      "idea": "Grouped mesh patches for extrusion mode (bridge selection)",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy bridge selection",
+      "note": "Exact pending branch field key 'bridge_selection'. Maps to kind 'type'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_pinch",
+      "section": "caddies",
+      "idea": "Opposed arrows measuring base width or pinch (pinch)",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Caddy pinch",
+      "note": "Exact pending branch field key 'pinch'. Maps to kind 'width'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_slide",
+      "section": "caddies",
+      "idea": "Local normal or shifted centre bias (slide)",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy slide",
+      "note": "Exact pending branch field key 'slide'. Maps to kind 'bias'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_smoothness",
+      "section": "caddies",
+      "idea": "Rounded subdivided surface for smoothing (smoothness)",
+      "reference": "smooth",
+      "presentation": "icon-only",
+      "spot": "Caddy smoothness",
+      "note": "Exact pending branch field key 'smoothness'. Maps to kind 'smooth'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_tessellate_type",
+      "section": "caddies",
+      "idea": "Mesh divided into several segments (tessellate type)",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Caddy tessellate type",
+      "note": "Exact pending branch field key 'tessellate_type'. Maps to kind 'segments'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_iterations",
+      "section": "caddies",
+      "idea": "Mesh divided into several segments (iterations)",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Caddy iterations",
+      "note": "Exact pending branch field key 'iterations'. Maps to kind 'segments'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_hold_boundary",
+      "section": "caddies",
+      "idea": "Pinned boundary points on a subdivided mesh (hold boundary)",
+      "reference": "relax",
+      "presentation": "icon-only",
+      "spot": "Caddy hold boundary",
+      "note": "Exact pending branch field key 'hold_boundary'. Maps to kind 'hold'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_hold_outer",
+      "section": "caddies",
+      "idea": "Pinned boundary points on a subdivided mesh (hold outer)",
+      "reference": "relax",
+      "presentation": "icon-only",
+      "spot": "Caddy hold outer",
+      "note": "Exact pending branch field key 'hold_outer'. Maps to kind 'hold'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_individual",
+      "section": "caddies",
+      "idea": "Grouped mesh patches for extrusion mode (individual)",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy individual",
+      "note": "Exact pending branch field key 'individual'. Maps to kind 'type'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_pick1",
+      "section": "caddies",
+      "idea": "Circular pick target (pick1)",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Caddy pick1",
+      "note": "Exact pending branch field key 'pick1'. Maps to kind 'pick'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_pick2",
+      "section": "caddies",
+      "idea": "Circular pick target (pick2)",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Caddy pick2",
+      "note": "Exact pending branch field key 'pick2'. Maps to kind 'pick'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_separate_smoothing",
+      "section": "caddies",
+      "idea": "Rounded subdivided surface for smoothing (separate smoothing)",
+      "reference": "smooth",
+      "presentation": "icon-only",
+      "spot": "Caddy separate smoothing",
+      "note": "Exact pending branch field key 'separate_smoothing'. Maps to kind 'smooth'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_separate_materials",
+      "section": "caddies",
+      "idea": "Alternating material regions (separate materials)",
+      "reference": "smooth",
+      "presentation": "icon-only",
+      "spot": "Caddy separate materials",
+      "note": "Exact pending branch field key 'separate_materials'. Maps to kind 'material'.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_weld_counts",
+      "section": "caddies",
+      "idea": "Before and after count comparison",
+      "reference": "poly_vertex",
+      "presentation": "text-only",
+      "spot": "Weld caddy Before / After counts",
+      "note": "Max shows Before and After text. This reserved asset must not replace those counts.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_ok",
+      "section": "caddies",
+      "idea": "Circular OK check",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy footer OK (Enter)",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "caddy_apply",
+      "section": "caddies",
+      "idea": "Circular Apply and Continue plus",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy footer Apply and Continue (Ctrl+Enter)",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "caddy_cancel",
+      "section": "caddies",
+      "idea": "Circular Cancel cross",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy footer Cancel (Esc)",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "caddy_type_group",
+      "section": "caddies",
+      "idea": "Single connected group of polygons",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy mode flyout",
+      "note": "Choice name appears on hover, not printed beside this pictogram.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_type_local",
+      "section": "caddies",
+      "idea": "Separate local normal directions",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy mode flyout",
+      "note": "Choice name appears on hover, not printed beside this pictogram.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_type_polygon",
+      "section": "caddies",
+      "idea": "Separated polygons",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Caddy mode flyout",
+      "note": "Choice name appears on hover, not printed beside this pictogram.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_type_edge",
+      "section": "caddies",
+      "idea": "Edge-centre tessellation",
+      "reference": "tessellate",
+      "presentation": "icon-only",
+      "spot": "Caddy mode flyout",
+      "note": "Choice name appears on hover, not printed beside this pictogram.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_type_face",
+      "section": "caddies",
+      "idea": "Face-centre tessellation",
+      "reference": "tessellate",
+      "presentation": "icon-only",
+      "spot": "Caddy mode flyout",
+      "note": "Choice name appears on hover, not printed beside this pictogram.",
+      "baseline": null
+    },
+    {
+      "name": "zoom",
+      "section": "navigation",
+      "idea": "Magnifying glass for viewport zoom",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "zoom_all",
+      "section": "navigation",
+      "idea": "Magnifier with multiple-view cross",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "zoom_extents",
+      "section": "navigation",
+      "idea": "Object within four framing corners",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "zoom_extents_all",
+      "section": "navigation",
+      "idea": "Four viewport extents framed together",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "zoom_region",
+      "section": "navigation",
+      "idea": "Magnifier within dotted zoom boundary",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "pan",
+      "section": "navigation",
+      "idea": "Open hand for panning",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "orbit",
+      "section": "navigation",
+      "idea": "Intersecting orbital paths and arrow",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "maximize_viewport",
+      "section": "navigation",
+      "idea": "Viewport frame and diagonal maximize arrow",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "viewport_general",
+      "section": "navigation",
+      "idea": "Bracketed plus viewport menu",
+      "reference": "labels",
+      "presentation": "text-only",
+      "spot": "Viewport label [+]",
+      "note": "Draw [+] as live text. Asset is reserved and must not replace the label.",
+      "baseline": null
+    },
+    {
+      "name": "viewport_view",
+      "section": "navigation",
+      "idea": "Point-of-view menu",
+      "reference": "labels",
+      "presentation": "text-only",
+      "spot": "Viewport label [Perspective]",
+      "note": "Keep active view name text.",
+      "baseline": null
+    },
+    {
+      "name": "viewport_shading",
+      "section": "navigation",
+      "idea": "Shading label menu",
+      "reference": "labels",
+      "presentation": "text-only",
+      "spot": "Viewport label [Default Shading]",
+      "note": "Keep shading mode text.",
+      "baseline": null
+    },
+    {
+      "name": "play",
+      "section": "navigation",
+      "idea": "Solid playback triangle",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": "play"
+    },
+    {
+      "name": "pause",
+      "section": "navigation",
+      "idea": "Parallel stop or pause bars",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "time_start",
+      "section": "navigation",
+      "idea": "Start bar and two backward triangles",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "time_end",
+      "section": "navigation",
+      "idea": "Two forward triangles and end bar",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "previous_frame",
+      "section": "navigation",
+      "idea": "Previous-frame triangle with key bars",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "next_frame",
+      "section": "navigation",
+      "idea": "Next-frame triangle with key bars",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "key",
+      "section": "navigation",
+      "idea": "Key symbol for setting animation keys",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "Standalone Set Keys icon is icon-only. Auto Key and Set Key mode buttons retain their text.",
+      "baseline": "key"
+    },
+    {
+      "name": "record",
+      "section": "navigation",
+      "idea": "Auto Key mode button",
+      "reference": "time",
+      "presentation": "text-only",
+      "spot": "Auto Key mode",
+      "note": "Use Auto Key text with state colour, not a record-dot replacement.",
+      "baseline": "record"
+    },
+    {
+      "name": "time_config",
+      "section": "navigation",
+      "idea": "Clock and gold settings wheel",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "key_mode",
+      "section": "navigation",
+      "idea": "Key navigation between frame bars",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "navigation",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "freeze",
+      "section": "navigation",
+      "idea": "Locked object symbol",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Display rollout and quad menu",
+      "note": "Keep Freeze Selection text. Max quad commands do not get added leading icons.",
+      "baseline": null
+    },
+    {
+      "name": "unfreeze",
+      "section": "navigation",
+      "idea": "Unlocked object symbol",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Display rollout and quad menu",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "ops.transform.translate",
+      "section": "features",
+      "idea": "Four-way Move tool cross",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "snaps and poly_constraints WorkSpaceTool.bl_icon",
+      "note": "Exact pending branch name. Blender WorkSpaceTool requires a .dat tool icon or an equivalent custom tool draw route in phase 2.",
+      "baseline": null
+    },
+    {
+      "name": "ops.transform.rotate",
+      "section": "features",
+      "idea": "Circular Rotate tool arrow",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "max_rotate.WorkSpaceTool.bl_icon",
+      "note": "Exact pending branch name. SVG/PNG previews alone do not replace a WorkSpaceTool .dat icon.",
+      "baseline": null
+    },
+    {
+      "name": "ops.transform.resize",
+      "section": "features",
+      "idea": "Expanding Scale tool square",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "snaps WorkSpaceTool.bl_icon",
+      "note": "Exact pending branch name. Tool-icon integration remains phase 2.",
+      "baseline": null
+    },
+    {
+      "name": "rotate_gizmo",
+      "section": "features",
+      "idea": "Three coloured axis rings",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "Rotate gizmo tool variant",
+      "note": "Only axis hints use RGB. Main toolbar rotate stays grey.",
+      "baseline": null
+    },
+    {
+      "name": "constraint_none",
+      "section": "features",
+      "idea": "Unconstrained transform",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Edit Geometry > Constraints radio None",
+      "note": "poly_constraints mode NONE. Max uses text radio choices, so retain None/Edge/Face/Normal labels.",
+      "baseline": null
+    },
+    {
+      "name": "constraint_edge",
+      "section": "features",
+      "idea": "Movement constrained to highlighted mesh edge",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Edit Geometry > Constraints radio Edge",
+      "note": "poly_constraints mode EDGE. Max uses text radio choices, so retain None/Edge/Face/Normal labels.",
+      "baseline": null
+    },
+    {
+      "name": "constraint_face",
+      "section": "features",
+      "idea": "Movement constrained to a polygon plane",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Edit Geometry > Constraints radio Face",
+      "note": "poly_constraints mode FACE. Max uses text radio choices, so retain None/Edge/Face/Normal labels.",
+      "baseline": null
+    },
+    {
+      "name": "constraint_normal",
+      "section": "features",
+      "idea": "Arrow along polygon normal",
+      "reference": "poly",
+      "presentation": "text-only",
+      "spot": "Edit Geometry > Constraints radio Normal",
+      "note": "poly_constraints mode NORMAL. Max uses text radio choices, so retain None/Edge/Face/Normal labels.",
+      "baseline": null
+    },
+    {
+      "name": "symmetry",
+      "section": "features",
+      "idea": "Mirrored halves separated by a centre plane",
+      "reference": "symmetry",
+      "presentation": "icon plus text",
+      "spot": "Modifier stack Symmetry row",
+      "note": "Keep Symmetry text in stack. No stock standalone Symmetry toolbar icon is established by this reference.",
+      "baseline": null
+    },
+    {
+      "name": "symmetry_align",
+      "section": "features",
+      "idea": "Opposed circular arrows for Align to Face",
+      "reference": "symmetry",
+      "presentation": "icon-only",
+      "spot": "Symmetry Align to Face",
+      "note": "Reference symmetry-04.png is an icon button.",
+      "baseline": null
+    }
+  ]
+}

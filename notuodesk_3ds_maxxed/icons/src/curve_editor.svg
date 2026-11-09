@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>curve editor</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<rect x="3" y="4" width="26" height="24" stroke="#dedede" fill="none"/><path d="M6 24 C12 24 8 8 16 10 S19 24 27 9" stroke="#78b7ce" fill="none" stroke-width="2"/><rect x="14" y="8" width="3" height="3" stroke="#ead078" fill="#ead078"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>curve_editor</title>
+<desc>Cyan animation curve in editor window</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1.5" y="2.5" width="13" height="11" rx="0" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M1.5 5.5 H14.5 M3 4 H4 M5 4 H6 M7 4 H8" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M3 11 C4 4 7 6 8 10 S12 12 13 7" fill="none" stroke="#50b9bf" stroke-width="1.6"/>
 </g>
 </svg>

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>pivot</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M16 2 V10 M16 22 V30 M2 16 H10 M22 16 H30" stroke="#dedede" fill="none" stroke-width="2"/><circle cx="16" cy="16" r="7" stroke="#78b7ce" fill="none"/><circle cx="16" cy="16" r="2" stroke="#ead078" fill="#ead078"/>
+<desc>Two objects with cyan pivot crosses</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="2.5" y="2.5" width="3" height="7" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="9.5" y="2.5" width="3" height="7" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><path d="M4 9 V14 M2 12 H6 M11 9 V14 M9 12 H13" fill="none" stroke="#50b9bf" stroke-width="1"/>
 </g>
 </svg>

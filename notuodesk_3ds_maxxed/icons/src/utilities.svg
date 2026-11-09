@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>utilities</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M19 4 C26 1 31 7 27 13 L22 13 L18 9 L18 5 M20 13 L7 28 L3 24 L17 11" stroke="#dedede" fill="none" stroke-width="2"/>
+<desc>Open-ended spanner, not a hammer</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M10 2 C6 1 5 5 8 7 L2 12 4 14 10 8 C14 10 16 6 14 3 L12 6 10 4 Z" fill="#d2d4d5" stroke="none" stroke-width="0"/>
 </g>
 </svg>

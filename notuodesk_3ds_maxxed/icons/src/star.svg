@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>star</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M16 2 L20 11 L30 12 L23 19 L25 29 L16 24 L7 29 L9 19 L2 12 L12 11 Z" stroke="#dedede" fill="none" stroke-width="2"/>
+<desc>Star spline outline</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="8,1 10,5.5 15,6 11,9.5 12,15 8,12 4,15 5,9.5 1,6 6,5.5" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

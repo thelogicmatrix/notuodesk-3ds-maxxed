@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>rotate_gizmo</title>
+<desc>Three coloured axis rings</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<ellipse cx="8" cy="8" rx="6.5" ry="3" fill="none" stroke="#df6663" stroke-width="1"/><ellipse cx="8" cy="8" rx="3" ry="6.5" fill="none" stroke="#79b981" stroke-width="1"/><circle cx="8" cy="8" r="5" fill="none" stroke="#699edf" stroke-width="1"/>
+</g>
+</svg>

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>select by name</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M14 7 H28 M14 14 H28 M14 21 H28" stroke="#dedede" fill="none" stroke-width="2"/><rect x="5" y="5" width="4" height="4" stroke="#78b7ce" fill="none"/><rect x="5" y="12" width="4" height="4" stroke="#78b7ce" fill="none"/><rect x="5" y="19" width="4" height="4" stroke="#78b7ce" fill="none"/><g transform="translate(15 13) scale(.55)"><path d="M5 3 V23 L10 18 L15 28 L19 26 L14 17 H23 Z" stroke="#dedede" fill="#dedede" stroke-width="1"/></g>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>select_by_name</title>
+<desc>Stacked list rows and yellow pointer</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1" y="2" width="11" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="1" y="6" width="11" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="1" y="10" width="11" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><g transform="translate(8 7) scale(.65)"><polygon points="0,0 0,9 2.5,6.5 4,10 6,9 4.5,5.5 8,5.5" fill="#efb83d" stroke="none" stroke-width="1"/></g>
 </g>
 </svg>

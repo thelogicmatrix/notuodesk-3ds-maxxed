@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>search</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<circle cx="13" cy="13" r="8" stroke="#dedede" fill="none"/><path d="M19 19 L29 29" stroke="#dedede" fill="none" stroke-width="3"/>
+<desc>Magnifying glass for search</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<circle cx="6.5" cy="6.5" r="4" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M9.5 9.5 14 14" fill="none" stroke="#d2d4d5" stroke-width="1.7"/>
 </g>
 </svg>

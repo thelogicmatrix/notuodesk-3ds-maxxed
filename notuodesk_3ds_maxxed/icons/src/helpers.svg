@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>helpers</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 25 H27 L5 3 Z M9 19 H13 M9 14 H12 M9 9 H11" stroke="#dedede" fill="none" stroke-width="2"/>
+<desc>Triangular set square with ruler marks</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,2 14,14 2,14" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="4,7 9,12 4,12" fill="#44484a" stroke="none" stroke-width="1"/><path d="M2 6 H4 M2 9 H4 M2 12 H4" fill="none" stroke="#8d9295" stroke-width="1"/>
 </g>
 </svg>

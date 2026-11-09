@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>unlink</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M13 7 L17 3 C23 -1 32 8 26 14 L22 18 M19 25 L15 29 C9 33 0 24 6 18 L10 14 M11 21 L21 11" stroke="#dedede" fill="none" stroke-width="2.5"/><path d="M3 3 L29 29" stroke="#78b7ce" fill="none" stroke-width="3"/>
+<desc>Separated diagonal links with cyan break marks</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M7 4 8 3 C12 0 16 5 13 8 L12 9 M4 7 3 8 C0 12 5 16 8 13 L9 12" fill="none" stroke="#d2d4d5" stroke-width="1.7"/><path d="M3 2 6 5 M10 9 14 13" fill="none" stroke="#50b9bf" stroke-width="1.7"/>
 </g>
 </svg>

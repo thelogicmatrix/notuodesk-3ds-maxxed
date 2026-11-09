@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>capsule</title>
-<g fill="none" stroke="#dedede" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M8 11 A8 8 0 0 1 24 11 V21 A8 8 0 0 1 8 21 Z"/>
-<path d="M8 11 C8 15 24 15 24 11 M8 21 C8 25 24 25 24 21" stroke="#999999" stroke-width="1"/>
+<desc>Capsule with hemispherical ends</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="3.5" y="1.5" width="9" height="13" rx="4.5" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M3.5 6 Q8 8 12.5 6 M3.5 10 Q8 12 12.5 10" fill="none" stroke="#8d9295" stroke-width="1"/>
 </g>
 </svg>

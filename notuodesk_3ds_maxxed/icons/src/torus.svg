@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>torus</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<ellipse cx="16" cy="16" rx="13" ry="8" stroke="#dedede"/><ellipse cx="16" cy="15" rx="7" ry="3" stroke="#dedede"/><path d="M3 16 C3 29 29 29 29 16" stroke="#dedede" fill="none" stroke-width="2"/>
+<desc>Thick ring with clear centre hole</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<ellipse cx="8" cy="8" rx="6" ry="4" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><ellipse cx="8" cy="7" rx="3" ry="1.5" fill="#44484a" stroke="#d2d4d5" stroke-width="1"/><path d="M2 8 C2 14 14 14 14 8" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

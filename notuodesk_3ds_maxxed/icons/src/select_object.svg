@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>select object</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 3 V23 L10 18 L15 28 L19 26 L14 17 H23 Z" stroke="#dedede" fill="#dedede" stroke-width="1"/><rect x="21" y="4" width="8" height="8" stroke="#ead078" fill="#ead078"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>select_object</title>
+<desc>Grey selection tile and yellow pointer</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1.5" y="1.5" width="10" height="11" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><g transform="translate(8 7) scale(.65)"><polygon points="0,0 0,9 2.5,6.5 4,10 6,9 4.5,5.5 8,5.5" fill="#efb83d" stroke="none" stroke-width="1"/></g>
 </g>
 </svg>

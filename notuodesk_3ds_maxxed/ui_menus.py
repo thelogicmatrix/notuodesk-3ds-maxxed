@@ -137,10 +137,10 @@ class MAX_MT_quad(Menu):
         # top-left: display  |  top-right: tools 1
         _header(left, "display")
         left.operator("max.object_cmd", text="Isolate Selection").cmd = "ISOLATE"
-        left.operator("max.object_cmd", text="Unfreeze All", icon="UNLOCKED").cmd = "UNFREEZE"
-        left.operator("max.object_cmd", text="Freeze Selection", icon="LOCKED").cmd = "FREEZE"
-        left.operator("max.unfreeze_by_name", text="Unfreeze by Name...", **max_icons.ui("select_by_name", "VIEWZOOM"))
-        left.operator("max.unfreeze_by_hit", text="Unfreeze by Hit", **max_icons.ui("select_object", "RESTRICT_SELECT_OFF"))
+        left.operator("max.object_cmd", text="Unfreeze All").cmd = "UNFREEZE"
+        left.operator("max.object_cmd", text="Freeze Selection").cmd = "FREEZE"
+        left.operator("max.unfreeze_by_name", text="Unfreeze by Name...")
+        left.operator("max.unfreeze_by_hit", text="Unfreeze by Hit")
         left.operator("max.select_by_name", text="Unhide by Name")
         left.operator("max.object_cmd", text="Unhide All").cmd = "UNHIDE"
         left.operator("max.object_cmd", text="Hide Unselected").cmd = "HIDE_UNSEL"
@@ -510,7 +510,7 @@ def view3d_header_draw(self, context):
         lay = self.layout
         lay.separator_spacer()
         row = lay.row(align=True)
-        row.prop(context.scene.tool_settings, "use_keyframe_insert_auto", text="", **max_icons.ui("record", "REC"))
+        row.prop(context.scene.tool_settings, "use_keyframe_insert_auto", text="Auto Key", toggle=True)
         space = context.space_data
         row = lay.row(align=True)
         row.prop(space.overlay, "show_overlays", text="", icon="OVERLAY")
@@ -536,34 +536,34 @@ def draw_main_toolbar(self, context):
 
     row = lay.row(align=True)
     row.operator("max.select_by_name", text="", **max_icons.ui("select_by_name", "VIEWZOOM"))
-    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_rect", "SELECT_SET"),
-                 depress=tool == "builtin.select_box").name = "builtin.select_box"
-    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_circle", "MESH_CIRCLE"),
-                 depress=tool == "builtin.select_circle").name = "builtin.select_circle"
-    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_fence", "SELECT_INTERSECT"),
-                 depress=tool == "builtin.select_lasso").name = "builtin.select_lasso"
+    row.operator("max.icon_tool", text="", **max_icons.ui("region_rect", "SELECT_SET"),
+                 depress=tool == "builtin.select_box").tool = "RECT"
+    row.operator("max.icon_tool", text="", **max_icons.ui("region_circle", "MESH_CIRCLE"),
+                 depress=tool == "builtin.select_circle").tool = "CIRCLE"
+    row.operator("max.icon_tool", text="", **max_icons.ui("region_fence", "SELECT_INTERSECT"),
+                 depress=tool == "builtin.select_lasso").tool = "FENCE"
 
     row = lay.row(align=True)
     row.scale_x = 1.1
     for idname, icon, custom in (("builtin.move", "OBJECT_ORIGIN", "move"), ("builtin.rotate", "ORIENTATION_GIMBAL", "rotate"),
                                  ("builtin.scale", "FULLSCREEN_ENTER", "scale")):
-        row.operator("wm.tool_set_by_id", text="", depress=(tool == idname), **max_icons.ui(custom, icon)).name = idname
+        row.operator("max.icon_tool", text="", depress=(tool == idname), **max_icons.ui(custom, icon)).tool = custom.upper()
 
     slot = context.scene.transform_orientation_slots[0]
     sub = lay.row(align=True)
     sub.ui_units_x = 4.5
-    sub.prop(slot, "type", text="", **max_icons.ui("reference_coords", "ORIENTATION_GLOBAL"))
+    sub.prop(slot, "type", text="", icon="NONE")
     sub = lay.row(align=True)
     sub.prop(ts, "transform_pivot_point", text="", icon_only=True, **max_icons.ui("pivot", "PIVOT_MEDIAN"))
 
     row = lay.row(align=True)
     # Boolean props shift a custom icon_value by one when on, so draw toggles as operators
-    for path, on, art, fallback in (
-            ("use_snap", ts.use_snap, "snap_3d" if ts.use_snap else "snap_off", "SNAP_ON" if ts.use_snap else "SNAP_OFF"),
-            ("use_snap_rotate", ts.use_snap_rotate, "angle_snap", "DRIVER_ROTATIONAL_DIFFERENCE"),
-            ("use_snap_scale", ts.use_snap_scale, "percent_snap", "MOD_PHYSICS")):
-        row.operator("wm.context_toggle", text="", depress=on,
-                     **max_icons.ui(art, fallback)).data_path = "tool_settings." + path
+    for kind, on, art, fallback in (
+            ("SNAP", ts.use_snap, "snap_3d", "SNAP_ON"),
+            ("ANGLE_SNAP", ts.use_snap_rotate, "angle_snap", "DRIVER_ROTATIONAL_DIFFERENCE"),
+            ("PERCENT_SNAP", ts.use_snap_scale, "percent_snap", "MOD_PHYSICS")):
+        row.operator("max.icon_snap", text="", depress=on,
+                     **max_icons.ui(art, fallback)).kind = kind
 
     row = lay.row(align=True)
     row.operator("max.object_cmd", text="", **max_icons.ui("mirror", "MOD_MIRROR")).cmd = "MIRROR"

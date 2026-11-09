@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>named selection sets</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M14 7 H28 M14 14 H28 M14 21 H28" stroke="#dedede" fill="none" stroke-width="2"/><rect x="5" y="5" width="4" height="4" stroke="#78b7ce" fill="none"/><rect x="5" y="12" width="4" height="4" stroke="#78b7ce" fill="none"/><rect x="5" y="19" width="4" height="4" stroke="#78b7ce" fill="none"/><path d="M3 28 L10 21 M7 28 L13 22" stroke="#ead078" fill="none" stroke-width="3"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>named_selection_sets</title>
+<desc>Selection braces and editing pencil</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M5 2 C3 2 4 6 2 7.5 C4 9 3 13 5 13 M10 2 C12 2 11 6 13 7.5 C11 9 12 13 10 13" fill="none" stroke="#d2d4d5" stroke-width="1.5"/><path d="M8 6 14 0" fill="none" stroke="#efb83d" stroke-width="2"/>
 </g>
 </svg>

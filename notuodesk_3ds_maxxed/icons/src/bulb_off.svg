@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>bulb off</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M12 23 V20 C4 12 9 4 16 4 C23 4 28 12 20 20 V23 Z M12 27 H20 M14 30 H18" stroke="#8c8c8c" fill="none" stroke-width="2"/><path d="M14 18 L13 12 M18 18 L19 12" stroke="#8c8c8c" fill="none" stroke-width="2"/><path d="M5 28 L27 4" stroke="#bcbcbc" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>bulb_off</title>
+<desc>Dim eye for disabled modifier</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M1 8 Q8 1 15 8 Q8 15 1 8 Z" fill="#656b6e" stroke="none" stroke-width="0"/>
 </g>
 </svg>

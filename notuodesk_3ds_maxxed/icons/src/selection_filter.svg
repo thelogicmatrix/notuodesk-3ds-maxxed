@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>selection filter</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M3 5 H29 L20 16 V26 L12 29 V16 Z" stroke="#dedede" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>selection_filter</title>
+<desc>Filter list, All is text in Max</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,3 14,3 9,9 9,13 7,14 7,9" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

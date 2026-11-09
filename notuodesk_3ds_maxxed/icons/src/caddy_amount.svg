@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_amount</title>
+<desc>Measured separation between two ends (amount)</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M4.5 2.5 V13.5 M11.5 2.5 V13.5 M3 2.5 H6 M10 2.5 H13 M3 13.5 H6 M10 13.5 H13" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M8 4 V12" fill="none" stroke="#50b9bf" stroke-width="1.5"/>
+</g>
+</svg>

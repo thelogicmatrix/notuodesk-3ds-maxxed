@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>pyramid</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M16 3 L3 23 L15 29 L29 23 Z M16 3 L15 29 M3 23 L16 18 L29 23" stroke="#dedede" fill="none" stroke-width="2"/>
+<desc>Square-based pyramid</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="8,1.5 2,12 8,14.5 14,12" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M8 1.5 V14.5 M2 12 8 10 14 12" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>light spot</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<circle cx="16" cy="7" r="4" stroke="#ead078" fill="none"/><path d="M13 10 L4 28 H28 L19 10 M16 12 V23" stroke="#ead078" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>light_spot</title>
+<desc>free spot alias for Blender light data</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="8,2 2,13 14,13" fill="none" stroke="#d2d4d5" stroke-width="1"/><circle cx="8" cy="2" r="1.5" fill="#d2d4d5" stroke="none" stroke-width="1"/><path d="M8 4 V10" fill="none" stroke="#8d9295" stroke-width="1"/>
 </g>
 </svg>

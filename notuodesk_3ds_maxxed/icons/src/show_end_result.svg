@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>show end result</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 6 H23 V11 H5 Z M8 14 H26 V19 H8 Z M5 22 H23 V27 H5 Z" stroke="#78b7ce" fill="none" stroke-width="2"/><path d="M28 7 V26 M25 23 L28 27 L31 23" stroke="#ead078" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>show_end_result</title>
+<desc>Narrow hourglass for result through stack</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="5,1 11,1 10,6 9,8 10,10 11,15 5,15 6,10 7,8 6,6" fill="#d2d4d5" stroke="none" stroke-width="1"/><path d="M6 3 H10 M6 13 H10" fill="none" stroke="#656b6e" stroke-width="1"/>
 </g>
 </svg>

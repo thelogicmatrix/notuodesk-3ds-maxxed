@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>break</title>
+<desc>Break mesh metaphor</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M2 2 6 6 M10 10 14 14 M2 14 6 10 M10 6 14 2" fill="none" stroke="#d2d4d5" stroke-width="1"/><rect x="5" y="5" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="9" y="9" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
+</g>
+</svg>

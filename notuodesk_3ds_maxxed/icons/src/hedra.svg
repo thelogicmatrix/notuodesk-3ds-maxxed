@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>hedra</title>
-<g fill="none" stroke="#dedede" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M16 3 L27 10 L29 21 L19 29 L7 25 L3 13 Z M16 3 L12 14 L27 10 M12 14 L19 29 L29 21 L12 14 L7 25 M3 13 L12 14"/>
-<path d="M27 10 L29 21 M16 3 L3 13" stroke="#999999" stroke-width="1"/>
+<desc>Faceted multi-faced hedron</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="8,1 14,5 12,13 4,13 1,6" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M8 1 5 6 14 5 8 10 4 13 M5 6 1 6 M5 6 8 10 12 13" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

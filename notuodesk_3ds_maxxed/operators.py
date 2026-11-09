@@ -7,7 +7,7 @@ from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, St
 from bpy.types import Operator
 from mathutils import Euler, Matrix, Quaternion
 
-from . import theme, editable_poly
+from . import theme, editable_poly, max_icons
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +83,11 @@ class MAX_OT_subobject(Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     level: IntProperty(min=0, max=5)
+
+    @classmethod
+    def description(cls, context, props):
+        label = ("Object", "Vertex", "Edge", "Border", "Polygon", "Element")[props.level]
+        return max_icons.tooltip(context, label, "max.subobject", level=props.level)
 
     @classmethod
     def poll(cls, context):
@@ -372,6 +377,10 @@ class MAX_OT_select_by_name(Operator):
     obj: EnumProperty(items=_object_items)
 
     @classmethod
+    def description(cls, context, props):
+        return max_icons.tooltip(context, "Select by Name", "max.select_by_name")
+
+    @classmethod
     def poll(cls, context):
         return context.mode == "OBJECT"
 
@@ -583,7 +592,8 @@ class MAX_OT_object_cmd(Operator):
     def description(cls, context, props):
         for k, n, d in OBJECT_CMDS:
             if k == props.cmd:
-                return d or n
+                name = max_icons.tooltip(context, n, "max.object_cmd", cmd=k)
+                return name + (": " + d if d else "")
         return ""
 
     def invoke(self, context, event):
@@ -737,7 +747,7 @@ class MAX_OT_open_editor(Operator):
 
     @classmethod
     def description(cls, context, props):
-        return EDITORS[props.editor][2]
+        return max_icons.tooltip(context, EDITORS[props.editor][2], "max.open_editor", editor=props.editor)
 
     def invoke(self, context, event):
         ui_type, tab, _ = EDITORS[self.editor]

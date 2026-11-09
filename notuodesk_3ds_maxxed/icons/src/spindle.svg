@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>spindle</title>
-<g fill="none" stroke="#dedede" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M16 2 L26 10 V22 L16 30 L6 22 V10 Z M6 10 C6 15 26 15 26 10 M6 22 C6 27 26 27 26 22"/>
-<path d="M6 10 C6 6 26 6 26 10 M6 22 C6 18 26 18 26 22" stroke="#999999" stroke-width="1"/>
+<desc>Spindle with pointed end caps</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="8,1 13,5 13,11 8,15 3,11 3,5" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M3 5 Q8 8 13 5 M3 11 Q8 14 13 11" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>time_start</title>
+<desc>Start bar and two backward triangles</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1" y="2" width="2" height="12" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="4,8 9,3 9,13" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="9,8 14,3 14,13" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+</g>
+</svg>
