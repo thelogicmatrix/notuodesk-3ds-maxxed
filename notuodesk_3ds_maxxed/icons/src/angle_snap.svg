@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>angle snap</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M5 26 H29 M5 26 L22 5 M13 26 A8 8 0 0 0 10 20" stroke="#78b7ce" fill="none" stroke-width="2"/><g transform="translate(15 12) scale(.5)"><path d="M7 7 V19 A9 9 0 0 0 25 19 V7 H19 V19 A3 3 0 0 1 13 19 V7 Z" stroke="#dedede" fill="none" stroke-width="2"/><path d="M7 11 H13 M19 11 H25" stroke="#ead078" fill="none" stroke-width="3"/></g>
+</g>
+</svg>

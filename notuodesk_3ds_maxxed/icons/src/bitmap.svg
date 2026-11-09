@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>bitmap</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="4" width="26" height="24" stroke="#dedede" fill="none"/><circle cx="22" cy="10" r="3" stroke="#ead078" fill="none"/><path d="M5 24 L12 13 L19 23 L23 17 L28 24" stroke="#78b7ce" fill="none" stroke-width="2"/>
+</g>
+</svg>

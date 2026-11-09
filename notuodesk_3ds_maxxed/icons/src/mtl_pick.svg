@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>mtl pick</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M19 4 Q24 -1 29 4 Q33 8 27 13 L22 18 L14 10 Z M14 10 L4 23 L3 29 L9 28 L22 18 M10 16 L16 22" stroke="#78b7ce" fill="none" stroke-width="2"/>
+</g>
+</svg>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>bind space warp</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M2 6 Q8 1 14 6 T26 6 M2 13 Q8 8 14 13 T26 13" stroke="#ead078" fill="none" stroke-width="2"/><path d="M12 22 L17 17 C23 13 31 21 26 26 L22 30 M10 27 L21 20" stroke="#dedede" fill="none" stroke-width="2"/>
+</g>
+</svg>

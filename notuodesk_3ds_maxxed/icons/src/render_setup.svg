@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>render setup</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<g transform="translate(-1 4) scale(.8)"><path d="M9 12 H24 V19 C24 28 9 28 9 19 Z M9 14 C0 10 2 24 9 21 M24 18 L29 11 H25 M11 9 H22 M15 6 H19 M16 9 V6" stroke="#dedede" fill="none" stroke-width="2"/></g><circle cx="25" cy="9" r="5" stroke="#ead078" fill="none"/><path d="M25 1 V4 M25 14 V17 M17 9 H20 M30 9 H32" stroke="#ead078" fill="none" stroke-width="2"/>
+</g>
+</svg>

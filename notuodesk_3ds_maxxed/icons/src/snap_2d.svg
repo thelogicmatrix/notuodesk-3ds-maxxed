@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>snap 2d</title>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M11 5 Q11 1 16 1 Q22 1 22 6 Q22 8 18 11 L11 16 H23" stroke="#dedede" stroke-width="3"/>
+<path d="M8 21 V25 A8 5 0 0 0 24 25 V21" stroke="#dedede" stroke-width="4"/><path d="M8 21 V23 M24 21 V23" stroke="#ead078" stroke-width="4"/>
+</g>
+</svg>

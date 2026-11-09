@@ -33,6 +33,7 @@ from . import line_tool
 from . import poly_tools
 from . import freezing, plane_plus
 from . import cursor_policy
+from . import max_icons
 
 
 _prefs_cache = [None]
@@ -188,11 +189,12 @@ def _unlock_quads_once():
 
 
 def register():
+    max_icons.register()
     for cls in _classes:
         bpy.utils.register_class(cls)
     wm = bpy.types.WindowManager
-    wm.max_cmd_tab = EnumProperty(name="Command Panel", items=ui_panel.TABS, default="CREATE")
-    wm.max_create_cat = EnumProperty(name="Category", items=ui_panel.CREATE_CATS, default="GEOMETRY")
+    wm.max_cmd_tab = EnumProperty(name="Command Panel", items=max_icons.enum_items(ui_panel.TABS), default="CREATE")
+    wm.max_create_cat = EnumProperty(name="Category", items=max_icons.enum_items(ui_panel.CREATE_CATS), default="GEOMETRY")
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""),
                                     ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", ""), ("JOKERMARTINI", "JokerMartini", "")])
@@ -245,3 +247,4 @@ def unregister():
             delattr(wm, prop)
     for cls in reversed(_classes):
         bpy.utils.unregister_class(cls)
+    max_icons.unregister()

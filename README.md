@@ -60,6 +60,11 @@ The image stays unlit in the default Solid viewport. An image draw handler suppl
 **Freeze** keeps the image visible and locks selection and snapping. PlanePlus starts with **Show Frozen in Gray** off. Other objects start with it on. Change it in **Object Properties** or **Display > Display Properties**. **Display > Freeze** and the right-click Display quadrant also have Freeze Selection, Unfreeze All, Unfreeze by Name and Unfreeze by Hit. Right-click leaves Unfreeze by Hit.
 
 Parameter edits to gray-frozen primitives survive unfreezing. Unfreeze by Hit uses Blender's viewport picking for mesh surfaces, wire edges, curves, helper display lines and light/camera icons. It keeps the previous selection, active object and unrelated selection locks.
+The Command Panel tabs, Create categories, sub-object levels, modifier stack and
+Main Toolbar use original Max-style icons. The Material Editor control icons and
+Create-menu object icons use the same set. Missing artwork falls back to Blender's
+icons. The set includes artwork for all 11 supported Extended Primitives.
+Material sample slots still show their real material previews.
 
 ## Compact Material Editor (M)
 
@@ -253,6 +258,7 @@ Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments*
 - Quad Cap uses an interpolated grid. It does not reproduce rapidQCap's surface smoothing. Borders too concave or twisted for a grid without folded cells are skipped with a warning. Odd borders cannot be all quads without changing the boundary.
 - AutoPivot's original buttons use center-of-mass calculations for meshes and vertex averages for splines. This add-on uses the bounding box and adds an optional creation preference. Moving an origin can change modifiers that depend on that origin, such as Mirror.
 - Text stays editable after a pivot move. A protected Geometry Nodes translation handles depth on tilted text. It stays below user modifiers and outside the Max stack, so stack controls cannot disable, remove or reorder it. Conversion to Editable Spline or Editable Poly bakes the translation. Existing Text Pivot Offset modifiers migrate when a file loads or the add-on is enabled.
+- The icons are original GPL artwork with Max's visual vocabulary, not Autodesk's icon artwork. Icons are supplied for toolbar and stack controls that this version does not draw, including Pin Stack, Show End Result, Configure Modifier Sets, Bind to Space Warp, Window/Crossing, Spinner Snap, Layer Explorer and Ribbon. This does not add those controls. The modifier's edit-mode toggle has a mesh-and-pencil icon. The Modifier List menu has a list-and-dropdown icon. Blender still draws its own material preview-type buttons and viewport shading and overlay buttons.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
@@ -275,6 +281,17 @@ From 1.5.0 on, the add-on can update itself from this repo's GitHub Releases. Us
 - **Publishing an update:** bump `version` in `blender_manifest.toml`, build the zip, and attach it to a new GitHub Release tagged `vX.Y.Z`.
 
 ## Building from source
+
+The editable icon sources are in `notuodesk_3ds_maxxed/icons/src/`. To rebuild the
+transparent 32px and 64px PNGs, install the build-only renderer and run:
+
+```powershell
+uv pip install --python C:/Users/thelo/.local/venvs/data/Scripts/python.exe resvg-py==0.5.0 Pillow
+& C:/Users/thelo/.local/venvs/data/Scripts/python.exe tools/build_icons.py --contact-sheet icons-contact.png
+```
+
+Blender needs no extra packages. See `notuodesk_3ds_maxxed/icons/README.md` for
+artwork provenance and test instructions.
 
 ```bash
 blender --command extension build --source-dir notuodesk_3ds_maxxed --output-dir .

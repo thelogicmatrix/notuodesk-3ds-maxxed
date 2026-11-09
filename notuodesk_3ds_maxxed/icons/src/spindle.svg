@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>spindle</title>
+<g fill="none" stroke="#dedede" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M16 2 L26 10 V22 L16 30 L6 22 V10 Z M6 10 C6 15 26 15 26 10 M6 22 C6 27 26 27 26 22"/>
+<path d="M6 10 C6 6 26 6 26 10 M6 22 C6 18 26 18 26 22" stroke="#999999" stroke-width="1"/>
+</g>
+</svg>

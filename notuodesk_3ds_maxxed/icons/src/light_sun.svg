@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>light sun</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="16" cy="16" r="7" stroke="#ead078" fill="none"/><path d="M16 1 V5 M16 27 V31 M1 16 H5 M27 16 H31 M5 5 L8 8 M24 24 L27 27 M5 27 L8 24 M24 8 L27 5" stroke="#ead078" fill="none" stroke-width="2"/>
+</g>
+</svg>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>motion</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M2 8 H9 M1 15 H6 M3 24 H10" stroke="#9b9b9b"/>
+<circle cx="13" cy="16" r="8" stroke="#9b9b9b"/>
+<circle cx="21" cy="16" r="9" stroke="#ededed" fill="#666666"/>
+<path d="M18 11 A6 6 0 0 1 25 13" stroke="#dedede"/>
+</g>
+</svg>

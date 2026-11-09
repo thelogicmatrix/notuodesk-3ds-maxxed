@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>hierarchy</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<rect x="12" y="3" width="8" height="7" stroke="#78b7ce" fill="none"/><path d="M16 10 V16 H5 V22 M16 16 H27 V22 M16 16 V22" stroke="#dedede" fill="none" stroke-width="2"/><rect x="2" y="22" width="6" height="6" stroke="#dedede" fill="none"/><rect x="13" y="22" width="6" height="6" stroke="#dedede" fill="none"/><rect x="24" y="22" width="6" height="6" stroke="#dedede" fill="none"/>
+</g>
+</svg>
