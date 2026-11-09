@@ -541,9 +541,13 @@ def draw_main_toolbar(self, context):
     sub.prop(ts, "transform_pivot_point", text="", icon_only=True, **max_icons.ui("pivot", "PIVOT_MEDIAN"))
 
     row = lay.row(align=True)
-    row.prop(ts, "use_snap", text="", **max_icons.ui("snap_3d" if ts.use_snap else "snap_off", "SNAP_ON" if ts.use_snap else "SNAP_OFF"))
-    row.prop(ts, "use_snap_rotate", text="", **max_icons.ui("angle_snap", "DRIVER_ROTATIONAL_DIFFERENCE"))
-    row.prop(ts, "use_snap_scale", text="", **max_icons.ui("percent_snap", "MOD_PHYSICS"))
+    # Boolean props shift a custom icon_value by one when on, so draw toggles as operators
+    for path, on, art, fallback in (
+            ("use_snap", ts.use_snap, "snap_3d" if ts.use_snap else "snap_off", "SNAP_ON" if ts.use_snap else "SNAP_OFF"),
+            ("use_snap_rotate", ts.use_snap_rotate, "angle_snap", "DRIVER_ROTATIONAL_DIFFERENCE"),
+            ("use_snap_scale", ts.use_snap_scale, "percent_snap", "MOD_PHYSICS")):
+        row.operator("wm.context_toggle", text="", depress=on,
+                     **max_icons.ui(art, fallback)).data_path = "tool_settings." + path
 
     row = lay.row(align=True)
     row.operator("max.object_cmd", text="", **max_icons.ui("mirror", "MOD_MIRROR")).cmd = "MIRROR"
