@@ -26,6 +26,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import keyboard_entry
 
 
 _prefs_cache = [None]
@@ -140,7 +141,7 @@ HOTKEY_CHEATSHEET = (
 
 
 _classes = (
-    (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
+    (MaxxedPreferences,) + prims.classes + keyboard_entry.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
@@ -177,6 +178,7 @@ def register():
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""), ("VRAY", "V-Ray", "")])
     prims.register_props()
+    keyboard_entry.register_props()
     ui_panel.register_props()
     vray.register_props()
     mtl_editor.register_props()
@@ -207,6 +209,7 @@ def unregister():
     vray.unregister_props()
     ui_panel.unregister_props()
     prims.unregister_props()
+    keyboard_entry.unregister_props()
     for prop in ("max_cmd_tab", "max_create_cat", "max_create_sub", "max_sublevel"):
         if hasattr(wm, prop):
             delattr(wm, prop)

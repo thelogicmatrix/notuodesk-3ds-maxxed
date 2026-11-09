@@ -14,6 +14,7 @@ from mathutils.geometry import intersect_line_plane
 from .operators import max_name
 
 from .prims import PRIMITIVES, set_params
+from . import keyboard_entry
 
 MAX_COLORS = [
     (0.88, 0.34, 0.78), (0.53, 0.89, 0.34), (0.34, 0.53, 0.89), (0.89, 0.73, 0.34),
@@ -182,6 +183,7 @@ class MAX_OT_create(Operator):
     @classmethod
     def description(cls, context, props):
         label, _, style, height = PRIMITIVES[props.kind]
+        height = keyboard_entry.has_height(props.kind, keyboard_entry.method(context, props.kind))
         steps = "drag the base, release, then move the mouse for height and click" if height else "drag to size"
         return f"{label}: in a viewport, {steps}. Right-click to stop creating"
 
@@ -192,6 +194,7 @@ class MAX_OT_create(Operator):
         MAX_OT_create._session += 1
         self.session = MAX_OT_create._session
         MAX_OT_create.active_kind = self.kind
+        keyboard_entry.remember_kind(context, self.kind)
         self.state = "WAIT"
         self.obj = None
         context.window_manager.modal_handler_add(self)
@@ -241,6 +244,7 @@ class MAX_OT_create(Operator):
         self.area, self.region = area, region
         self.rv3d = region.data
         self.u, self.v, self.n = construction_frame(self.rv3d)
+        self.creation_method = keyboard_entry.method(context, self.kind)
         p = ray_plane(region, self.rv3d, self._co(event), Vector((0, 0, 0)), self.n)
         if p is None:
             return False
@@ -262,21 +266,11 @@ class MAX_OT_create(Operator):
             return
         if context.scene.tool_settings.use_snap:
             p = Vector([round(c) for c in p])
-        _, _, style, has_h = PRIMITIVES[self.kind]
-        h = max(abs(self.height), 1e-4) if has_h else 1.0
-        if style == "RECT":
-            d = p - self.p0
-            du, dv = d.dot(self.u), d.dot(self.v)
-            center = self.p0 + (self.u * du + self.v * dv) * 0.5
-            self.obj.location = center
-            self.size = (abs(du), abs(dv))
-            self.obj.scale = (max(abs(du), 1e-4), max(abs(dv), 1e-4), h)
-        else:
-            r = (p - self.p0).length
-            self.size = (r, r)
-            self.obj.location = self.p0
-            z = h if has_h else r
-            self.obj.scale = (max(r, 1e-4), max(r, 1e-4), max(z, 1e-4))
+        center, scale = keyboard_entry.base_size(
+            self.kind, self.creation_method, self.p0, p, self.u, self.v, self.height)
+        self.obj.location = center
+        self.obj.scale = scale
+        self.size = (scale.x, scale.y)
 
     def _update_height(self, context, event):
         base = self.obj.location.copy()
@@ -346,7 +340,7 @@ class MAX_OT_create(Operator):
                 if max(self.size) < 1e-3:          # a click without a drag creates nothing
                     self._cancel_object()
                     self.state = "WAIT"
-                elif PRIMITIVES[self.kind][3]:
+                elif keyboard_entry.has_height(self.kind, self.creation_method):
                     self.release_co = self._co(event)
                     self.state = "HEIGHT"
                 else:

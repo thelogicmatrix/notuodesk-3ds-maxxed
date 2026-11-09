@@ -178,7 +178,7 @@ class MaxPrimParams(bpy.types.PropertyGroup):
     length: FloatProperty(name="Length", default=1.0, min=0.0001, unit="LENGTH", update=_update)
     width: FloatProperty(name="Width", default=1.0, min=0.0001, unit="LENGTH", update=_update)
     height: FloatProperty(name="Height", default=1.0, unit="LENGTH", update=_update)
-    radius1: FloatProperty(name="Radius 1", default=1.0, min=0.0001, unit="LENGTH", update=_update)
+    radius1: FloatProperty(name="Radius 1", default=1.0, min=0.0, unit="LENGTH", update=_update)
     radius2: FloatProperty(name="Radius 2", default=0.0, min=0.0, unit="LENGTH", update=_update)
     length_segs: IntProperty(name="Length Segs", default=1, min=1, max=200, update=_update)
     width_segs: IntProperty(name="Width Segs", default=1, min=1, max=200, update=_update)

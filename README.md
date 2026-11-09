@@ -27,12 +27,19 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 | 4 viewports: Top, Front, Left, Perspective | Quad view with clickable `[+] [Top] [Standard] [Edged Faces]` labels, like Max:<br>**[+]** maximize, grid, ViewCube, statistics<br>**[Perspective]** Top / Front / Left… and your cameras<br>**[Standard]** High Quality / Standard / Performance, shadows and AO<br>**[Default Shading]** Default Shading, Shaded Materials with Maps, Flat Color, Clay, Wireframe Override, Realistic, ActiveShade, Edged Faces, See-Through |
 | Command Panel: Create, Modify, Hierarchy, Motion, Display, Utilities | Right sidebar with collapsible rollouts |
 | Click-drag creation (base first, then height) | Box, Cone, Sphere, GeoSphere, Cylinder, Tube, Torus, Pyramid, Plane. Right-click stops creating |
+| Keyboard Entry and Creation Method | Type grid coordinates and dimensions, then click Create. Choose Edge / Center, Cube / Box, Base/Apex / Center or Rectangle / Square for mouse creation |
 | Parametric primitives | Length/Width/Height/Segs stay editable in **Parameters** until you convert to Editable Poly or enter sub-object mode |
 | Modifier List and stack | About 60 modifiers under their Max names (see below). Newest is on top, with a visibility toggle per modifier |
 | Editable Poly | Selection, Edit Vertices/Edges/Borders/Polygons/Elements and Edit Geometry rollouts |
 | Quad menus | Right-click (display / tools / transform) and Ctrl+right-click (modeling) |
 | Status bar | "1 Object Selected", X/Y/Z type-in, Grid, Auto Key, Set Key |
 | Look | Max dark UI, cyan selection outline, red sub-object selection, blue vertices, random object colors, names like Box001 |
+
+## Creating primitives from the keyboard
+
+In **Create > Geometry > Standard Primitives**, pick a primitive and open **Keyboard Entry**. Enter X, Y, Z and its dimensions, then click **Create**. X, Y and Z follow the active viewport's construction grid. For Box, Cone, Cylinder, Tube and Pyramid they place the centre of the base. For Sphere, GeoSphere, Torus and Plane they place the centre.
+
+The rollout starts closed. Each type keeps its own values between creations and when you save the scene. New objects keep editable parameters and the default segment counts. **Creation Method** controls mouse creation only. GeoSphere calls its diameter method **Diameter**, as Max does. **Cube** creates equal sides in one drag.
 
 ## Compact Material Editor (M)
 
@@ -157,6 +164,8 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
+- Keyboard Entry uses the existing viewport construction planes. It has no custom grid objects or AutoGrid. GeoSphere keeps Blender's icosphere tessellation.
+- Mouse creation still uses fixed second radii for Cone, Tube and Torus. Use Keyboard Entry to set both radii.
 
 ## Updating
 
