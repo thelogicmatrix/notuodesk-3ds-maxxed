@@ -25,6 +25,7 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 | Main Toolbar | Viewport header: undo/redo, link/unlink, select by name, region select, move/rotate/scale, reference coordinate system, pivot, snaps, mirror, align, editors, render |
 | Scene Explorer | Outliner on the left |
 | 4 viewports: Top, Front, Left, Perspective | Quad view with clickable `[+] [Top] [Standard] [Edged Faces]` labels, like Max:<br>**[+]** maximize, grid, ViewCube, statistics<br>**[Perspective]** Top / Front / Left… and your cameras<br>**[Standard]** High Quality / Standard / Performance, shadows and AO<br>**[Default Shading]** Default Shading, Shaded Materials with Maps, Flat Color, Clay, Wireframe Override, Realistic, ActiveShade, Edged Faces, See-Through |
+| ViewCube | Shaded, labelled cube in each viewport of the 3ds Max workspace, with a compass and Home. Click faces, edges or corners, drag to orbit, or drag the compass to turn around the vertical axis. Right-click for Home, projection, Front and configuration. Orthographic face views have adjacent-view and roll arrows |
 | Command Panel: Create, Modify, Hierarchy, Motion, Display, Utilities | Right sidebar with collapsible rollouts |
 | Click-drag creation (base first, then height) | Box, Cone, Sphere, GeoSphere, Cylinder, Tube, Torus, Pyramid, Plane. Right-click stops creating |
 | Parametric primitives | Length/Width/Height/Segs stay editable in **Parameters** until you convert to Editable Poly or enter sub-object mode |
@@ -151,10 +152,13 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 
 You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, labels, random colors) under **Preferences › Add-ons › NotuoDesk 3ds Maxxed**.
 
+**ViewCube.** Alt+Ctrl+H shows or hides it. Its preferences include Tiny, Small, Normal and Large sizes, inactive opacity, Snap to Closest View and Keep Scene Upright. View changes use Blender's Smooth View duration. Set Current View as Home saves the rotation, projection, centre and distance in the scene. Set Current View as Front changes the cube's reference orientation, and Reset Front restores the default. Camera views hide the cube. Turning it off restores Blender's navigation gizmo.
+
 ## Known differences from 3ds Max
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
-- There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
+- There's no Teapot or Ribbon.
+- The ViewCube uses Blender's font and a GPU-drawn approximation of Max's cube. It has no Fit-to-View on View Change or adjustable compass north. Its visibility shortcut is Alt+Ctrl+H, while Autodesk's 2026 help lists Alt+Ctrl+V. Small is the documented size default. Inactive opacity starts at 50%, since Autodesk's help does not state its default.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 

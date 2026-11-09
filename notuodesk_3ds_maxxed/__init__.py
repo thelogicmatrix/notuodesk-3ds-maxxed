@@ -26,6 +26,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import viewcube
 
 
 _prefs_cache = [None]
@@ -80,6 +81,13 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
     random_colors: BoolProperty(name="Random Object Colors", default=True,
                                 description="Give new objects a random wireframe/object color like 3ds Max")
     first_run_done: BoolProperty(default=False)
+    show_viewcube: BoolProperty(name="Show the ViewCube", default=True, update=viewcube.update)
+    viewcube_size: EnumProperty(name="ViewCube Size", items=[(s, s.title(), "") for s in
+                                ("TINY", "SMALL", "NORMAL", "LARGE")], default="SMALL", update=viewcube.update)
+    viewcube_opacity: EnumProperty(name="Inactive Opacity", items=[(str(n), f"{n}%", "") for n in
+                                   (0, 25, 50, 75, 100)], default="50", update=viewcube.update)
+    viewcube_snap: BoolProperty(name="Snap to Closest View", default=True)
+    viewcube_upright: BoolProperty(name="Keep Scene Upright", default=True)
 
     def draw(self, context):
         lay = self.layout
@@ -90,6 +98,9 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
         col = lay.column(heading="Features")
         for p in ("use_keymap", "max_menubar", "show_toolbar", "show_statusbar", "show_labels", "random_colors"):
             col.prop(self, p)
+        box = lay.box()
+        box.label(text="ViewCube")
+        viewcube.draw_settings(box, self)
 
         updater.draw_update_box(lay, self)
 
@@ -142,7 +153,7 @@ HOTKEY_CHEATSHEET = (
 _classes = (
     (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
-    + ui_menus.classes
+    + ui_menus.classes + viewcube.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
@@ -188,6 +199,7 @@ def register():
     p = get_prefs()
     if p is None or p.use_keymap:
         keymap.register_keymaps()
+    viewcube.register()
     if not bpy.app.background:
         bpy.app.timers.register(_first_run, first_interval=0.5)
         bpy.app.timers.register(_unlock_quads_once, first_interval=1.0)
@@ -195,6 +207,7 @@ def register():
 
 
 def unregister():
+    viewcube.unregister()
     _prefs_cache[0] = None
     keymap.unregister_keymaps()
     overlay.unregister()

@@ -69,7 +69,7 @@ VIEWPORT = [
     # Clickable viewport labels ([+] [Perspective] [Standard] [Default Shading])
     K("max.viewport_label", "LEFTMOUSE", "CLICK"),
     # Quad menus
-    K("wm.call_menu", "RIGHTMOUSE", name="MAX_MT_quad"),
+    K("max.viewcube_context", "RIGHTMOUSE"),
     K("wm.call_menu", "RIGHTMOUSE", ctrl=True, name="MAX_MT_quad_modeling"),
 ]
 
