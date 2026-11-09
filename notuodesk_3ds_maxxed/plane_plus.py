@@ -337,14 +337,13 @@ class MAX_OT_plane_plus_pick(bpy.types.Operator):
 
 
 def draw(layout, ob):
+    from . import max_widgets
     p = ob.max_plane_plus
     layout.use_property_split = False
     layout.use_property_decorate = False
-    for prop, label in (("width", "Width:"), ("length", "Length:")):
-        row = layout.row(align=True)
-        row.label(text=label)
-        row.prop(p, prop, text="")
-    layout.prop(p, "uniform")
+    for prop, label in (("width", "Width"), ("length", "Length")):
+        max_widgets.spinner(layout, p, prop, label)
+    max_widgets.checkbox(layout, p, 'uniform', 'Uniform')
     layout.label(text="Pivot:")
     for key in ("LEFT", "CENTER", "RIGHT"):
         row = layout.row()
@@ -357,10 +356,8 @@ def draw(layout, ob):
     box = layout.box()
     box.label(text="Image:")
     box.operator("max.plane_plus_image", text=os.path.basename(p.image.filepath) if p.image else "Select Image...")
-    box.prop(p, "enable_image")
-    row = layout.row(align=True)
-    row.label(text="Opacity:")
-    row.prop(p, "opacity", text="")
+    max_widgets.checkbox(box, p, 'enable_image', 'Enable Image')
+    max_widgets.spinner(layout, p, 'opacity', 'Opacity')
     row = layout.row(align=True)
     row.emboss = "NONE"
     for key, label in (("HORIZONTAL", "Horizontal"), ("VERTICAL", "Vertical")):

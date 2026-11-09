@@ -479,18 +479,9 @@ def draw_rendering(layout, context):
 
 
 def _spinner(layout, values, prop, label):
-    row = layout.row(align=True)
-    row.use_property_split = False
-    row.use_property_decorate = False
-    row.scale_y = 0.85
-    split = row.split(factor=0.48, align=True)
-    caption = split.row(align=True)
-    caption.alignment = "RIGHT"
-    caption.label(text=label + ":")
-    field = split.row(align=True)
-    field.alignment = "LEFT"
-    field.ui_units_x = 5.0
-    field.prop(values, prop, text="")
+    from . import max_widgets
+    return max_widgets.spinner(layout, values, prop, label,
+                               step=1 if values.bl_rna.properties[prop].type == 'INT' else .1)
 
 
 def draw_interpolation(layout, context):
