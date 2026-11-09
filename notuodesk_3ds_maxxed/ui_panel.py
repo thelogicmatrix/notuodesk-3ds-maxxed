@@ -359,8 +359,9 @@ def create_object_type(layout, context):
             label = prims.PRIMITIVES[k][0]
             g.operator("max.create", text=label, depress=(create.MAX_OT_create.active_kind == k)).kind = k
     elif cat == "SHAPES":
+        g.operator_context = "INVOKE_DEFAULT"
         for k, label, icon in create.SHAPES:
-            g.operator("max.create_shape", text=label).kind = k
+            g.operator("max.create_shape", text=label, depress=(k == "LINE" and line_tool.MAX_OT_line.active is not None)).kind = k
     elif cat == "LIGHTS":
         for k, label, icon in create.LIGHTS:
             g.operator("max.create_light", text=label).kind = k
@@ -425,6 +426,13 @@ def parameters(layout, context):
 
 
 # ----- Material (VRayMtl) ---------------------------------------------------------
+
+from . import line_tool
+
+rollout("Rendering", {"CREATE", "MODIFY"}, 4, closed=True)(when(line_tool.spline_poll)(line_tool.draw_rendering))
+rollout("Interpolation", {"CREATE", "MODIFY"}, 5, closed=True)(when(line_tool.spline_poll)(line_tool.draw_interpolation))
+rollout("Creation Method", {"CREATE"}, 6)(when(line_tool.line_poll)(line_tool.draw_method))
+rollout("Keyboard Entry", {"CREATE"}, 7, closed=True)(when(line_tool.line_poll)(line_tool.draw_keyboard))
 
 @rollout("Material", {"MODIFY"}, 9, closed=True)
 @when(lambda c: c.active_object is not None and c.active_object.type in {"MESH", "CURVE", "FONT", "SURFACE", "META"})

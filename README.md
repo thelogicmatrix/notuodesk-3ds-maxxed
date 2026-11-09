@@ -143,6 +143,18 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
   - **Quality presets** (Draft, Medium, High, Very High) use progressive sampling with a noise limit and the denoiser.
 - These objects are standard Blender lights, cameras and Principled materials, so V-Ray for Blender's Cycles-to-V-Ray conversion can handle them. I couldn't test that conversion because V-Ray isn't installed on the test machine.
 
+## Line splines
+
+Choose **Create > Shapes > Splines > Line**, then click to place Corner vertices or drag for Bezier handles. **Creation Method** changes the click type (Corner or Smooth) and drag type (Corner, Smooth or Bezier). A preview segment follows the mouse.
+
+Right-click finishes the current spline and leaves Line active for another. Right-click or Esc with no points exits. Click the first vertex and choose **Yes** in **Close spline?** to close it. Cancel continues drawing. Backspace removes the last point. Hold Shift for horizontal or vertical segments on the construction plane. S toggles grid snapping.
+
+**Keyboard Entry** adds points at world X, Y and Z coordinates. **Add Point** continues the current Line, **Close** joins its ends and **Finish** leaves it open. Both need at least two points.
+
+Line's **Creation Method** and **Keyboard Entry** appear only while Line is the chosen Shapes creator. Choosing another shape or switching to Geometry hides them, even with a Line selected. Creation Method uses circle radio buttons. Keyboard Entry, Rendering and Interpolation use compact labelled spinners.
+
+Spline objects have **Rendering** and **Interpolation** rollouts in Create and Modify. Radial Thickness is the diameter. Sides and Angle control the radial cross-section. Enable In Renderer and Enable In Viewport work independently. Blender curves keep the editable vertices, with a Geometry Nodes modifier for the radial mesh. Steps sets subdivisions between vertices. Optimize skips subdivisions on straight segments in the generated mesh.
+
 ## Hotkeys
 
 | Keys | Action |
@@ -207,7 +219,8 @@ Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments*
 - Extended Primitives do not include RingWave or Hose. Creation uses the default Corners, Center or Isosceles method. Alternate creation methods and Slice controls are not included.
 - Hedra uses reflection-generated polyhedra. Star1, Star2 and axis scaling approximate Max's shapes. Its facet topology and the other primitives' triangulation can differ from Max. OilTank and Spindle use Blender's bevel for Blend.
 - Generate Mapping Coords on Extended Primitives uses box projection. It does not reproduce Max's UV layouts. Torus Knot uses whole-number winding, twist, warp and lump counts, and Smooth is an on/off setting. Real-World Map Size and mapping offset/tiling controls are not included.
-
+- Line uses Blender's automatic handles for Smooth vertices, so its curvature can differ from Max. The close prompt uses Blender's Cancel button to keep drawing.
+- Spline Adaptive uses a fixed 64 subdivisions per curved segment. Blender does not expose Max's curvature-based adaptive interpolation.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
