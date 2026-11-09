@@ -43,9 +43,20 @@ levels. Subdivision Surface, Subdivision Displacement and Paint Deformation are
 available at every level. Unmapped controls remain visible and disabled. Adding
 Edit Poly still edits the base mesh.
 
-The small settings button beside an operation opens its options. Click OK to
-apply them. The main button reuses the accepted values for that operation and
-sub-object level. Values live in the scene and are saved in the blend file.
+The small settings button beside an operation opens a floating viewport caddy
+for Extrude, Chamfer, Connect, Bevel, Inset, Outline, Bridge, Weld, Tessellate,
+MSmooth and Relax. Shift-click the main button to open its caddy too, except
+Outline. Drag a spinner's icon vertically or click its value and type. Changes
+preview from the original mesh, so adjusting an amount never repeats the operation.
+Choice arrows open dropdowns. Drag the title to move the caddy.
+
+The bottom buttons are OK, Apply and Continue, and Cancel. Enter accepts. Ctrl+Enter
+applies and previews another iteration. Right-click or Esc cancels the current
+preview and keeps earlier Apply and Continue operations. Each accepted operation
+has one undo step. While typing, Enter accepts the number and leaves the caddy open.
+The main button reuses the accepted values for that operation and sub-object
+level. Values live in the scene and are saved in the blend file. Detach, Create
+Shape and Slice Plane keep their separate dialogs.
 
 Material IDs use Blender's material slots, numbered from 1. Smoothing groups use
 the face attribute `max_smoothing_group`, including group 32. Faces that share a
@@ -220,6 +231,17 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
+- Caddies use a custom viewport overlay with vector icons, not Autodesk's native
+  controls. The icon shapes, spacing and text editing differ. Numeric input accepts
+  plain numbers in Blender units, without Max unit expressions. Navigation works
+  outside the caddy, but selection changes and undo while it is open are blocked.
+  Cancel or accept before selecting another part of the mesh. Right-click while
+  dragging a spinner restores that drag's starting value. Right-click again exits.
+  Caddies support one mesh in Edit mode. Shape-key meshes are rejected before preview.
+- Caddies expose the existing operation settings. Chamfer's newer mitering,
+  end/radial bias and smoothing controls are not implemented. MSmooth's Separate
+  by Smoothing Groups and Materials, and Bridge's pick controls, appear disabled.
+  Weld shows total vertex or edge counts before and after its preview.
 - Editable Poly's By Vertex click filter, Ignore Backfacing, hover Preview
   Selection, topology Constraints and Preserve UVs channel settings are disabled.
   By Angle expands the current face selection with a separate button.

@@ -9,6 +9,8 @@ from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, FloatProp
 from bpy.types import Operator, PropertyGroup
 from mathutils import Vector
 
+from . import poly_caddies
+
 SG_ATTRIBUTE = "max_smoothing_group"
 SMOOTH_BACKUP = "max_poly_original_smooth"
 OBJECT_ACTIONS = {"MSMOOTH", "TESSELLATE", "MAKE_PLANAR", "PLANAR_X", "PLANAR_Y", "PLANAR_Z", "VIEW_ALIGN", "GRID_ALIGN", "RELAX", "ATTACH", "CUT", "QUICK_SLICE"}
@@ -246,10 +248,18 @@ class MAX_OT_poly_settings(Operator):
         return context.mode == "EDIT_MESH" or (context.mode == "OBJECT" and context.active_object is not None)
 
     def invoke(self, context, event):
+        if self.action in poly_caddies.ACTIONS:
+            return poly_caddies.invoke(self, context, event)
         s = settings(context, self.action)
         for key in CADDIES[self.action]:
             setattr(self, key, getattr(s, key))
         return context.window_manager.invoke_props_dialog(self, width=300)
+
+    def modal(self, context, event):
+        return poly_caddies.modal(self, context, event)
+
+    def cancel(self, context):
+        poly_caddies.cancel(self, context)
 
     def draw(self, context):
         from .operators import EDIT_POLY_OPS, current_level
@@ -478,7 +488,7 @@ def run(operator, context, how, operation_settings=None):
     bm = bmesh.from_edit_mesh(ob.data)
     mode = mesh_select_mode(context)
     s = operation_settings if operation_settings is not None else settings(context, action)
-    ops = bpy.ops.mesh
+    ops = poly_caddies.MeshOps() if how == "CADDY_PREVIEW" else bpy.ops.mesh
     try:
         if action == "EXTRUDE":
             faces = [f for f in bm.faces if f.select and not f.hide]
@@ -934,12 +944,14 @@ classes = target_weld.classes + poly_modal.classes + hsx_adapter_classes() + (Ma
 
 
 def register_props():
+    poly_caddies.register_handlers()
     bpy.types.Scene.max_poly_operations = CollectionProperty(type=MaxPolyOperation)
     bpy.types.Scene.max_poly_slice = PointerProperty(type=MaxPolyOperation)
     bpy.types.Object.max_poly = PointerProperty(type=MaxPolyState)
 
 
 def unregister_props():
+    poly_caddies.unregister_handlers()
     del bpy.types.Object.max_poly
     del bpy.types.Scene.max_poly_operations
     del bpy.types.Scene.max_poly_slice
