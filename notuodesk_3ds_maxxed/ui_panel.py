@@ -4,7 +4,7 @@ import bpy
 from bpy.props import IntProperty
 from bpy.types import Menu, Panel, UIList
 
-from . import create, prims
+from . import create, prims, loft
 from .operators import EDIT_POLY_OPS, current_level
 
 EP_LABELS = {k: n for k, n, _ in EDIT_POLY_OPS}
@@ -42,6 +42,8 @@ SKIP_PROPS = {
 
 
 def base_name(ob):
+    if loft.is_loft(ob):
+        return "Loft"
     if ob.type == "MESH" and ob.max_prim.kind:
         return prims.PRIMITIVES[ob.max_prim.kind][0]
     return BASE_NAMES.get(ob.type, ob.type.title())
@@ -86,7 +88,7 @@ class MAX_UL_stack(UIList):
 
 
 SUBTYPES = {
-    "GEOMETRY": (("STANDARD", "Standard Primitives"), ("VRAY", "V-Ray")),
+    "GEOMETRY": (("STANDARD", "Standard Primitives"), ("VRAY", "V-Ray"), ("COMPOUND", "Compound Objects")),
     "LIGHTS": (("STANDARD", "Standard"), ("VRAY", "V-Ray")),
     "CAMERAS": (("STANDARD", "Standard"), ("VRAY", "V-Ray")),
     "SHAPES": (("STANDARD", "Splines"),),
@@ -346,6 +348,8 @@ def create_object_type(layout, context):
             g.operator("max.vray_light", text=label).kind = k
     elif vray_sub and cat == "CAMERAS":
         g.operator("max.vray_camera", text="VRayPhysicalCamera")
+    elif cat == "GEOMETRY" and wm.max_create_sub == "COMPOUND":
+        g.operator("max.loft_start", text="Loft", depress=wm.max_loft_active)
     elif cat == "GEOMETRY":
         for k, (label, icon, _, _) in prims.PRIMITIVES.items():
             g.operator("max.create", text=label, depress=(create.MAX_OT_create.active_kind == k)).kind = k
@@ -381,6 +385,8 @@ def _has_params(context):
     ob = context.active_object
     if ob is None:
         return False
+    if loft.is_loft(ob) and (_stack_get(ob) < 0 or ob.modifiers.active == loft.modifier(ob)):
+        return False
     if tab(context) == "CREATE":
         return ob.type == "MESH" and bool(ob.max_prim.kind)
     if context.mode == "EDIT_MESH" or (ob.type == "MESH" and not ob.max_prim.kind and _stack_get(ob) < 0):
@@ -399,6 +405,36 @@ def parameters(layout, context):
         draw_prim_params(layout, ob)
     else:
         draw_base_params(layout, ob)
+
+
+@rollout("Creation Method", {"CREATE", "MODIFY"}, 3)
+@when(loft.creation_visible)
+def loft_creation(layout, context):
+    loft.draw_creation(layout, context)
+
+
+@rollout("Skin Parameters", {"CREATE", "MODIFY"}, 4)
+@when(loft.params_visible)
+def loft_skin(layout, context):
+    loft.draw_skin(layout, context)
+
+
+@rollout("Surface Parameters", {"CREATE", "MODIFY"}, 5)
+@when(loft.params_visible)
+def loft_surface(layout, context):
+    loft.draw_surface(layout, context)
+
+
+@rollout("Path Parameters", {"CREATE", "MODIFY"}, 6)
+@when(loft.params_visible)
+def loft_path(layout, context):
+    loft.draw_path(layout, context)
+
+
+@rollout("Deformations", {"MODIFY"}, 7)
+@when(loft.params_visible)
+def loft_deformations(layout, context):
+    loft.draw_deformations(layout, context)
 
 
 # ----- Material (VRayMtl) ---------------------------------------------------------
@@ -436,6 +472,8 @@ def material_rollout(layout, context):
 def _is_poly(context):
     ob = context.active_object
     if ob is None or ob.type != "MESH":
+        return False
+    if loft.is_loft(ob):
         return False
     if context.mode == "EDIT_MESH":
         return True

@@ -79,6 +79,22 @@ Press **M**, or choose **Rendering › Material Editor**. It opens as a narrow f
 
 **For full scenes, use FBX:** run [`tools/max_to_blender.ms`](tools/max_to_blender.ms) inside 3ds Max (*Scripting › Run Script*). It exports the open scene, or a whole folder of `.max` files, to FBX. Then use **File › Import › FBX from 3ds Max** in Blender, which keeps animation, skinning, cameras and lights, and turns TurboSmooth into subdivision. *(I haven't been able to test the MAXScript, since 3ds Max isn't available here.)*
 
+## Loft
+
+Select a spline, then choose **Create > Geometry > Compound Objects > Loft**.
+Use **Get Shape** with a selected path, or **Get Path** with a selected shape.
+Click the other spline in a viewport. Right-click or Esc cancels picking.
+Only single Poly or Bezier splines can be picked.
+
+- **Instance** is the default. Point edits and source scale changes update the Loft.
+- **Copy** uses independent, hidden copies. **Move** hides the sources in the viewport and render.
+- **Skin Parameters** has separate start/end caps, Shape Steps, Path Steps, Adaptive Path Steps, Contour, Banking and Flip Normals. Steps add points between the source vertices.
+- **Surface Parameters** has Smooth Length and Smooth Width. Either one turns on smooth shading.
+- **Path Parameters > Path %** sets the level for the next Get Shape. One profile fills the whole path. Get Shape replaces it. Adaptive Path Steps adds a division at that level.
+- **Deformations** has linear start/end Scale percentages and Twist in degrees.
+
+The Loft is a mesh with a Geometry Nodes modifier. Object Info reads the two sources and Curve to Mesh builds the skin. Get Shape creates it at the path. Get Path aligns the path's first tangent to the selected shape's local Z axis.
+
 ## Modifiers
 
 ### TurboSmooth
@@ -152,6 +168,10 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, labels, random colors) under **Preferences › Add-ons › NotuoDesk 3ds Maxxed**.
 
 ## Known differences from 3ds Max
+
+- Loft supports one profile on one Poly or Bezier spline path. NURBS, Text, multiple-spline shapes, and several profiles along a path are not supported. Use sources without bevel or extrusion.
+- Loft uses Blender's minimum-twist and Z-up frames for Banking, which can differ from Max. Smooth Length and Smooth Width share Blender's face smoothing. Caps use n-gons rather than Morph or Grid capping.
+- Loft Scale and Twist are linear parameters, without Max's deformation graph. Teeter, Bevel and Fit deformations are not implemented. Adaptive Path Steps adds the shape level, without Max's deformation-graph divisions. Loft placement uses the selected spline's initial location and rotation, while source point edits and scale stay live.
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
