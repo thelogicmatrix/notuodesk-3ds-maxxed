@@ -414,6 +414,7 @@ class MAX_MT_customize(Menu):
         lay = self.layout
         lay.operator_context = "INVOKE_DEFAULT"
         lay.operator("screen.userpref_show", text="Preferences...")
+        lay.operator("max.gizmo_preferences", text="Gizmos Preferences...")
         lay.operator("preferences.addon_show", text="Hotkeys (3ds Maxxed)...").module = __package__
         lay.operator("max.import_hsx", text="Import 3ds Max Hotkeys (.hsx)...")
         lay.separator()
@@ -548,14 +549,21 @@ def draw_main_toolbar(self, context):
     row.scale_x = 1.1
     for idname, icon, custom in (("builtin.move", "OBJECT_ORIGIN", "move"), ("builtin.rotate", "ORIENTATION_GIMBAL", "rotate"),
                                  ("builtin.scale", "FULLSCREEN_ENTER", "scale")):
-        row.operator("max.select_transform", text="", depress=(tool in {idname, idname.replace("builtin.", "max.snap_")}), **max_icons.ui(custom, icon)).kind = {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]
+        kind = {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]
+        row.operator("max.select_transform", text="", **max_icons.ui(custom, icon),
+                     depress=(tool in {idname, idname.replace("builtin.", "max.snap_"), idname.replace("builtin.", "max.")})).kind = kind
 
     slot = context.scene.transform_orientation_slots[0]
-    sub = lay.row(align=True)
-    sub.ui_units_x = 4.5
-    sub.prop(slot, "type", text="", icon="NONE")
-    sub = lay.row(align=True)
-    sub.prop(ts, "transform_pivot_point", text="", icon_only=True, **max_icons.ui("pivot", "PIVOT_MEDIAN"))
+    from . import max_rotate
+    if tool in {"max.rotate", "max.snap_move", "max.poly_move", "max.snap_scale"}:
+        max_rotate.draw_managers(lay, context)
+    else:
+        sub = lay.row(align=True)
+        sub.ui_units_x = 4.5
+        sub.prop(slot, "type", text="", icon="NONE")
+        sub = lay.row(align=True)
+        sub.prop(ts, "transform_pivot_point", text="", icon_only=True, **max_icons.ui("pivot", "PIVOT_MEDIAN"))
+    lay.menu("MAX_MT_scale_flyout", text="", icon="DOWNARROW_HLT")
 
     from . import snaps
     snaps.draw_toolbar(lay, context)

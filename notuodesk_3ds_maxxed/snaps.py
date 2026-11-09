@@ -754,6 +754,10 @@ def _tool(context):
 
 def orientation_basis(context):
     """World-space axes for the selected reference coordinate system."""
+    from . import max_rotate, max_gizmos
+    operation = max_gizmos.kind(context)
+    if operation in {"MOVE", "SCALE"} and getattr(max_rotate.settings(context),"use_"+operation.lower()+"_reference"):
+        return max_rotate.reference_basis(context,operation=operation)
     slot = context.scene.transform_orientation_slots[0]
     kind = slot.type
     ob = context.active_object
@@ -810,6 +814,9 @@ def constraint_session(context):
 
 
 def select_transform(context, kind):
+    if context.mode in {"OBJECT", "EDIT_MESH"}:
+        bpy.ops.wm.tool_set_by_id(name={"MOVE":"max.snap_move", "ROTATE":"max.rotate", "SCALE":"max.snap_scale"}[kind])
+        return
     from . import poly_constraints
     s = settings(context)
     use = context.scene.tool_settings.use_snap or s.override != "NONE"
@@ -856,7 +863,7 @@ def toggle(context, kind):
     ts.use_snap_scale = s.percent_snap
     active = _tool(context)
     for kind, name in (("MOVE", "move"), ("ROTATE", "rotate"), ("SCALE", "scale")):
-        if active in {"builtin." + name, "max.snap_" + name}:
+        if active in {"builtin." + name, "max.snap_" + name, "max." + name}:
             select_transform(context, kind)
             break
     clear_preview()
@@ -964,18 +971,34 @@ class MAX_OT_snap_transform(bpy.types.Operator):
     kind: EnumProperty(items=[("MOVE", "Move", ""), ("ROTATE", "Rotate", ""), ("SCALE", "Scale", "")])
     constraint_axis: BoolVectorProperty(size=3, default=(False, False, False), options={"SKIP_SAVE"})
     from_gizmo: BoolProperty(default=False, options={"SKIP_SAVE"})
+    screen_plane: BoolProperty(default=False, options={"SKIP_SAVE"})
 
     @classmethod
     def poll(cls, context):
         return context.area and context.area.type == "VIEW_3D" and context.mode in {"OBJECT", "EDIT_MESH"}
 
     def invoke(self, context, event):
-        # All three tools own snapping, input, clones and undo. The shared
-        # constraint session only projects their requested geometry.
+        from . import max_rotate, max_gizmos
+        self._closed = False
+        if self.kind == "ROTATE":
+            axes = [i for i, enabled in enumerate(self.constraint_axis) if enabled]
+            return bpy.ops.max.rotate("INVOKE_DEFAULT", handle="XYZ"[axes[0]] if len(axes) == 1 else "OFF")
+        if self.from_gizmo:
+            lock = "".join(c for c, enabled in zip("XYZ", self.constraint_axis) if enabled) or "XYZ"
+            if not self.screen_plane:
+                max_rotate.set_constraint(context, lock, self.kind)
+        else:
+            lock = max_rotate.constraint(context, self.kind)
+            self.constraint_axis = tuple(c in lock for c in "XYZ")
+        if self.kind == "MOVE" and context.scene.tool_settings.use_snap and not settings(context).axis_constraints:
+            self.constraint_axis = (False, False, False)
+        self.clone = None
         from .create import construction_frame
         self.region = context.region
         self.rv3d = context.region_data
         if self.rv3d is None:
+            return {"CANCELLED"}
+        if not context.selected_objects:
             return {"CANCELLED"}
         self.start_co = Vector((event.mouse_region_x, event.mouse_region_y))
         if event.value == "CLICK_DRAG":
@@ -983,15 +1006,11 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                                     event.mouse_prev_press_y - self.region.y))
         self.u, self.v, self.n = construction_frame(self.rv3d)
         self.plane = (Vector((0, 0, 0)), self.n)
-        self.constraint_tx = constraint_session(context)
+        self.poly_targets = constraint_session(context)
         self.normal_distance = None
-        self.clone_tx = None
-        if event.shift and not event.ctrl and not event.alt:
-            from . import shift_clone
-            self.clone_tx = shift_clone.ObjectClone(context) if context.mode == "OBJECT" else shift_clone.MeshClones(context)
-            shift_clone._active[context.window.as_pointer()] = (self.clone_tx, context.window_manager, None)
-            if self.constraint_tx is not None:
-                self.constraint_tx.retarget_clones(self.clone_tx)
+        self.clone = max_rotate.begin_clone(context) if event.shift and not event.ctrl and not event.alt else None
+        if self.poly_targets is not None and self.clone is not None:
+            self.poly_targets.retarget_clones(self.clone)
         self.objects = list(context.objects_in_mode_unique_data) if context.mode == "EDIT_MESH" else list(context.selected_objects)
         self.meshes = []
         self.matrices = []
@@ -1005,25 +1024,32 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 self.matrices.append((ob, ob.matrix_world.copy()))
         s = settings(context)
         enabled = {s.override} if s.override != "NONE" else {k for k, _ in TYPES if getattr(s, k)}
-        center = (_selection_center(context) if self.from_gizmo or self.constraint_tx is not None else
-                  sum((ob.matrix_world.translation for ob in self.objects), Vector()) / max(1, len(self.objects)))
+        center = max_rotate.transform_center(context, self.kind)
         hit = None
         if context.scene.tool_settings.use_snap or s.override not in {"NONE", "OFF"}:
             cursor = self._ray(self.start_co, self.plane[0], self.n)
             hit = _pick(context, self.region, self.rv3d, self.start_co,
                         cursor if cursor is not None else center, self.plane,
                         enabled, self.objects, source=True)
-        if hit:
+        if hit and self.kind != "SCALE":
             self.base = hit[0]
         elif self.objects:
             # Grid-only and angle/percent transforms start at the picked surface.
             view_n = self.rv3d.view_rotation @ Vector((0, 0, 1))
             self.base = self._ray(self.start_co, center, view_n) if self.kind == "MOVE" else center.copy()
             if self.base is None:
-                return self._finish(context, True)
+                return self._abort_invoke(context)
         else:
-            return self._finish(context, True)
+            return self._abort_invoke(context)
         self.orientation = orientation_basis(context)
+        rs = max_rotate.settings(context)
+        self.individual = (self.kind == "SCALE" and
+            (max_rotate.center_mode(context,"SCALE") == "PIVOT" or
+             (rs.use_scale_reference and rs.scale_reference == "LOCAL")))
+        self.object_pivots = {ob:matrix.translation.copy() for ob,matrix in self.matrices}
+        for ob, vertices in self.meshes:
+            if vertices:
+                self.object_pivots[ob] = sum((ob.matrix_world@co for _,co in vertices),Vector())/len(vertices)
         self.axis = None
         self.constraint_normal = None
         self._set_constraint(self.constraint_axis)
@@ -1035,11 +1061,24 @@ class MAX_OT_snap_transform(bpy.types.Operator):
         if self.constraint_normal is not None:
             self.drag_n = self.constraint_normal
         self.drag_origin = self._ray(self.start_co, self.base, self.drag_n)
+        if self.kind == "SCALE" and self.drag_origin is not None:
+            self.reference = self.drag_origin-self.pivot
         if self.drag_origin is None:
-            return self._finish(context, True)
+            return self._abort_invoke(context)
         context.window_manager.modal_handler_add(self)
+        max_gizmos.begin(context, self, self.kind, center, self.orientation, lock if lock != "XYZ" else "CENTER")
         context.workspace.status_text_set("Snap base picked. Drag to target. X/Y/Z: axis. Right-click: cancel")
+        if event.value == "CLICK_DRAG":
+            self._update(context, Vector((event.mouse_region_x, event.mouse_region_y)))
         return {"RUNNING_MODAL"}
+
+    def _abort_invoke(self, context):
+        from . import max_rotate
+        max_rotate.close_constraints(context,self.poly_targets,True)
+        if self.clone:
+            max_rotate.cancel_clone(context,self.clone)
+        self._closed = True
+        return {"CANCELLED"}
 
     def _set_constraint(self, flags):
         indices = [i for i, enabled in enumerate(flags) if enabled]
@@ -1052,24 +1091,28 @@ class MAX_OT_snap_transform(bpy.types.Operator):
         return intersect_line_plane(origin, origin + direction, point, normal)
 
     def _apply(self, context, matrix):
+        def individual_matrix(ob):
+            if not self.individual:
+                return matrix
+            offset = self.object_pivots[ob]-self.pivot
+            return Matrix.Translation(offset) @ matrix @ Matrix.Translation(-offset)
+        targets = {}
         for ob, saved in self.matrices:
-            ob.matrix_world = matrix @ saved
-        tx = getattr(self, "constraint_tx", None)
-        if tx is not None:
-            if self.kind == "MOVE":
-                tx.apply_targets({}, move_delta=matrix.translation, normal_distance=self.normal_distance)
-            else:
-                tx.apply_targets({ob: {index: matrix @ (ob.matrix_world @ saved)
-                                      for index, saved in vertices} for ob, vertices in self.meshes})
-            context.view_layer.update()
-            return
+            ob.matrix_world = individual_matrix(ob) @ saved
         for ob, vertices in self.meshes:
             bm = bmesh.from_edit_mesh(ob.data)
             bm.verts.ensure_lookup_table()
-            local = ob.matrix_world.inverted_safe() @ matrix @ ob.matrix_world
-            for index, saved in vertices:
-                bm.verts[index].co = local @ saved
+            local = ob.matrix_world.inverted_safe() @ individual_matrix(ob) @ ob.matrix_world
+            targets[ob] = {index:ob.matrix_world @ local @ saved for index,saved in vertices}
+            if self.poly_targets is None:
+                for index, saved in vertices:
+                    bm.verts[index].co = local @ saved
             bmesh.update_edit_mesh(ob.data, loop_triangles=False, destructive=False)
+        if self.poly_targets is not None:
+            if self.kind == "MOVE":
+                self.poly_targets.apply_targets({}, move_delta=matrix.translation, normal_distance=self.normal_distance)
+            else:
+                self.poly_targets.apply_targets(targets)
         context.view_layer.update()
 
     def _update(self, context, co):
@@ -1098,7 +1141,7 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 delta -= self.constraint_normal * delta.dot(self.constraint_normal)
             if self.number not in {"", "-", ".", "-."}:
                 delta = (self.axis if self.axis is not None else self.u) * float(self.number)
-            tx = self.constraint_tx
+            tx = self.poly_targets
             if tx is not None:
                 self.normal_distance = delta.dot(tx.normal)
                 if tx.normal_degenerate or abs(tx.normal.dot(self.view_n)) > .95:
@@ -1108,6 +1151,7 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 if self.number not in {"", "-", ".", "-."}:
                     self.normal_distance = float(self.number)
             mat = Matrix.Translation(delta)
+            self.display_center = self.gizmo_pivot + delta
         else:
             axis = self.axis if self.axis is not None else self.view_n
             if self.kind == "ROTATE":
@@ -1130,49 +1174,53 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 if self.number not in {"", "-", ".", "-."}:
                     factor = float(self.number) / 100
                 factor = snap_scale(s, factor)
+                self.scale_factor = factor
                 if self.constraint_normal is not None:
                     n = self.constraint_normal
                     mat = Matrix(tuple(tuple((factor if i == j else 0) + (1 - factor) * n[i] * n[j]
                                              for j in range(3)) for i in range(3))).to_4x4()
                 else:
                     mat = Matrix.Scale(factor, 4, self.axis) if self.axis is not None else Matrix.Scale(factor, 4)
+                from . import max_rotate
+                if max_rotate.settings(context).scale_mode == "SQUASH":
+                    mat = max_rotate.squash_matrix(factor, self.constraint_axis, self.orientation).to_4x4()
+                self.display_basis = mat.to_3x3() @ self.orientation
             mat = Matrix.Translation(self.pivot) @ mat @ Matrix.Translation(-self.pivot)
         self._apply(context, mat)
         context.area.tag_redraw()
 
     def _finish(self, context, cancel=False):
-        constraint_tx = getattr(self, "constraint_tx", None)
+        from . import max_gizmos, max_rotate
+        if self._closed:
+            return {"CANCELLED"}
+        self._closed = True
+        max_gizmos.finish(self.region)
+        max_rotate.close_constraints(context, self.poly_targets, cancel)
         if cancel:
-            tx = getattr(self, "clone_tx", None)
-            if constraint_tx is not None:
-                constraint_tx.cancel()
-            elif tx is None or tx.valid():
+            if self.poly_targets is None and (self.clone is None or self.clone.valid()):
                 self._apply(context, Matrix.Identity(4))
+            if self.clone:
+                max_rotate.cancel_clone(context,self.clone)
         else:
-            if constraint_tx is not None:
-                constraint_tx.finish()
             consume_override(context)
+            if self.clone:
+                max_rotate.defer_clone(context, self.clone)
+            else:
+                bpy.ops.ed.undo_push(message="Move" if self.kind == "MOVE" else "Scale")
         clear_preview(self.region)
-        tx = getattr(self, "clone_tx", None)
-        if tx is not None:
-            from . import shift_clone
-            shift_clone.finish_snap_clone(context, tx, cancel=cancel)
-            self.clone_tx = None
-        elif not cancel:
-            bpy.ops.ed.undo_push(message="Snap " + self.kind.title())
         context.workspace.status_text_set(None)
         context.area.tag_redraw()
-        return {"CANCELLED"} if cancel else {"FINISHED"}
+        return {"CANCELLED"} if cancel or self.clone else {"FINISHED"}
 
     def cancel(self, context):
         self._finish(context, True)
 
     def modal(self, context, event):
-        constraint_tx = getattr(self, "constraint_tx", None)
-        if constraint_tx is not None and (constraint_tx.closed or context.mode != "EDIT_MESH"):
+        if self._closed:
+            return {"CANCELLED"}
+        if self.poly_targets is not None and (self.poly_targets.closed or context.mode != "EDIT_MESH"):
             return self._finish(context, True)
-        tx = getattr(self, "clone_tx", None)
-        if tx is not None and not tx.valid():
+        if self.clone is not None and not self.clone.valid():
             return self._finish(context, True)
         co = Vector((event.mouse_region_x, event.mouse_region_y))
         if override_event(self, context, event):
@@ -1190,6 +1238,13 @@ class MAX_OT_snap_transform(bpy.types.Operator):
             self._update(context, co)
             return self._finish(context)
         if event.value == "PRESS":
+            if event.type in {"F5", "F6", "F7", "F8"}:
+                from . import max_rotate
+                lock = max_rotate.set_constraint(context, {"F5":"X", "F6":"Y", "F7":"Z", "F8":"CYCLE"}[event.type], self.kind)
+                self._set_constraint(tuple(c in lock for c in "XYZ"))
+                self.drag_n = self.constraint_normal if self.constraint_normal is not None else self.view_n
+                self.drag_origin = self._ray(self.start_co, self.base, self.drag_n)
+                self.handle = lock
             if event.type in {"X", "Y", "Z"}:
                 index = "XYZ".index(event.type)
                 self._set_constraint(tuple((i != index) if event.shift else (i == index) for i in range(3)))
@@ -1209,11 +1264,14 @@ class MAX_OT_snap_transform(bpy.types.Operator):
             self._update(context, co)
         return {"RUNNING_MODAL"}
 
+    def cancel(self, context):
+        self._finish(context, True)
+
 
 class _SnapTool:
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"
-    bl_widget = "MAX_GGT_snap_transform"
+    bl_widget = "MAX_GGT_max_transform"
     bl_options = set()
 
 
@@ -1232,7 +1290,6 @@ def _make_tool(name, label, kind, mode):
 
 tools = tuple(_make_tool(name, label, kind, mode) for mode in ("OBJECT", "EDIT_MESH")
               for name, label, kind in (("move", "Select and Move", "MOVE"),
-                                        ("rotate", "Select and Rotate", "ROTATE"),
                                         ("scale", "Select and Uniform Scale", "SCALE")))
 
 
@@ -1245,7 +1302,7 @@ class MAX_GGT_snap_transform(bpy.types.GizmoGroup):
 
     @classmethod
     def poll(cls, context):
-        return _tool(context).startswith("max.snap_") and bool(context.selected_objects)
+        return False  # max_gizmos draws and picks the shared Max transform set.
 
     def setup(self, context):
         self.handles = []

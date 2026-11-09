@@ -42,6 +42,7 @@ from . import xview
 from . import editable_poly
 from . import snaps
 from . import symmetry
+from . import max_rotate, max_gizmos
 
 
 _prefs_cache = [None]
@@ -190,6 +191,7 @@ _classes = (
     + loft.classes
     + xview.classes
     + symmetry.classes
+    + max_rotate.classes + max_gizmos.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
     + max_export.classes
 )
@@ -219,7 +221,7 @@ def _unlock_quads_once():
 def register():
     max_icons.register()
     for cls in _classes:
-        if not shift_clone.retained_class(cls):
+        if not shift_clone.retained_class(cls) and not max_rotate.retained_class(cls):
             bpy.utils.register_class(cls)
     shift_clone.register_macros()
     wm = bpy.types.WindowManager
@@ -236,6 +238,8 @@ def register():
     freezing.register_props()
     plane_plus.register_props()
     snaps.register_props()
+    max_rotate.register()
+    max_gizmos.register()
     ui_panel.register_props()
     vray.register_props()
     mtl_editor.register_props()
@@ -268,6 +272,7 @@ def unregister():
     viewcube.unregister()
     editable_poly.poly_modal.teardown()
     editable_poly.target_weld.unregister_handlers()
+    max_gizmos.cancel_all()
     _prefs_cache[0] = None
     shift_clone.unregister()
     keymap.unregister_keymaps()
@@ -287,6 +292,8 @@ def unregister():
     ui_panel.unregister_props()
     freezing.unregister_props()
     plane_plus.unregister_props()
+    max_gizmos.unregister()
+    max_rotate.unregister()
     snaps.unregister_props()
     prims.unregister_props()
     keyboard_entry.unregister_props()
@@ -296,6 +303,6 @@ def unregister():
         if hasattr(wm, prop):
             delattr(wm, prop)
     for cls in reversed(_classes):
-        if not shift_clone.defer_unregister(cls):
+        if not shift_clone.defer_unregister(cls) and not max_rotate.defer_unregister(cls):
             bpy.utils.unregister_class(cls)
     max_icons.unregister()

@@ -359,11 +359,23 @@ Spline objects have **Rendering** and **Interpolation** rollouts in Create and M
 
 S toggles positional snaps. The toolbar flyout chooses 2D, 2.5D or 3D. Grid Points is the initial snap type. Grid snapping is magnetic: points stay free outside the 20-pixel Snap Radius. Primitive bases and heights use the same rule, so they no longer jump in whole-unit increments.
 
-With snaps on, W, E and R select tools that drag from a picked snap base. Move a box by its corner onto another corner, or move selected Editable Poly vertices onto unselected vertices in the same mesh or another object. Rotate and Scale use the picked point as their center. Axis and plane gizmos follow the selected reference coordinate system. A cyan marker shows the target and a rubber band connects it to the base. Release commits. Right-click cancels the drag.
+W, E and R select the shared Max Move, Rotate and Scale gizmos. Move a box by its corner onto another corner, or move selected Editable Poly vertices onto unselected vertices in the same mesh or another object. Move and Scale retain their magnetic snap base. Rotate uses its Use Center setting and ignores positional snap targets. A cyan marker shows positional snap targets and a rubber band connects them to the base. Release commits. Right-click cancels the drag.
 
 Right-click a snap toolbar button for **Grid and Snap Settings**. Its Snaps, Options, Home Grid and User Grids tabs use Max's labels. The available targets are Grid Points, Pivot, Perpendicular on straight segments, Bounding Box, Vertex, Endpoint, Edge/Segment, Midpoint, Face, Center Face and Grid Lines. Unsupported settings are greyed out with a reason. Snap settings live in the add-on preferences, as Max stores them in its user settings rather than the scene file.
 
 Shift+right-click opens the snap quad, including during a transform or primitive creation. Release the left button, choose an override, then press it again to resume the current drag. Standard chooses a one-shot override. None disables snaps for the next action, and Last repeats the previous override. Alt+S cycles through enabled snap types. The regular checkboxes return after the action. A controls Angle Snap, initially 5 degrees. Ctrl+Shift+P controls Percent Snap, initially 10 percent. Spinner Snap quantizes changed primitive parameter fields in the Command Panel. Grid Spacing and Major Lines map to Blender's grid overlay controls. 2D accepts geometry on the active construction plane and rejects off-plane targets.
+
+## Rotate and transform gizmos
+
+E selects Linear Roll rotation. Drag an axis ring along its tangent, at 0.5 degrees per pixel. The grey outer ring rotates in the screen plane. Drag inside the sphere for free rotation. A turns Angle Snap on or off, including during a drag. Its default increment is 5 degrees. Angle Snap works with S on or off and never pulls the rotation toward a vertex, edge, face or grid point. Percent Snap stays separate.
+
+During an axis drag, a translucent slice shows the direction and amount of rotation. Its colour follows the axis, as in Autodesk's red X example. Complete turns overlap. Yellow tangent guides and the live X/Y/Z angle readout follow the stepped angle. Right-click or Esc restores the starting transform. A completed rotation uses one undo step. Shift-drag opens Clone Options or Clone Part of Mesh.
+
+The transform toolbar offers View, Screen, World, Local, Parent, Grid, Working, Gimbal, Local Aligned and Pick reference systems. Pick accepts a viewport click or H and remembers four objects. Use Center is an icon flyout. Local disables it and uses individual pivots. F12 toggles a floating Rotate Transform Type-In window. Absolute fields and Offset fields update the viewport live. Offset fields reset to zero after each edit. Angle Snap does not round typed values.
+
+Move has projected cone arrowheads and connected plane corners. Scale has point ends and nested triangular handles. The small centre tripods are muted, with colour on the locked axes. Rotate's rings retain their drawing. The Scale flyout also offers Non-Uniform Scale and Squash. Picking an axis or plane keeps that constraint for later drags on the selection. F5, F6 and F7 select X, Y and Z. F8 cycles XY, YZ and ZX. Max stores these locks separately for each transform and for Object and sub-object modes. Locked handles remain yellow. With positional snaps on, Move respects the lock only when Use Axis Constraints in Snaps is on. Plus and minus change the shared gizmo size. X hides or shows all three.
+
+Customize > Gizmos Preferences controls labels, multiple object gizmos, relative tool sizes, plane handles, the Rotate tripod, free rotation, screen handle, pie slice and angle data. Linear Roll remains the default. Circular Crank uses a circular drag and switches to Linear Roll for nearly edge-on rings. Legacy R4 offers axis-directed dragging. Constant keeps reference coordinates across tools. Disabling the add-on cancels live previews, including Shift clones and Edit Mesh changes.
 
 ## Hotkeys
 
@@ -385,6 +397,8 @@ Shift+right-click opens the snap quad, including during a transform or primitive
 | Ctrl+Shift+P | Percent Snap |
 | Shift+right-click / Alt+S | Snap quad / Cycle snap override |
 | Alt+F3 | Use Axis Constraints in Snaps |
+| F5 / F6 / F7 / F8 | X / Y / Z / Cycle plane constraint |
+| + / - | Grow / shrink transform gizmos |
 | N / K | Auto Key / Set Key |
 | Ctrl+V / Ctrl+C | Clone / Camera from view |
 | Shift+drag with W / E / R | Clone with Move / Rotate / Scale |
@@ -537,6 +551,11 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 - Disabling the add-on removes clone previews immediately. An open clone dialog stays until you dismiss it.
 - There's no Teapot or Ribbon.
 - The ViewCube uses a raster label atlas and GPU artwork rather than Autodesk's assets. It has no Fit-to-View on View Change or adjustable compass north. Its smaller default size and permanent transparency are deliberate preferences, rather than Max's stock settings. Tiny is unlabeled, as in Max.
+- Free rotation uses a virtual sphere whose grabbed position affects the rotation. Angle Snap quantizes its reference Euler components. Max's internal trackball, free-snap rounding and Legacy R4 sensitivity have not been compared against a running Max instance. Local Aligned uses the object's frame. Max's per-sub-object normal interpretation and animated controllers remain unverified.
+- Gizmo colours, proportions and slice transparency follow Autodesk's documentation images. Exact GPU antialiasing and undocumented opacity values are estimates. Multiple gizmos cover individual object pivots. Independent sub-object tripods are not implemented.
+- Rotate Transform Type-In and Gizmos Preferences use floating Blender editor windows. Their controls occupy the sidebar, and Blender supplies the frame and canvas. Absolute sub-object rotation uses the object's frame. Local sub-object Type-In exposes offsets only.
+- Rotate deliberately ignores geometry snap targets, including Max's documented ability to use a snapped point as a rotation pivot. This keeps Angle Snap independent of S.
+- Shift-drag reuses the shared cloning module when installed. The standalone fallback provides Copy, Instance, a one-way Reference geometry dependency, mesh separation/naming and Edge/Border extension. Its dialog frame and hierarchy controller options differ from the shared module.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 - Keyboard Entry uses the existing viewport construction planes. It has no custom grid objects or AutoGrid. GeoSphere keeps Blender's icosphere tessellation.
 - Keyboard Entry uses Blender's numeric widgets and unit formatting. Spinner arrows and unit spacing differ from Max.
