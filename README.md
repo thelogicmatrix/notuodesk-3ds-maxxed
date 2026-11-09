@@ -154,7 +154,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 **ViewCube.** Alt+Ctrl+V shows or hides it. Alt+Ctrl+H returns Home, as in Max 2026. The chamfered cube has lit faces, bold labels mapped onto the faces, and a broad blue-grey compass band. Face views have inward-pointing adjacent-view arrows and curved roll arrows at the top right. Hover targets turn blue with a yellow outline. It starts smaller than Max's default, at 80% opacity when active and 50% when inactive. Preferences and right-click **Configure** offer Tiny, Small, Normal and Large sizes, inactive opacity up to 70%, Snap to Closest View and Keep Scene Upright. View changes use Blender's Smooth View duration. Set Current View as Home saves the rotation, projection, centre and distance in the scene. Set Current View as Front changes the cube's reference orientation, and Reset Front restores the default. Camera views hide the cube. Turning it off restores Blender's navigation gizmo.
 
-Keep Scene Upright also controls clicked views. Turn it off to carry the current roll into an edge or corner view. Dark text and outlines use slightly higher opacity than the faces so they stay readable over bright viewports. Opening a saved file rebuilds the cube's drawing resources.
+Keep Scene Upright also controls clicked views. Turn it off to carry the current roll into an edge or corner view. Dark text and outlines use slightly higher opacity than the faces so they stay readable over bright viewports. Opening a saved file rebuilds the cube's drawing resources. Files keep each viewport's original navigation gizmo setting, so turning the ViewCube or add-on off after reopening restores that setting.
 
 ## Known differences from 3ds Max
 

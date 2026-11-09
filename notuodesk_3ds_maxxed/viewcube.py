@@ -771,6 +771,22 @@ def _load_pre(_):
 
 
 @persistent
+def _save_pre(_):
+    # Serialize the user's setting, not our temporary replacement. The native
+    # space field follows its viewport across reloads without storing RNA.
+    for space, original in _gizmos.values():
+        try:
+            space.show_gizmo_navigate = original
+        except ReferenceError:
+            pass
+
+
+@persistent
+def _save_post(_):
+    sync_gizmos()
+
+
+@persistent
 def _load_post(_):
     global _hover, _menu_target
     # File loading replaces Images, areas and regions. Never retain their RNA
@@ -787,6 +803,8 @@ def register():
     _enabled = True
     bpy.app.handlers.load_pre.append(_load_pre)
     bpy.app.handlers.load_post.append(_load_post)
+    bpy.app.handlers.save_pre.append(_save_pre)
+    bpy.app.handlers.save_post.append(_save_post)
     if bpy.app.background:
         return
     _handle = bpy.types.SpaceView3D.draw_handler_add(_draw, (), 'WINDOW', 'POST_PIXEL')
@@ -812,7 +830,9 @@ def unregister():
     global _handle, _enabled, _hover, _menu_target
     _enabled = False
     for handlers, callback in ((bpy.app.handlers.load_pre, _load_pre),
-                               (bpy.app.handlers.load_post, _load_post)):
+                               (bpy.app.handlers.load_post, _load_post),
+                               (bpy.app.handlers.save_pre, _save_pre),
+                               (bpy.app.handlers.save_post, _save_post)):
         if callback in handlers:
             handlers.remove(callback)
     if bpy.app.timers.is_registered(_maintain):
