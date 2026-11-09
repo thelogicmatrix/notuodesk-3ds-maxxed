@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>geometry</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<circle cx="16" cy="16" r="12" stroke="#dedede" fill="none"/><ellipse cx="16" cy="16" rx="6" ry="12" stroke="#dedede"/><ellipse cx="16" cy="16" rx="12" ry="4" stroke="#dedede"/>
+<desc>Filled round geometry category</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<circle cx="8" cy="8" r="5.5" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

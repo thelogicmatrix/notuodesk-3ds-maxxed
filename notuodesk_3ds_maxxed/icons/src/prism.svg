@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>prism</title>
-<g fill="none" stroke="#dedede" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M4 27 L14 8 L22 27 Z M14 8 L21 3 L29 22 L22 27 M4 27 L11 22"/>
-<path d="M11 22 L21 3 M11 22 H29" stroke="#999999" stroke-width="1" stroke-dasharray="2 3"/>
+<desc>Triangular prism with depth</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,11 7,2 14,10 10,14" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M7 2 10 14 M2 11 10 14 M7 2 12 1 15 9 14 10" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

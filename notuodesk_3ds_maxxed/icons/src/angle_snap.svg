@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>angle snap</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 26 H29 M5 26 L22 5 M13 26 A8 8 0 0 0 10 20" stroke="#78b7ce" fill="none" stroke-width="2"/><g transform="translate(15 12) scale(.5)"><path d="M7 7 V19 A9 9 0 0 0 25 19 V7 H19 V19 A3 3 0 0 1 13 19 V7 Z" stroke="#dedede" fill="none" stroke-width="2"/><path d="M7 11 H13 M19 11 H25" stroke="#ead078" fill="none" stroke-width="3"/></g>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>angle_snap</title>
+<desc>Open angle with an arc and tilted gold magnet</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M2 13 H14 M2 13 10 5 M6 9 Q8 10 8 13" fill="none" stroke="#d2d4d5" stroke-width="2"/><path d="M9 5 11 3 Q13 1 15 3 Q17 5 15 7 L13 9" fill="none" stroke="#efb83d" stroke-width="2"/><path d="M9 5 10 4 M13 9 14 8" fill="none" stroke="#d2d4d5" stroke-width="2"/>
 </g>
 </svg>

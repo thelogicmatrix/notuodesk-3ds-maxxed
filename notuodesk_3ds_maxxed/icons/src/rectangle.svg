@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>rectangle</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<rect x="4" y="7" width="24" height="18" stroke="#dedede" fill="none"/>
+<desc>Rectangle spline outline</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="2.5" y="4.5" width="11" height="7" rx="0" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

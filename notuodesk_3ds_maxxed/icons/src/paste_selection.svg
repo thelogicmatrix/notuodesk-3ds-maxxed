@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>paste_selection</title>
+<desc>Paste selection mesh metaphor</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="3.5" y="3.5" width="9" height="11" rx="0" fill="none" stroke="#d2d4d5" stroke-width="1"/><rect x="6" y="1.5" width="4" height="3" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
+</g>
+</svg>

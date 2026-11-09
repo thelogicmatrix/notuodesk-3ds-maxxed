@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>create</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M16 5 V27 M5 16 H27" stroke="#dedede" fill="none" stroke-width="2.5"/>
+<desc>Simple filled plus</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="7" y="1" width="2" height="14" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="1" y="7" width="14" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_hold_boundary</title>
+<desc>Pins along an open boundary edge (hold boundary)</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M2.5 12.5 V3.5 H13.5 M7.5 3.5 V12.5 M2.5 8.5 H13.5" fill="none" stroke="#8d9295" stroke-width="1"/><rect x="1" y="2" width="3" height="3" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="6" y="2" width="3" height="3" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="12" y="2" width="3" height="3" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
+</g>
+</svg>

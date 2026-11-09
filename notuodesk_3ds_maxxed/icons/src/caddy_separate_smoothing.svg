@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_separate_smoothing</title>
+<desc>Two smooth patches separated by an open gap (separate smoothing)</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M1 7 Q1 2 6 2 V13 Q1 13 1 7 Z" fill="#d2d4d5" stroke="none" stroke-width="0"/><path d="M10 2 Q15 2 15 7 Q15 13 10 13 Z" fill="#50b9bf" stroke="none" stroke-width="0"/>
+</g>
+</svg>

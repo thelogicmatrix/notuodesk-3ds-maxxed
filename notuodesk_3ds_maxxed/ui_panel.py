@@ -160,8 +160,8 @@ class MAX_PT_command_panel(Panel):
             split.prop(ob, "color", text="")
             row = layout.row(align=True)
             row.operator_context = "INVOKE_DEFAULT"
-            row.operator("max.modifier_search", text="Modifier List", **max_icons.ui("search", "VIEWZOOM"))
-            row.menu("MAX_MT_modifier_list", text="", **max_icons.ui("modifier_list", "COLLAPSEMENU"))
+            row.operator("max.modifier_search", text="Modifier List")
+            row.menu("MAX_MT_modifier_list", text="")
 
             col = layout.column(align=True)
             if not symmetry.draw_stack(col, context, ob):
@@ -169,8 +169,7 @@ class MAX_PT_command_panel(Panel):
                                   rows=3, maxrows=8, sort_lock=True)
             base = col.row(align=True)
             no_active = _stack_get(ob) < 0
-            base.operator("max.modifier_set_active", text=base_name(ob), depress=no_active,
-                          **max_icons.ui("editable_poly" if ob.type == "MESH" else "shapes", "MESH_DATA" if ob.type == "MESH" else "OBJECT_DATA")).name = ""
+            base.operator("max.modifier_set_active", text=base_name(ob), depress=no_active).name = ""
 
             # stack tool icons
             active = ob.modifiers.active if _stack_get(ob) >= 0 else None
@@ -375,7 +374,7 @@ def create_object_type(layout, context):
     vray_sub = wm.max_create_sub == "VRAY" and len(SUBTYPES[cat]) > 1
     if cat == "GEOMETRY" and wm.max_create_sub == "JOKERMARTINI":
         from . import plane_plus
-        g.operator("max.plane_plus", text="PlanePlus", depress=plane_plus.MAX_OT_plane_plus.active, **max_icons.ui("plane", "MESH_PLANE"))
+        g.operator("max.plane_plus", text="PlanePlus", depress=plane_plus.MAX_OT_plane_plus.active)
     elif vray_sub and cat == "GEOMETRY":
         g.operator("max.vray_plane", text="VRayPlane")
     elif vray_sub and cat == "LIGHTS":
@@ -385,7 +384,7 @@ def create_object_type(layout, context):
     elif vray_sub and cat == "CAMERAS":
         g.operator("max.vray_camera", text="VRayPhysicalCamera")
     elif cat == "GEOMETRY" and wm.max_create_sub == "COMPOUND":
-        g.operator("max.loft_start", text="Loft", depress=wm.max_loft_active, **max_icons.ui("geometry", "OUTLINER_OB_MESH"))
+        g.operator("max.loft_start", text="Loft", depress=wm.max_loft_active)
     elif cat == "GEOMETRY":
         kinds = (prims.extended_primitives.DISPLAY_ORDER if wm.max_create_sub == "EXTENDED"
                  else prims.PRIMITIVES)
@@ -604,8 +603,8 @@ def motion_anim(layout, context):
     scene = context.scene
     ts = context.tool_settings
     row = layout.row(align=True)
-    row.prop(ts, "use_keyframe_insert_auto", text="Auto Key", toggle=True, **max_icons.ui("record", "REC"))
-    row.operator("max.set_key", text="Set Key", **max_icons.ui("key", "KEY_HLT"))
+    row.prop(ts, "use_keyframe_insert_auto", text="Auto Key", toggle=True)
+    row.operator("max.set_key", text="Set Key")
     layout.operator("anim.keyframe_delete_v3d", text="Delete Keys")
     col = _split_col(layout)
     col.prop(scene, "frame_current", text="Frame")
@@ -641,10 +640,10 @@ def disp_hide(layout, context):
 @rollout("Freeze", {"DISPLAY"}, 31)
 def disp_freeze(layout, context):
     g = _grid(layout)
-    g.operator("max.object_cmd", text="Freeze Selection", icon="LOCKED").cmd = "FREEZE"
-    g.operator("max.object_cmd", text="Unfreeze All", icon="UNLOCKED").cmd = "UNFREEZE"
-    g.operator("max.unfreeze_by_name", text="Unfreeze by Name...", **max_icons.ui("select_by_name", "VIEWZOOM"))
-    g.operator("max.unfreeze_by_hit", text="Unfreeze by Hit", **max_icons.ui("select_object", "RESTRICT_SELECT_OFF"))
+    g.operator("max.object_cmd", text="Freeze Selection").cmd = "FREEZE"
+    g.operator("max.object_cmd", text="Unfreeze All").cmd = "UNFREEZE"
+    g.operator("max.unfreeze_by_name", text="Unfreeze by Name...")
+    g.operator("max.unfreeze_by_hit", text="Unfreeze by Hit")
 
 
 @rollout("Display Properties", {"DISPLAY"}, 32)

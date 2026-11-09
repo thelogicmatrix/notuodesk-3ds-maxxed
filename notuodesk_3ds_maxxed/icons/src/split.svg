@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>split</title>
+<desc>Split mesh metaphor</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1.5" y="2.5" width="5" height="11" rx="0" fill="none" stroke="#d2d4d5" stroke-width="1"/><rect x="9.5" y="2.5" width="5" height="11" rx="0" fill="none" stroke="#50b9bf" stroke-width="1"/><path d="M7.5 1 V15" fill="none" stroke="#8d9295" stroke-width="1" stroke-dasharray="1 1"/>
+</g>
+</svg>

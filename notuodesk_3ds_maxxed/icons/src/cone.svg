@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>cone</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M16 3 L4 25 C4 31 28 31 28 25 Z" stroke="#dedede" fill="none" stroke-width="2"/><path d="M4 25 C4 20 28 20 28 25" stroke="#999999" fill="none" stroke-width="1"/>
+<desc>Frustum cone with separate cap and base</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M2 12 6 2 H10 L14 12 Z" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><ellipse cx="8" cy="12" rx="6" ry="2" fill="#858b8e" stroke="#d2d4d5" stroke-width="1"/><ellipse cx="8" cy="2.5" rx="2" ry="0.8" fill="#a4a9ac" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>mtl pick</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M19 4 Q24 -1 29 4 Q33 8 27 13 L22 18 L14 10 Z M14 10 L4 23 L3 29 L9 28 L22 18 M10 16 L16 22" stroke="#78b7ce" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>mtl_pick</title>
+<desc>Material eyedropper with diagonal stem</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M3 12 11 4" fill="none" stroke="#d2d4d5" stroke-width="2"/><path d="M9 3 12 6 M2 13 4 14" fill="none" stroke="#d2d4d5" stroke-width="1"/><polygon points="10,2 12,1 15,4 14,6" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

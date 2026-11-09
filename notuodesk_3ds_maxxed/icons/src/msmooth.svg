@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>msmooth</title>
+<desc>Msmooth mesh metaphor</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="2.5" y="2.5" width="11" height="11" rx="3" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M8 2.5 V13.5 M2.5 8 H13.5" fill="none" stroke="#50b9bf" stroke-width="1"/>
+</g>
+</svg>

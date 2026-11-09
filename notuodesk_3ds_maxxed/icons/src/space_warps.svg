@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>space warps</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M3 8 Q9 2 16 8 T29 8 M3 16 Q9 10 16 16 T29 16 M3 24 Q9 18 16 24 T29 24" stroke="#dedede" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>space_warps</title>
+<desc>Three wavy horizontal bands</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M1 4 Q4 1 8 4 T15 4" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M1 8 Q4 5 8 8 T15 8" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M1 12 Q4 9 8 12 T15 12" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

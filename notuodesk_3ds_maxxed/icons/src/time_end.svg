@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>time_end</title>
+<desc>Two forward triangles and end bar</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="13" y="2" width="2" height="12" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="2,3 7,8 2,13" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="7,3 12,8 7,13" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+</g>
+</svg>

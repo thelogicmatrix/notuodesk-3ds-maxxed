@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>ops.transform.translate</title>
+<desc>Four-way Move tool cross</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="8,1 11,4 9,4 9,7 12,7 12,5 15,8 12,11 12,9 9,9 9,12 11,12 8,15 5,12 7,12 7,9 4,9 4,11 1,8 4,5 4,7 7,7 7,4 5,4" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+</g>
+</svg>

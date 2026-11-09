@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>unfreeze</title>
+<desc>Unlocked object symbol</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="3.5" y="7.5" width="9" height="7" rx="0" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M6 7 V4 C6 0 12 0 12 4" fill="none" stroke="#d2d4d5" stroke-width="1"/>
+</g>
+</svg>

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>bone</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M6 5 L13 6 L27 25 L24 29 L8 14 L3 13 Z M8 14 L13 6" stroke="#78b7ce" fill="none" stroke-width="2"/>
+<desc>Tapered bone with distinct joints</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="3,3 6,2 13,11 12,14 9,13 2,6" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M3 3 9 8 13 11 M6 2 9 8 12 14" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

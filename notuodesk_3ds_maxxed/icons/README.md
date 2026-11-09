@@ -2,7 +2,7 @@
 
 These SVGs were drawn from scratch for NotuoDesk 3ds Maxxed. They use familiar
 modeling symbols, light grey strokes, transparent backgrounds and sparse accent
-colors. The Modify tab has a colored arch. The Render buttons have a teapot.
+colors. Modify has a curved segment in a cyan control cage. Render has a teapot.
 The color choices belong to this set and are not measured Autodesk theme values.
 
 Extended Primitive artwork covers Hedra, Torus Knot, ChamferBox, ChamferCyl,
@@ -15,9 +15,10 @@ add-on. See the repository's LICENSE. Every SVG also carries the SPDX identifier
 
 ## Provenance
 
-No Autodesk icon file was downloaded, copied, traced, extracted or embedded.
-No Max installation files were read. The supplied reference pack was inspected
-only for symbols and placement. It is not included in this directory.
+No Autodesk artwork was copied, traced, extracted or embedded in these assets.
+Official Help images were downloaded into the external review sandbox for
+visual study. No Max installation files were read. The supplied reference pack
+and those images informed symbols and placement. Neither ships in the add-on.
 
 Visual references in the external `max-ui-reference/images/` pack were
 `interface-overview.png`, `create-primitives.png`, `edit-poly-stack.png` and
@@ -26,18 +27,24 @@ Visual references in the external `max-ui-reference/images/` pack were
 `nathan-setup.md`.
 
 The SVG paths, circles, ellipses and rectangles are the editable source. Their
-32 by 32 coordinate system uses strokes near two units wide. Numerals on snap
+16 by 16 coordinate system uses strokes near one unit wide. Numerals on snap
 icons are original paths. Sources contain no linked images, fonts or external
 resources. PNGs are transparent RGBA renders at 32px and 64px (`@2x`).
 
 ## Rebuild
 
-From the repository root on Reborn:
+From the repository root, using a Python virtual environment:
 
 ```powershell
-uv pip install --python C:/Users/thelo/.local/venvs/data/Scripts/python.exe resvg-py==0.5.0 Pillow
-& C:/Users/thelo/.local/venvs/data/Scripts/python.exe tools/build_icons.py --contact-sheet icons-contact.png
+python -m pip install resvg-py==0.5.0 Pillow
+python tools/build_icons.py --contact-sheet icons-contact.png
 ```
+
+`tools/draw_max_icons_v2.py` authors the SVG family and `src/catalog.json`.
+The catalog gives every asset a Max placement, presentation, visual metaphor
+and Autodesk 2026 reference URL. `tools/preview_max_icons_v2.py --out <sandbox>`
+compares these drawings with a frozen pre-change `<sandbox>/baseline` folder.
+It renders native 16, 20 and 32px sizes and 24, 30 and 48px for 150% scaling.
 
 The renderer reads only the SVG sources. Pillow is needed only for the optional
 contact sheet. Neither dependency ships with the add-on or runs inside Blender.
@@ -71,14 +78,35 @@ does not allocate GUI icon IDs. Positive IDs and visible drawing need a GUI run.
 
 ## Scope
 
-The set includes icons for Max controls that this add-on does not yet display.
+The set has 273 drawings, including all 125 previous names. It includes assets
+for Max controls that this add-on does not yet display.
 No new controls or tool behavior are introduced. The existing quad menus have
 no built-in icon arguments to replace. Material previews remain live Blender
 previews. Blender's native material preview-type, viewport shading and overlay
 buttons retain their built-in enum icons.
 
-`edit_mode` depicts a mesh and pencil for Blender's modifier edit-mode toggle.
-`modifier_list` depicts list rows and a dropdown arrow for the Modifier List
-menu. `show_end_result` and `configure_modifier_sets` remain unused assets for
-their corresponding Max controls. Motion uses overlapping discs and motion
-trails. The 2D, 2.5D and 3D snap icons share a compact magnet and large numerals.
+Move uses a solid four-way cross. Create categories use Max's disc, overlapping
+shapes, bulb, camera and set-square metaphors. Each sub-object icon has the same
+small mesh with a different component highlighted. Modifier visibility uses eyes.
+Settings buttons use inset squares. Snaps use large numerals with a small gold
+magnet at the upper right. These are original drawings, not pixel copies.
+
+Command Panel tabs, categories, sub-object buttons, toolbar tools, snap toggles
+and existing stack tools remain icon-only. Icon tooltips give the Max name and
+an active configured shortcut when one exists. Create object buttons, Loft,
+PlanePlus, Constraints, viewport labels and Editable Poly commands keep text.
+Auto Key and Set Key mode controls keep text. Named stack rows keep icon and text.
+The catalog marks reserved drawings for text-only spots so integration does not
+add decorative icons to Max's text controls.
+
+`max_icons.CADDY_FIELDS` maps pending `poly_caddies` field keys to the `caddy_*`
+assets. These include the branch's kind names and field names. The caddy branch
+must use these assets in its GPU draw routine. Its numeric values stay visible,
+and its field names move into hover titles. That branch is not merged here.
+The `constraint_*`, `symmetry*` and `ops.transform.*` drawings are ready for
+their feature integrator. WorkSpaceTool `bl_icon` requires Blender's tool-icon
+format or a custom draw route. A preview PNG does not replace its `.dat` file.
+This branch changes toolbar previews, not unmerged gizmo drawing code.
+
+`show_end_result`, `pin_stack` and `configure_modifier_sets` are assets for
+controls not yet implemented here. No inactive asset creates a new control.

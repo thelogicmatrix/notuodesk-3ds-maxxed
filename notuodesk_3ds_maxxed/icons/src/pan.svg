@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>pan</title>
+<desc>Open hand for panning</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M4 8 V4 C4 3 6 3 6 4 V7 M6 7 V2 C6 1 8 1 8 2 V7 M8 7 V3 C8 2 10 2 10 3 V8 M10 8 V5 C10 4 12 4 12 5 V10 C12 15 7 16 5 13 L2 9 C1 7 3 7 4 8 Z" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/>
+</g>
+</svg>

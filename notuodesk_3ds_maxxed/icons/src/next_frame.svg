@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>next_frame</title>
+<desc>Next-frame triangle with key bars</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="8,2 14,8 8,14" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="4" y="2" width="2" height="12" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="2" y="2" width="1" height="12" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+</g>
+</svg>

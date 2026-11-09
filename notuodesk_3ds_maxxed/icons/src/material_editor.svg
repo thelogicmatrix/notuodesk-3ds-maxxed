@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>material editor</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<circle cx="10" cy="10" r="6" stroke="#dedede" fill="none"/><circle cx="23" cy="10" r="6" stroke="#78b7ce" fill="none"/><circle cx="10" cy="23" r="6" stroke="#78b7ce" fill="none"/><circle cx="23" cy="23" r="6" stroke="#dedede" fill="none"/><path d="M7 8 L10 6 M20 21 L23 19" stroke="#dedede" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>material_editor</title>
+<desc>Checker material grid and settings rows in window</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1.5" y="2.5" width="13" height="11" rx="0" fill="#353a3d" stroke="#d2d4d5" stroke-width="1"/><path d="M1.5 5.5 H14.5" fill="none" stroke="#d2d4d5" stroke-width="1"/><rect x="3" y="7" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="5" y="7" width="2" height="2" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="7" y="7" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="3" y="9" width="2" height="2" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="5" y="9" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="7" y="9" width="2" height="2" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="3" y="11" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="5" y="11" width="2" height="2" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="7" y="11" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><path d="M10 7.5 H12 M10 9.5 H12 M10 11.5 H12" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

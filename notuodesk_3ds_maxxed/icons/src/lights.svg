@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>lights</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M12 23 V20 C4 12 9 4 16 4 C23 4 28 12 20 20 V23 Z M12 27 H20 M14 30 H18" stroke="#ead078" fill="none" stroke-width="2"/><path d="M14 18 L13 12 M18 18 L19 12" stroke="#ead078" fill="none" stroke-width="2"/>
+<desc>Filled light bulb and two base bars</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M5 10 C1 5 4 1.5 8 1.5 C12 1.5 15 5 11 10 L10 12 H6 Z" fill="#d2d4d5" stroke="none" stroke-width="0"/><path d="M6 13.5 H10 M7 15 H9" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

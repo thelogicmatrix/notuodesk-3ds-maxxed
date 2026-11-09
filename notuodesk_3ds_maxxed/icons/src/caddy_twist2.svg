@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_twist2</title>
+<desc>Crossing twisted boundary strips (twist2)</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M3 2 C14 2 2 14 13 14 M13 2 C2 2 14 14 3 14" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M3 2 H13 M3 14 H13" fill="none" stroke="#50b9bf" stroke-width="1"/><rect x="9" y="9" width="7" height="7" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><path d="M10.5 11.5 V10.5 H13.5 V12.5 L10.5 14.5 H13.5" fill="none" stroke="#253033" stroke-width="1"/>
+</g>
+</svg>

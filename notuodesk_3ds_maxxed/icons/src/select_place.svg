@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>select_place</title>
+<desc>Object placed onto a target surface</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<circle cx="6.5" cy="9" r="5" fill="#d2d4d5" stroke="none" stroke-width="1"/><ellipse cx="11" cy="4.5" rx="3" ry="2.5" fill="#50b9bf" stroke="none" stroke-width="1"/><path d="M8 8 11 5" fill="none" stroke="#efb83d" stroke-width="2"/>
+</g>
+</svg>

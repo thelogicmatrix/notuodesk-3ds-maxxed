@@ -3,10 +3,12 @@
 Catches missing artwork, dead custom icon IDs, broken fallbacks, and preview leaks.
 """
 import ast
+import json
 from pathlib import Path
 import struct
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 
 import addon_utils
 import bpy
@@ -34,6 +36,38 @@ def run():
                    "scene_explorer layer_explorer ribbon curve_editor schematic_view material_editor "
                    "render_setup rendered_frame render_production".split())
     assert required <= names, f"Missing required icons: {sorted(required - names)}"
+    catalog = json.loads((PACKAGE / "icons/src/catalog.json").read_text(encoding="utf-8"))
+    indexed = {row["name"]: row for row in catalog["icons"]}
+    assert set(indexed) == names, "The artwork index must cover every shipped SVG"
+    assert all(row["presentation"] in {"icon-only", "icon plus text", "text-only"}
+               and row["reference"] in catalog["references"] for row in indexed.values())
+    assert {"ops.transform.translate", "ops.transform.rotate", "ops.transform.resize",
+            "symmetry", "symmetry_align", "constraint_none", "constraint_edge",
+            "constraint_face", "constraint_normal", "planeplus", "loft"} <= names
+    assert set(icons.CADDY_FIELDS.values()) <= names
+    for name in names:
+        source = PACKAGE / "icons/src" / (name + ".svg")
+        assert "SPDX-License-Identifier: GPL-3.0-or-later" in source.read_text(encoding="utf-8")
+        root = ET.parse(source).getroot()
+        assert root.get("viewBox") == "0 0 16 16", name
+        assert not any(node.tag.split("}")[-1] in {"image", "text", "script", "foreignObject"}
+                       or any("href" in attr for attr in node.attrib) for node in root.iter()), name
+    before = (bpy.context.scene.tool_settings.use_snap,
+              bpy.context.scene.tool_settings.use_snap_rotate,
+              bpy.context.scene.tool_settings.use_snap_scale)
+    try:
+        for kind, attr in (("SNAP", "use_snap"), ("ANGLE_SNAP", "use_snap_rotate"),
+                           ("PERCENT_SNAP", "use_snap_scale")):
+            previous = getattr(bpy.context.scene.tool_settings, attr)
+            assert bpy.ops.max.icon_snap(kind=kind) == {"FINISHED"}
+            assert getattr(bpy.context.scene.tool_settings, attr) is not previous
+            assert bpy.ops.max.icon_snap(kind=kind) == {"FINISHED"}
+            assert getattr(bpy.context.scene.tool_settings, attr) is previous
+    finally:
+        ts = bpy.context.scene.tool_settings
+        ts.use_snap, ts.use_snap_rotate, ts.use_snap_scale = before
+    print(f"ICONS catalog: {len(indexed)} indexed SVGs, pending tools and caddy fields resolved", flush=True)
+    print("ICONS toggles: snap, angle and percent round trips preserve native settings", flush=True)
     referenced = set()
     for source in PACKAGE.glob("*.py"):
         for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):

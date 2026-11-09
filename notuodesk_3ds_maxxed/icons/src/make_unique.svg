@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>make unique</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<rect x="4" y="4" width="15" height="17" stroke="#dedede" fill="none"/><rect x="13" y="12" width="15" height="17" stroke="#78b7ce" fill="none"/><path d="M17 17 H24 M17 21 H24" stroke="#dedede" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>make_unique</title>
+<desc>Single stem forked into two copies, one cyan</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M8 14 V9 L3 4 M8 9 13 4" fill="none" stroke="#d2d4d5" stroke-width="2"/><rect x="1" y="1" width="4" height="4" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="11" y="1" width="4" height="4" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
 </g>
 </svg>

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>plane</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M4 23 L12 6 L29 9 L21 27 Z M8 15 L25 18 M20 8 L12 25" stroke="#dedede" fill="none" stroke-width="2"/>
+<desc>Subdivided flat construction plane</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,6.5 10.5,3 14,9.5 5.5,13" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M6 5 9.5 11.5 M3.5 9.5 12 6" fill="none" stroke="#8d9295" stroke-width="1"/>
 </g>
 </svg>

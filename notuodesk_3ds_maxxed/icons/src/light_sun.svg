@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>light sun</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<circle cx="16" cy="16" r="7" stroke="#ead078" fill="none"/><path d="M16 1 V5 M16 27 V31 M1 16 H5 M27 16 H31 M5 5 L8 8 M24 24 L27 27 M5 27 L8 24 M24 8 L27 5" stroke="#ead078" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>light_sun</title>
+<desc>free direct alias for Blender light data</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="4.5" y="2.5" width="7" height="3" rx="0" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M5 6 V13 M8 6 V13 M11 6 V13" fill="none" stroke="#d2d4d5" stroke-width="1"/><polygon points="3,11 5,15 7,11" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="9,11 11,15 13,11" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

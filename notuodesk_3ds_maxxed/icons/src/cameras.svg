@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>cameras</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<rect x="3" y="10" width="17" height="15" stroke="#dedede" fill="none"/><path d="M20 14 L29 10 V25 L20 21 Z M9 25 L6 29 M15 25 L18 29" stroke="#dedede" fill="none" stroke-width="2"/><circle cx="8" cy="6" r="4" stroke="#dedede" fill="none"/><circle cx="16" cy="6" r="4" stroke="#dedede" fill="none"/>
+<desc>Rectangular camera body and triangular lens</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1" y="4" width="9" height="8" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="11,6 15,3 15,13 11,10" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

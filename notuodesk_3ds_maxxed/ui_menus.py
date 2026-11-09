@@ -137,10 +137,10 @@ class MAX_MT_quad(Menu):
         # top-left: display  |  top-right: tools 1
         _header(left, "display")
         left.operator("max.object_cmd", text="Isolate Selection").cmd = "ISOLATE"
-        left.operator("max.object_cmd", text="Unfreeze All", icon="UNLOCKED").cmd = "UNFREEZE"
-        left.operator("max.object_cmd", text="Freeze Selection", icon="LOCKED").cmd = "FREEZE"
-        left.operator("max.unfreeze_by_name", text="Unfreeze by Name...", **max_icons.ui("select_by_name", "VIEWZOOM"))
-        left.operator("max.unfreeze_by_hit", text="Unfreeze by Hit", **max_icons.ui("select_object", "RESTRICT_SELECT_OFF"))
+        left.operator("max.object_cmd", text="Unfreeze All").cmd = "UNFREEZE"
+        left.operator("max.object_cmd", text="Freeze Selection").cmd = "FREEZE"
+        left.operator("max.unfreeze_by_name", text="Unfreeze by Name...")
+        left.operator("max.unfreeze_by_hit", text="Unfreeze by Hit")
         left.operator("max.select_by_name", text="Unhide by Name")
         left.operator("max.object_cmd", text="Unhide All").cmd = "UNHIDE"
         left.operator("max.object_cmd", text="Hide Unselected").cmd = "HIDE_UNSEL"
@@ -253,32 +253,32 @@ class MAX_MT_create(Menu):
         for k, (label, icon, _, _) in create.PRIMITIVES.items():
             if k == "PLANEPLUS" or k in create.extended_primitives.PRIMITIVES:
                 continue
-            lay.operator("max.create", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+            lay.operator("max.create", text=label).kind = k
         lay.separator()
         lay.label(text="Extended Primitives")
         for k in create.extended_primitives.DISPLAY_ORDER:
             label, icon, _, _ = create.PRIMITIVES[k]
-            lay.operator("max.create", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+            lay.operator("max.create", text=label).kind = k
         lay.separator()
         lay.label(text="JokerMartini")
-        lay.operator("max.plane_plus", text="PlanePlus", **max_icons.ui("plane", "MESH_PLANE"))
+        lay.operator("max.plane_plus", text="PlanePlus")
         lay.separator()
         lay.label(text="Shapes")
         for k, label, icon in create.SHAPES:
-            lay.operator("max.create_shape", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+            lay.operator("max.create_shape", text=label).kind = k
         lay.separator()
         lay.label(text="Lights")
         for k, label, icon in create.LIGHTS:
-            lay.operator("max.create_light", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+            lay.operator("max.create_light", text=label).kind = k
         lay.separator()
-        lay.operator("max.create_camera", text="Target Camera", **max_icons.ui("cameras", "CAMERA_DATA")).target = True
-        lay.operator("max.create_camera", text="Physical Camera", **max_icons.ui("cameras", "CAMERA_DATA")).target = False
-        lay.operator("max.camera_from_view", text="Create Camera From View", **max_icons.ui("cameras", "VIEW_CAMERA"))
+        lay.operator("max.create_camera", text="Target Camera").target = True
+        lay.operator("max.create_camera", text="Physical Camera").target = False
+        lay.operator("max.camera_from_view", text="Create Camera From View")
         lay.separator()
         lay.label(text="V-Ray")
         lay.operator_menu_enum("max.vray_light", "kind", text="VRayLight")
-        lay.operator("max.vray_camera", text="VRayPhysicalCamera", **max_icons.ui("cameras", "CAMERA_DATA"))
-        lay.operator("max.vray_plane", text="VRayPlane", **max_icons.ui("plane", "MESH_PLANE"))
+        lay.operator("max.vray_camera", text="VRayPhysicalCamera")
+        lay.operator("max.vray_plane", text="VRayPlane")
 
 
 class MAX_MT_views(Menu):
@@ -511,7 +511,7 @@ def view3d_header_draw(self, context):
         lay = self.layout
         lay.separator_spacer()
         row = lay.row(align=True)
-        row.prop(context.scene.tool_settings, "use_keyframe_insert_auto", text="", **max_icons.ui("record", "REC"))
+        row.prop(context.scene.tool_settings, "use_keyframe_insert_auto", text="Auto Key", toggle=True)
         space = context.space_data
         row = lay.row(align=True)
         row.prop(space.overlay, "show_overlays", text="", icon="OVERLAY")
@@ -537,12 +537,12 @@ def draw_main_toolbar(self, context):
 
     row = lay.row(align=True)
     row.operator("max.select_by_name", text="", **max_icons.ui("select_by_name", "VIEWZOOM"))
-    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_rect", "SELECT_SET"),
-                 depress=tool == "builtin.select_box").name = "builtin.select_box"
-    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_circle", "MESH_CIRCLE"),
-                 depress=tool == "builtin.select_circle").name = "builtin.select_circle"
-    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_fence", "SELECT_INTERSECT"),
-                 depress=tool == "builtin.select_lasso").name = "builtin.select_lasso"
+    row.operator("max.icon_tool", text="", **max_icons.ui("region_rect", "SELECT_SET"),
+                 depress=tool == "builtin.select_box").tool = "RECT"
+    row.operator("max.icon_tool", text="", **max_icons.ui("region_circle", "MESH_CIRCLE"),
+                 depress=tool == "builtin.select_circle").tool = "CIRCLE"
+    row.operator("max.icon_tool", text="", **max_icons.ui("region_fence", "SELECT_INTERSECT"),
+                 depress=tool == "builtin.select_lasso").tool = "FENCE"
 
     row = lay.row(align=True)
     row.scale_x = 1.1
@@ -553,7 +553,7 @@ def draw_main_toolbar(self, context):
     slot = context.scene.transform_orientation_slots[0]
     sub = lay.row(align=True)
     sub.ui_units_x = 4.5
-    sub.prop(slot, "type", text="", **max_icons.ui("reference_coords", "ORIENTATION_GLOBAL"))
+    sub.prop(slot, "type", text="", icon="NONE")
     sub = lay.row(align=True)
     sub.prop(ts, "transform_pivot_point", text="", icon_only=True, **max_icons.ui("pivot", "PIVOT_MEDIAN"))
 

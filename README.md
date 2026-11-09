@@ -40,6 +40,15 @@ The 3ds Max workspace hides Blender's 3D cursor in every viewport, including new
 | Status bar | "1 Object Selected", X/Y/Z type-in, Grid, Auto Key, Set Key |
 | Look | Max dark UI, cyan selection outline, red sub-object selection, blue vertices, random object colors, names like Box001 |
 
+The icon family follows the visual ideas in Autodesk's 3ds Max 2026 Help.
+Move is a four-way arrow, Modify is a curved segment in a control cage, snaps
+use a numeral and magnet, and sub-object buttons highlight part of a small mesh.
+The 273 original GPL SVGs have transparent 32px and 64px renders. Toolbar and
+Command Panel buttons use icons where Max does. Create, Editable Poly commands,
+viewport labels and Auto Key retain text. Hover a tool for its name and assigned
+shortcut. Artwork references and pending-branch mappings are in `icons/README.md`
+inside the add-on package.
+
 ## Creating primitives from the keyboard
 
 In **Create > Geometry > Standard Primitives**, pick a primitive and open **Keyboard Entry**. Enter X, Y, Z and its dimensions, then click **Create**. X, Y and Z follow the active viewport's construction grid. For Box, Cone, Cylinder, Tube and Pyramid they place the centre of the base. For Sphere, GeoSphere, Torus and Plane they place the centre.
@@ -552,8 +561,8 @@ The editable icon sources are in `notuodesk_3ds_maxxed/icons/src/`. To rebuild t
 transparent 32px and 64px PNGs, install the build-only renderer and run:
 
 ```powershell
-uv pip install --python C:/Users/thelo/.local/venvs/data/Scripts/python.exe resvg-py==0.5.0 Pillow
-& C:/Users/thelo/.local/venvs/data/Scripts/python.exe tools/build_icons.py --contact-sheet icons-contact.png
+python -m pip install resvg-py==0.5.0 Pillow
+python tools/build_icons.py --contact-sheet icons-contact.png
 ```
 
 Blender needs no extra packages. See `notuodesk_3ds_maxxed/icons/README.md` for

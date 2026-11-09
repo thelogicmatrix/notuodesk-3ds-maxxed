@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>planar_x</title>
+<desc>Planar x mesh metaphor</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M1 12 H15 M3 2 V7 M8 4 V7 M13 1 V7" fill="none" stroke="#d2d4d5" stroke-width="1"/><polygon points="1,6 5,6 3,10" fill="#50b9bf" stroke="none" stroke-width="1"/><polygon points="6,6 10,6 8,10" fill="#50b9bf" stroke="none" stroke-width="1"/><polygon points="11,6 15,6 13,10" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="13" y="1" width="2" height="2" rx="0" fill="#df6663" stroke="none" stroke-width="1"/>
+</g>
+</svg>

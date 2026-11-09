@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>pin stack</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M12 4 H24 L21 8 V16 L25 20 H17 L8 29 M17 20 H8 L12 16 V8 Z" stroke="#dedede" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>pin_stack</title>
+<desc>Pushpin locking the modifier stack</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M5 4 H11 M6 4 V9 L4 11 H12 L10 9 V4 M8 11 V15" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

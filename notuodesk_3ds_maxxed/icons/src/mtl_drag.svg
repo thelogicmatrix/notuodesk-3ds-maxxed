@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>mtl drag</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M6 17 V13 Q6 10 9 12 L12 17 V5 Q15 1 17 5 V14 V7 Q20 3 22 7 V16 V11 Q25 7 27 11 V23 L23 29 H13 Z" stroke="#dedede" fill="none" stroke-width="2"/>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>mtl_drag</title>
+<desc>Hand carrying a checker material tile</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="1" y="1" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="3" y="1" width="2" height="2" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="5" y="1" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="1" y="3" width="2" height="2" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="3" y="3" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="5" y="3" width="2" height="2" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="1" y="5" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="3" y="5" width="2" height="2" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="5" y="5" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><path d="M6.5 11.5 V8.5 Q6.5 7.5 7.5 8.5 L9.5 10.5 V5.5 Q9.5 4.5 10.5 5.5 V9.5 L13.5 10.5 V13.5 L11.5 15.5 H9.5 Z" fill="#50b9bf" stroke="#50b9bf" stroke-width="1"/>
 </g>
 </svg>

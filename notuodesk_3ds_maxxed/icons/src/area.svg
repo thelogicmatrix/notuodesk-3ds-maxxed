@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>area</title>
-<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M4 15 L12 5 L29 11 L21 21 Z M8 20 L6 27 M16 24 L14 31 M25 23 L23 30" stroke="#ead078" fill="none" stroke-width="2"/>
+<desc>Rectangular area emitter</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="3,3 14,5 11,10 1,8" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M4 10 3 14 M8 11 7 15 M12 11 11 15" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>
