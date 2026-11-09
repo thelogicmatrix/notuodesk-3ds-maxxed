@@ -24,6 +24,19 @@ feedback = FeedbackFixture()
 
 
 class ChromeTests(unittest.TestCase):
+    def test_region_overlap_restores_after_file_load(self):
+        system = bpy.context.preferences.system
+        original = system.use_region_overlap
+        try:
+            system.use_region_overlap = True
+            chrome.apply_layout(bpy.context)
+            self.assertFalse(system.use_region_overlap)
+            chrome._load(None)
+            chrome.uninstall()
+            self.assertTrue(system.use_region_overlap)
+        finally:
+            system.use_region_overlap = original
+
     def setUp(self):
         chrome.install(feedback=feedback)
         self.scene = bpy.context.scene

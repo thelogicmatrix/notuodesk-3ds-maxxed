@@ -14,6 +14,7 @@ _pointers = {}
 _menus = None
 _explorer_layout = None
 _command_panel_layout = None
+_region_overlap = None
 
 
 class MAX_OT_chrome_pointer(bpy.types.Operator):
@@ -134,6 +135,10 @@ def _adopt_timelines(screen):
 
 def apply_layout(context, quad=False):
     """Explicitly configure this screen, preserving scene range, FPS, units and data."""
+    global _region_overlap
+    if _region_overlap is None:
+        _region_overlap = context.preferences.system.use_region_overlap
+    context.preferences.system.use_region_overlap = False
     _set(context.workspace, 'name', '3ds Max')
     _adopt_timelines(context.screen)
     for area in context.screen.areas:
@@ -285,7 +290,7 @@ def install(*, feedback=None, read_transform=None, write_transform=None, command
 
 def uninstall():
     """Restore only callbacks still owned here, and discard all screen/window state."""
-    global _installed, _menus, _explorer_layout, _command_panel_layout
+    global _installed, _menus, _explorer_layout, _command_panel_layout, _region_overlap
     if not _installed:
         return
     _installed = False
@@ -323,6 +328,9 @@ def uninstall():
         except (ReferenceError, RuntimeError, AttributeError):
             pass
     _layout_changes.clear()
+    if _region_overlap is not None:
+        bpy.context.preferences.system.use_region_overlap = _region_overlap
+        _region_overlap = None
     if _load in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(_load)
     for handlers, callback in ((bpy.app.handlers.save_pre, _before_save), (bpy.app.handlers.save_post, _after_save)):
