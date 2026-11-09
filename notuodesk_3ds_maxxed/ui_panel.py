@@ -5,6 +5,7 @@ from bpy.props import IntProperty
 from bpy.types import Menu, Panel, UIList
 
 from . import create, prims
+from . import keyboard_entry
 from .operators import EDIT_POLY_OPS, current_level
 
 EP_LABELS = {k: n for k, n, _ in EDIT_POLY_OPS}
@@ -375,6 +376,20 @@ def create_name_color(layout, context):
     split.prop(ob, "color", text="")
 
 
+# ----- Creation Method and Keyboard Entry -----------------------------------
+
+@rollout("Creation Method", {"CREATE"}, 3)
+@when(keyboard_entry.visible)
+def creation_method(layout, context):
+    keyboard_entry.draw_method(layout, context)
+
+
+@rollout("Keyboard Entry", {"CREATE"}, 4, closed=True)
+@when(keyboard_entry.visible)
+def keyboard_entry_rollout(layout, context):
+    keyboard_entry.draw_keyboard(layout, context)
+
+
 # ----- Parameters (Create right after creation, and Modify) -------------------
 
 def _has_params(context):
@@ -388,7 +403,7 @@ def _has_params(context):
     return True
 
 
-@rollout("Parameters", {"CREATE", "MODIFY"}, 3)
+@rollout("Parameters", {"CREATE", "MODIFY"}, 5)
 @when(_has_params)
 def parameters(layout, context):
     ob = context.active_object

@@ -98,10 +98,12 @@ def build_bmesh(kind, p):
         bmesh.ops.create_uvsphere(bm, u_segments=max(p.sides, 4), v_segments=max(p.sides // 2, 2), radius=p.radius1)
     elif kind == "GEOSPHERE":
         bmesh.ops.create_icosphere(bm, subdivisions=max(1, min(p.sides, 7)), radius=p.radius1)
-    elif kind in {"CYLINDER", "CONE"}:
-        r2 = p.radius1 if kind == "CYLINDER" else p.radius2
+    elif kind in {"CYLINDER", "CONE"} or (kind == "TUBE" and min(p.radius1, p.radius2) == 0):
+        # A Tube with no inner radius is solid, not a collapsed inner wall.
+        r1 = max(p.radius1, p.radius2) if kind == "TUBE" else p.radius1
+        r2 = p.radius2 if kind == "CONE" else r1
         bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=max(p.sides, 3),
-                              radius1=p.radius1, radius2=r2, depth=ah)
+                              radius1=r1, radius2=r2, depth=ah)
         bmesh.ops.translate(bm, verts=bm.verts, vec=(0, 0, ah / 2))
         _slice(bm, 2, 0.0, ah, p.height_segs)
     elif kind == "TUBE":
@@ -116,19 +118,11 @@ def build_bmesh(kind, p):
         _slice(bm, 2, 0.0, ah, p.height_segs)
     elif kind == "TORUS":
         segs, sides = max(p.sides, 3), max(p.height_segs, 3)
-        grid = []
-        for i in range(segs):
-            a = 2 * math.pi * i / segs
-            row = []
-            for j in range(sides):
-                b = 2 * math.pi * j / sides
-                r = p.radius1 + p.radius2 * math.cos(b)
-                row.append(bm.verts.new((r * math.cos(a), r * math.sin(a), p.radius2 * math.sin(b))))
-            grid.append(row)
-        for i in range(segs):
-            for j in range(sides):
-                i2, j2 = (i + 1) % segs, (j + 1) % sides
-                bm.faces.new((grid[i][j], grid[i2][j], grid[i2][j2], grid[i][j2]))
+        if p.radius1 == 0 and p.radius2 > 0:
+            # The ring collapses to a sphere. Avoid tracing its surface twice.
+            bmesh.ops.create_uvsphere(bm, u_segments=segs, v_segments=max(sides // 2, 2), radius=p.radius2)
+        else:
+            _torus(bm, p.radius1, p.radius2, segs, sides)
         smooth_all = True
     if kind in {"SPHERE", "GEOSPHERE"}:
         smooth_all = True
@@ -141,6 +135,31 @@ def build_bmesh(kind, p):
             # smooth round surfaces only, keep caps / boxes flat
             f.smooth = smooth_all or abs(f.normal.z) < 0.7
     return bm
+
+
+def _torus(bm, radius1, radius2, segs, sides):
+    """Share axis vertices for horn and spindle torus cross sections."""
+    poles = {}
+    grid = []
+    for i in range(segs):
+        a = 2 * math.pi * i / segs
+        row = []
+        for j in range(sides):
+            b = 2 * math.pi * j / sides
+            r = radius1 + radius2 * math.cos(b)
+            if abs(r) <= radius2 * 1e-12:
+                if j not in poles:
+                    poles[j] = bm.verts.new((0, 0, radius2 * math.sin(b)))
+                row.append(poles[j])
+            else:
+                row.append(bm.verts.new((r * math.cos(a), r * math.sin(a), radius2 * math.sin(b))))
+        grid.append(row)
+    for i in range(segs):
+        for j in range(sides):
+            i2, j2 = (i + 1) % segs, (j + 1) % sides
+            verts = tuple(dict.fromkeys((grid[i][j], grid[i2][j], grid[i2][j2], grid[i][j2])))
+            if len(verts) >= 3:
+                bm.faces.new(verts)
 
 
 def rebuild(ob):
@@ -179,7 +198,7 @@ class MaxPrimParams(bpy.types.PropertyGroup):
     length: FloatProperty(name="Length", default=1.0, min=0.0001, unit="LENGTH", update=_update)
     width: FloatProperty(name="Width", default=1.0, min=0.0001, unit="LENGTH", update=_update)
     height: FloatProperty(name="Height", default=1.0, unit="LENGTH", update=_update)
-    radius1: FloatProperty(name="Radius 1", default=1.0, min=0.0001, unit="LENGTH", update=_update)
+    radius1: FloatProperty(name="Radius 1", default=1.0, min=0.0, unit="LENGTH", update=_update)
     radius2: FloatProperty(name="Radius 2", default=0.0, min=0.0, unit="LENGTH", update=_update)
     length_segs: IntProperty(name="Length Segs", default=1, min=1, max=200, update=_update)
     width_segs: IntProperty(name="Width Segs", default=1, min=1, max=200, update=_update)
