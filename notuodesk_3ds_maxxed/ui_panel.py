@@ -8,6 +8,7 @@ from . import create, prims, poly_tools
 from . import keyboard_entry
 from . import max_icons
 from . import loft
+from . import symmetry
 from .operators import EDIT_POLY_OPS, current_level
 
 EP_LABELS = {k: n for k, n, _ in EDIT_POLY_OPS}
@@ -139,7 +140,7 @@ class MAX_PT_command_panel(Panel):
         row.prop(wm, "max_cmd_tab", expand=True, icon_only=True)
         layout.separator(factor=0.3)
         t = wm.max_cmd_tab
-        ob = context.active_object
+        ob = symmetry.owner(context)
 
         if t == "CREATE":
             row = layout.row(align=True)
@@ -160,8 +161,9 @@ class MAX_PT_command_panel(Panel):
             row.menu("MAX_MT_modifier_list", text="", **max_icons.ui("modifier_list", "COLLAPSEMENU"))
 
             col = layout.column(align=True)
-            col.template_list("MAX_UL_stack", "", ob, "modifiers", ob, "max_stack_index",
-                              rows=3, maxrows=8, sort_lock=True)
+            if not symmetry.draw_stack(col, context, ob):
+                col.template_list("MAX_UL_stack", "", ob, "modifiers", ob, "max_stack_index",
+                                  rows=3, maxrows=8, sort_lock=True)
             base = col.row(align=True)
             no_active = _stack_get(ob) < 0
             base.operator("max.modifier_set_active", text=base_name(ob), depress=no_active,
@@ -175,13 +177,22 @@ class MAX_PT_command_panel(Panel):
                 row.prop(active, "show_in_editmode", text="", **max_icons.ui("edit_mode", "EDITMODE_HLT"))
                 row.prop(active, "show_on_cage", text="", **max_icons.ui("editable_poly", "MESH_DATA"))
                 row.operator("object.make_single_user", text="", **max_icons.ui("make_unique", "DUPLICATE")).object = True
-                row.operator("object.modifier_remove", text="", **max_icons.ui("remove_modifier", "TRASH")).modifier = active.name
+                if symmetry.is_symmetry(active):
+                    op = row.operator("max.symmetry_action", text="", **max_icons.ui("remove_modifier", "TRASH"))
+                    op.name, op.action = active.name, "REMOVE"
+                else:
+                    row.operator("object.modifier_remove", text="", **max_icons.ui("remove_modifier", "TRASH")).modifier = active.name
                 row.separator()
-                move = row.operator("max.stack_move", text="", **max_icons.ui("up", "TRIA_UP"))
-                move.modifier, move.direction = active.name, "DOWN"
-                move = row.operator("max.stack_move", text="", **max_icons.ui("down", "TRIA_DOWN"))
-                move.modifier, move.direction = active.name, "UP"
-                row.operator("object.modifier_apply", text="", **max_icons.ui("check", "CHECKMARK")).modifier = active.name
+                if symmetry.is_symmetry(active):
+                    for icon, fallback, action in (("up", "TRIA_UP", "DOWN"), ("down", "TRIA_DOWN", "UP"), ("check", "CHECKMARK", "APPLY")):
+                        op = row.operator("max.symmetry_action", text="", **max_icons.ui(icon, fallback))
+                        op.name, op.action = active.name, action
+                else:
+                    move = row.operator("max.stack_move", text="", **max_icons.ui("up", "TRIA_UP"))
+                    move.modifier, move.direction = active.name, "DOWN"
+                    move = row.operator("max.stack_move", text="", **max_icons.ui("down", "TRIA_DOWN"))
+                    move.modifier, move.direction = active.name, "UP"
+                    row.operator("object.modifier_apply", text="", **max_icons.ui("check", "CHECKMARK")).modifier = active.name
             else:
                 row.operator("max.object_cmd", text="", **max_icons.ui("check", "CHECKMARK")).cmd = "CONVERT_POLY"
                 row.label(text="")
@@ -221,6 +232,9 @@ MELT_PRESETS = (("Ice", 2.0), ("Glass", 0.5), ("Jelly", 0.4), ("Plastic", 0.1))
 
 def draw_modifier_params(layout, mod):
     from . import ffd, turbosmooth
+    if symmetry.is_symmetry(mod):
+        symmetry.draw(layout, mod.id_data, mod)
+        return
     if turbosmooth.is_turbosmooth(mod):
         turbosmooth.draw(layout, mod.id_data, mod)
         return
@@ -423,7 +437,7 @@ def keyboard_entry_rollout(layout, context):
 # ----- Parameters (Create right after creation, and Modify) -------------------
 
 def _has_params(context):
-    ob = context.active_object
+    ob = symmetry.owner(context)
     if ob is None:
         return False
     if loft.is_loft(ob) and (_stack_get(ob) < 0 or ob.modifiers.active == loft.modifier(ob)):
@@ -438,7 +452,7 @@ def _has_params(context):
 @rollout("Parameters", {"CREATE", "MODIFY"}, 5)
 @when(_has_params)
 def parameters(layout, context):
-    ob = context.active_object
+    ob = symmetry.owner(context)
     idx = _stack_get(ob)
     if idx >= 0:
         draw_modifier_params(layout, ob.modifiers[idx])

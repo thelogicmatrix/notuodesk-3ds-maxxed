@@ -90,6 +90,9 @@ class MAX_OT_subobject(Operator):
 
     def execute(self, context):
         obj = context.active_object
+        from . import symmetry
+        if symmetry.editing(context):
+            obj = symmetry.leave(context)
         wm = context.window_manager
         lvl = self.level
 
@@ -860,7 +863,16 @@ class MAX_OT_add_modifier(Operator):
     def execute(self, context):
         spec, label = self.kind.split("|")
         mtype, _, option = spec.partition(":")
-        ob = context.active_object
+        from . import symmetry
+        ob = symmetry.leave(context)
+        if mtype == "SYMMETRY":
+            if ob.type != "MESH":
+                self.report({"WARNING"}, "Symmetry works on mesh objects")
+                return {"CANCELLED"}
+            if context.mode != "OBJECT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+            symmetry.add(ob)
+            return {"FINISHED"}
         if mtype == "TURBOSMOOTH":
             if ob.type != "MESH":
                 self.report({"WARNING"}, "TurboSmooth works on mesh objects")
@@ -1057,7 +1069,10 @@ class MAX_OT_modifier_set_active(Operator):
     name: StringProperty()
 
     def execute(self, context):
-        ob = context.active_object
+        from . import symmetry
+        ob = symmetry.leave(context)
+        if context.mode.startswith("EDIT"):
+            bpy.ops.object.mode_set(mode="OBJECT")
         mod = ob.modifiers.get(self.name) if ob else None
         from . import poly_tools
         if mod is not None and poly_tools.is_font_pivot(mod):

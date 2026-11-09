@@ -119,6 +119,16 @@ Object Type follows Max's button order. Parameters use compact labelled fields. 
 
 Parameter names and segment defaults follow [Autodesk's Extended Primitives reference](https://help.autodesk.com/cloudhelp/2015/ENU/3DSMax/files/GUID-BF868DCF-12E3-431C-A73B-C16C0FD67C98.htm). Types whose Max constructor starts with zero dimensions start at one Blender unit here. ChamferBox, Capsule, Hedra and Prism keep their documented nonzero dimensions. Click-drag creation replaces these dimensions with the size you draw.
 
+## Symmetry
+
+Choose **Modifier List > Symmetry** in the Modify panel. The stack calls it Symmetry and its Parameters rollout follows Autodesk's 2026 control order. Planar symmetry supports X, Y and Z together, with a separate Flip for each axis. Slice Along Mirror and Weld Seam start on. Both Threshold fields start at **0.01 object-space Blender units**, matching the numbers in Autodesk's 2026 rollout image. No physical unit conversion is applied.
+
+Expand Symmetry in the stack and click **Mirror**. Press **W** to move or **E** to rotate its yellow mirror plane with the viewport gizmo. Click Symmetry or Editable Poly to return to the mesh. The original mesh stays editable at Vertex, Edge, Border, Polygon and Element levels, with the symmetric result visible. Align to Face picks a surface point and normal. Pick Object copies a reference object's current transform. Reset Gizmo restores the object's local origin and axes. Right-click cancels picking.
+
+Blender's Mirror modifier supplies the geometry. Each Symmetry has an independent, parented helper in the hidden-from-render `.3ds Maxxed Symmetry` collection. Helpers stay hidden and unselectable except while editing Mirror. Removing or applying the modifier removes its helper. Save/reload and undo retain the plane. Disabling the add-on removes its helpers and stores their poses on the mesh. Re-enabling restores them.
+
+Reference: [Autodesk 3ds Max 2026 Symmetry](https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modifiers/files/GUID-EB0B7B9B-117D-4CC3-A966-A3E007E0C68A.htm).
+
 ## Poly tools and pivots
 
 - **Quad Cap:** in Edit Poly at Border level, next to Cap, or in the modeling quad menu. Select the border edges or just one edge of a hole. It fills each selected hole with a quad grid and chooses the grid corners from the border angles. An odd edge count uses triangles and quads, with a warning.
@@ -298,6 +308,8 @@ Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments*
 Keep Scene Upright also controls clicked views. Turn it off to carry the current roll into an edge or corner view. Dark text and outlines use slightly higher opacity than the faces so they stay readable over bright viewports. Opening a saved file rebuilds the cube's drawing resources. Files keep each viewport's original navigation gizmo setting, so turning the ViewCube or add-on off after reopening restores that setting.
 
 ## Known differences from 3ds Max
+
+- Symmetry supports Planar geometry. Radial is disabled in the Symmetry Type menu with a reason. Blender Mirror always uses proximity welding, so Use Proximity Weld is checked and disabled. Max's newer cut-vertex tracking weld is not reproduced. Blender supplies the spinners and transform gizmos. A helper collection remains visible in the Outliner. Pick Object samples the reference transform once. While the add-on is disabled, Mirror uses the object's origin until the stored plane is restored on re-enable. Mirror-plane animation across disable/re-enable is not supported.
 
 - Shapes, helpers, lights, cameras and V-Ray objects use the world origin instead of interactive placement. Target lights and cameras keep a preset target offset.
 - The cursor policy checks new viewports and scene switches every 0.2 seconds. Other workspaces keep their cursor display settings. A scene shared with the 3ds Max workspace shares its cursor location too.

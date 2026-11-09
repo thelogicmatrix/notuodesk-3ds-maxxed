@@ -39,6 +39,7 @@ from . import max_export
 from . import viewcube
 from . import loft
 from . import xview
+from . import symmetry
 
 
 _prefs_cache = [None]
@@ -184,6 +185,7 @@ _classes = (
     + viewcube.classes
     + loft.classes
     + xview.classes
+    + symmetry.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
     + max_export.classes
 )
@@ -241,6 +243,7 @@ def register():
     overlay.register()
     cursor_policy.register()
     xview.register()
+    symmetry.register()
     p = get_prefs()
     if p is None or p.use_keymap:
         keymap.register_keymaps()
@@ -252,6 +255,7 @@ def register():
 
 
 def unregister():
+    symmetry.unregister()
     cursor_policy.unregister()
     cut_loop.cancel_active()
     viewcube.unregister()
