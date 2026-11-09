@@ -167,6 +167,8 @@ def _update(self, context):
     ob = self.id_data
     _guard[0] = True
     try:
+        from . import snaps
+        snaps.spinner_params(self, context)
         rebuild(ob)
     finally:
         _guard[0] = False
@@ -199,6 +201,8 @@ def set_params(ob, kind, **values):
     finally:
         _guard[0] = False
     rebuild(ob)
+    from . import snaps
+    snaps.remember_spinners(p)
 
 
 def collapse(ob):

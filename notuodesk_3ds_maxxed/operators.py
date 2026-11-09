@@ -224,19 +224,11 @@ class MAX_OT_toggle(Operator):
             area, _ = find_view3d(context)
             space = area.spaces.active if area else None
         w = self.what
-        if w == "SNAP":
-            ts.use_snap = not ts.use_snap
-            self.report({"INFO"}, f"Snaps {'ON' if ts.use_snap else 'OFF'}")
-        elif w == "ANGLE_SNAP":
-            ts.use_snap_rotate = not ts.use_snap_rotate
-            if ts.use_snap_rotate:
-                ts.use_snap = True
-                if "INCREMENT" not in ts.snap_elements:
-                    ts.snap_elements = set(ts.snap_elements) | {"INCREMENT"}
-            self.report({"INFO"}, f"Angle Snap {'ON' if ts.use_snap_rotate else 'OFF'}")
-        elif w == "PERCENT_SNAP":
-            ts.use_snap_scale = not ts.use_snap_scale
-        elif w == "AUTOKEY":
+        if w in {"SNAP", "ANGLE_SNAP", "PERCENT_SNAP"}:
+            from . import snaps
+            snaps.toggle(context, w)
+            return {"FINISHED"}
+        if w == "AUTOKEY":
             ts.use_keyframe_insert_auto = not ts.use_keyframe_insert_auto
             self.report({"INFO"}, f"Auto Key {'ON' if ts.use_keyframe_insert_auto else 'OFF'}")
         elif space is None:

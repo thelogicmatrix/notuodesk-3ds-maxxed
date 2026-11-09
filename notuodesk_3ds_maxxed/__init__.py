@@ -23,9 +23,9 @@ bl_info = {
 }
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty, PointerProperty
 
-from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor, snaps
 
 
 _prefs_cache = [None]
@@ -60,6 +60,8 @@ def _redraw(self, context):
 
 class MaxxedPreferences(bpy.types.AddonPreferences):
     bl_idname = __package__
+
+    snap_settings: PointerProperty(type=snaps.MaxSnapSettings)
 
     use_keymap: BoolProperty(name="3ds Max Hotkeys", default=True, update=_update_keymap,
                              description="Use 3ds Max default keyboard shortcuts and mouse navigation")
@@ -140,7 +142,7 @@ HOTKEY_CHEATSHEET = (
 
 
 _classes = (
-    (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
+    snaps.classes + (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
@@ -177,6 +179,7 @@ def register():
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""), ("VRAY", "V-Ray", "")])
     prims.register_props()
+    snaps.register_props()
     ui_panel.register_props()
     vray.register_props()
     mtl_editor.register_props()
@@ -206,6 +209,7 @@ def unregister():
     mtl_editor.unregister_props()
     vray.unregister_props()
     ui_panel.unregister_props()
+    snaps.unregister_props()
     prims.unregister_props()
     for prop in ("max_cmd_tab", "max_create_cat", "max_create_sub", "max_sublevel"):
         if hasattr(wm, prop):

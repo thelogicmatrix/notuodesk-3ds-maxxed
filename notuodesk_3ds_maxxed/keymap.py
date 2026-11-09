@@ -18,9 +18,9 @@ def K(idname, key, value="PRESS", ctrl=False, shift=False, alt=False, **props):
 VIEWPORT = [
     # Main toolbar tools
     K("wm.tool_set_by_id", "Q", name="builtin.select_box"),
-    K("wm.tool_set_by_id", "W", name="builtin.move"),
-    K("wm.tool_set_by_id", "E", name="builtin.rotate"),
-    K("wm.tool_set_by_id", "R", name="builtin.scale"),
+    K("max.select_transform", "W", kind="MOVE"),
+    K("max.select_transform", "E", kind="ROTATE"),
+    K("max.select_transform", "R", kind="SCALE"),
     # Selection
     K("max.select_all", "A", ctrl=True, action="SELECT"),
     K("max.select_all", "D", ctrl=True, action="DESELECT"),
@@ -59,6 +59,9 @@ VIEWPORT = [
     K("max.toggle", "SEVEN", what="STATS"),
     K("max.toggle", "S", what="SNAP"),
     K("max.toggle", "A", what="ANGLE_SNAP"),
+    K("max.toggle", "P", ctrl=True, shift=True, what="PERCENT_SNAP"),
+    K("max.snap_cycle", "S", alt=True),
+    K("max.snap_toggle", "F3", alt=True, kind="AXIS_CONSTRAINTS"),
     K("max.toggle", "N", what="AUTOKEY"),
     K("max.expert_mode", "X", ctrl=True),
     K("max.adaptive_degradation", "O"),
@@ -71,6 +74,7 @@ VIEWPORT = [
     # Quad menus
     K("wm.call_menu", "RIGHTMOUSE", name="MAX_MT_quad"),
     K("wm.call_menu", "RIGHTMOUSE", ctrl=True, name="MAX_MT_quad_modeling"),
+    K("max.snap_quad", "RIGHTMOUSE", shift=True),
 ]
 
 # Navigation lives only in "3D View"
