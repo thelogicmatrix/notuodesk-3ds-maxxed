@@ -23,7 +23,7 @@ bl_info = {
 }
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty, PointerProperty
 from . import hsx_import
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
@@ -40,6 +40,7 @@ from . import viewcube
 from . import loft
 from . import xview
 from . import editable_poly
+from . import snaps
 
 
 _prefs_cache = [None]
@@ -74,6 +75,8 @@ def _redraw(self, context):
 
 class MaxxedPreferences(bpy.types.AddonPreferences):
     bl_idname = __package__
+
+    snap_settings: PointerProperty(type=snaps.MaxSnapSettings)
 
     use_keymap: BoolProperty(name="3ds Max Hotkeys", default=True, update=_update_keymap,
                              description="Use 3ds Max default keyboard shortcuts and mouse navigation")
@@ -175,7 +178,7 @@ HOTKEY_CHEATSHEET = (
 
 
 _classes = (
-    (MaxxedPreferences,) + editable_poly.classes + prims.classes + keyboard_entry.classes + freezing.classes + plane_plus.classes + operators.classes + create.classes + vray.classes + max_import.classes
+    snaps.classes + (MaxxedPreferences,) + editable_poly.classes + prims.classes + keyboard_entry.classes + freezing.classes + plane_plus.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes + line_tool.classes
     + cut_loop.classes
@@ -230,6 +233,7 @@ def register():
     poly_tools.register()
     freezing.register_props()
     plane_plus.register_props()
+    snaps.register_props()
     ui_panel.register_props()
     vray.register_props()
     mtl_editor.register_props()
@@ -279,6 +283,7 @@ def unregister():
     ui_panel.unregister_props()
     freezing.unregister_props()
     plane_plus.unregister_props()
+    snaps.unregister_props()
     prims.unregister_props()
     keyboard_entry.unregister_props()
     poly_tools.unregister()

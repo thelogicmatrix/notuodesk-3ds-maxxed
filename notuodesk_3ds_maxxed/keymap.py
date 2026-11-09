@@ -19,13 +19,13 @@ VIEWPORT = [
     # No 3D cursor in Max: swallow Blender's Shift+right-click place and drag
     # Integrator: replace this PRESS entry with max.snap_quad when merging snaps.
     # Do not keep both PRESS bindings. Keep CLICK_DRAG to block cursor fallback.
-    K("max.block_cursor", "RIGHTMOUSE", shift=True),
+    K("max.snap_quad", "RIGHTMOUSE", shift=True),
     K("max.block_cursor", "RIGHTMOUSE", "CLICK_DRAG", shift=True),
     # Main toolbar tools
     K("wm.tool_set_by_id", "Q", name="builtin.select_box"),
-    K("wm.tool_set_by_id", "W", name="builtin.move"),
-    K("wm.tool_set_by_id", "E", name="builtin.rotate"),
-    K("wm.tool_set_by_id", "R", name="builtin.scale"),
+    K("max.select_transform", "W", kind="MOVE"),
+    K("max.select_transform", "E", kind="ROTATE"),
+    K("max.select_transform", "R", kind="SCALE"),
     K("max.cut", "C", alt=True),
     K("max.swift_loop", "ONE", alt=True),
     K("max.shift_drag_clone", "LEFT_SHIFT", shift=True),
@@ -70,6 +70,9 @@ VIEWPORT = [
     K("max.toggle", "SEVEN", what="STATS"),
     K("max.toggle", "S", what="SNAP"),
     K("max.toggle", "A", what="ANGLE_SNAP"),
+    K("max.toggle", "P", ctrl=True, shift=True, what="PERCENT_SNAP"),
+    K("max.snap_cycle", "S", alt=True),
+    K("max.snap_toggle", "F3", alt=True, kind="AXIS_CONSTRAINTS"),
     K("max.toggle", "N", what="AUTOKEY"),
     K("max.expert_mode", "X", ctrl=True),
     K("max.adaptive_degradation", "O"),

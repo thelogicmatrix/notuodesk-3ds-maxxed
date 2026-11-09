@@ -306,6 +306,16 @@ Line's **Creation Method** and **Keyboard Entry** appear only while Line is the 
 
 Spline objects have **Rendering** and **Interpolation** rollouts in Create and Modify. Radial Thickness is the diameter. Sides and Angle control the radial cross-section. Enable In Renderer and Enable In Viewport work independently. Blender curves keep the editable vertices, with a Geometry Nodes modifier for the radial mesh. Steps sets subdivisions between vertices. Optimize skips subdivisions on straight segments in the generated mesh.
 
+## Snaps
+
+S toggles positional snaps. The toolbar flyout chooses 2D, 2.5D or 3D. Grid Points is the initial snap type. Grid snapping is magnetic: points stay free outside the 20-pixel Snap Radius. Primitive bases and heights use the same rule, so they no longer jump in whole-unit increments.
+
+With snaps on, W, E and R select tools that drag from a picked snap base. Move a box by its corner onto another corner, or move selected Editable Poly vertices onto unselected vertices in the same mesh or another object. Rotate and Scale use the picked point as their center. Axis and plane gizmos follow the selected reference coordinate system. A cyan marker shows the target and a rubber band connects it to the base. Release commits. Right-click cancels the drag.
+
+Right-click a snap toolbar button for **Grid and Snap Settings**. Its Snaps, Options, Home Grid and User Grids tabs use Max's labels. The available targets are Grid Points, Pivot, Perpendicular on straight segments, Bounding Box, Vertex, Endpoint, Edge/Segment, Midpoint, Face, Center Face and Grid Lines. Unsupported settings are greyed out with a reason. Snap settings live in the add-on preferences, as Max stores them in its user settings rather than the scene file.
+
+Shift+right-click opens the snap quad, including during a transform or primitive creation. Release the left button, choose an override, then press it again to resume the current drag. Standard chooses a one-shot override. None disables snaps for the next action, and Last repeats the previous override. Alt+S cycles through enabled snap types. The regular checkboxes return after the action. A controls Angle Snap, initially 5 degrees. Ctrl+Shift+P controls Percent Snap, initially 10 percent. Spinner Snap quantizes changed primitive parameter fields in the Command Panel. Grid Spacing and Major Lines map to Blender's grid overlay controls. 2D accepts geometry on the active construction plane and rejects off-plane targets.
+
 ## Hotkeys
 
 | Keys | Action |
@@ -323,6 +333,9 @@ Spline objects have **Rendering** and **Interpolation** rollouts in Create and M
 | Alt+X / Alt+Q | See-Through / Isolate Selection |
 | G / X / 7 | Grid / Gizmo / Statistics |
 | S / A | Snaps / Angle Snap |
+| Ctrl+Shift+P | Percent Snap |
+| Shift+right-click / Alt+S | Snap quad / Cycle snap override |
+| Alt+F3 | Use Axis Constraints in Snaps |
 | N / K | Auto Key / Set Key |
 | Ctrl+V / Ctrl+C | Clone / Camera from view |
 | Shift+drag with W / E / R | Clone with Move / Rotate / Scale |
@@ -432,6 +445,11 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
   Colors, Subdivision Displacement and Paint Deformation remain visible but
   disabled. Max's automatic Hard/Smooth smoothing-group reassignment, vertex
   channels, displacement approximation and paint tools are not mapped.
+
+- Grid and Snap Settings stays open in a separate, modeless Blender editor window. The controls occupy its sidebar. Blender supplies the window frame, canvas and sidebar tabs. Use the panel's X or the window's close button. Toolbar right-click opens it directly without a button context menu underneath.
+- Tangent snaps, NURBS snaps, user grids and AutoGrid are unavailable. Blender controls the visible grid extent and its adaptive subdivision. Those controls are disabled in the dialog.
+- Spinner Snap applies to primitive float fields in the Command Panel, including typed edits. It does not change every Blender spinner. Curve segments use evaluated geometry, so curved-segment snaps follow Blender's tessellation.
+- Use the add-on's toolbar, Edit menu, quad menu or W/E/R for the shared magnetic transform tools. Transforms invoked directly through Blender's own operators retain Blender's snapping behavior. The snap tools support object mode and Editable Poly mesh levels.
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - Reference clones share Blender data in both directions. They do not have Max's one-way reference stack. Controller Instance uses one-way drivers from the original children, rather than Max's shared controller objects.

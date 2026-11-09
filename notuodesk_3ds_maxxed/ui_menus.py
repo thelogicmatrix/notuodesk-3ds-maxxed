@@ -181,9 +181,9 @@ class MAX_MT_quad(Menu):
             left.operator("max.object_cmd", text="See-Through").cmd = "SEE_THROUGH"
 
         _header(right, "transform")
-        right.operator("wm.tool_set_by_id", text="Move").name = "builtin.move"
-        right.operator("wm.tool_set_by_id", text="Rotate").name = "builtin.rotate"
-        right.operator("wm.tool_set_by_id", text="Scale").name = "builtin.scale"
+        right.operator("max.select_transform", text="Move").kind = "MOVE"
+        right.operator("max.select_transform", text="Rotate").kind = "ROTATE"
+        right.operator("max.select_transform", text="Scale").kind = "SCALE"
         right.operator("wm.tool_set_by_id", text="Select").name = "builtin.select_box"
         if not edit:
             right.operator("object.select_grouped", text="Select Similar").type = "TYPE"
@@ -333,9 +333,9 @@ class MAX_MT_edit(Menu):
         lay.operator("max.delete", text="Delete")
         lay.operator("max.clone", text="Clone")
         lay.separator()
-        lay.operator("wm.tool_set_by_id", text="Move").name = "builtin.move"
-        lay.operator("wm.tool_set_by_id", text="Rotate").name = "builtin.rotate"
-        lay.operator("wm.tool_set_by_id", text="Scale").name = "builtin.scale"
+        lay.operator("max.select_transform", text="Move").kind = "MOVE"
+        lay.operator("max.select_transform", text="Rotate").kind = "ROTATE"
+        lay.operator("max.select_transform", text="Scale").kind = "SCALE"
         lay.operator("max.transform_typein", text="Transform Type-In...")
         lay.separator()
         lay.operator("max.select_all", text="Select All").action = "SELECT"
@@ -362,6 +362,7 @@ class MAX_MT_tools(Menu):
         lay.operator("max.object_cmd", text="Align...").cmd = "ALIGN"
         lay.operator("object.duplicate_move", text="Snapshot")
         lay.separator()
+        lay.operator("max.snap_settings", text="Grid and Snap Settings")
         lay.operator("max.object_cmd", text="Reset XForm").cmd = "RESET_XFORM"
 
 
@@ -547,7 +548,7 @@ def draw_main_toolbar(self, context):
     row.scale_x = 1.1
     for idname, icon, custom in (("builtin.move", "OBJECT_ORIGIN", "move"), ("builtin.rotate", "ORIENTATION_GIMBAL", "rotate"),
                                  ("builtin.scale", "FULLSCREEN_ENTER", "scale")):
-        row.operator("wm.tool_set_by_id", text="", depress=(tool == idname), **max_icons.ui(custom, icon)).name = idname
+        row.operator("max.select_transform", text="", depress=(tool in {idname, idname.replace("builtin.", "max.snap_")}), **max_icons.ui(custom, icon)).kind = {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]
 
     slot = context.scene.transform_orientation_slots[0]
     sub = lay.row(align=True)
@@ -556,14 +557,8 @@ def draw_main_toolbar(self, context):
     sub = lay.row(align=True)
     sub.prop(ts, "transform_pivot_point", text="", icon_only=True, **max_icons.ui("pivot", "PIVOT_MEDIAN"))
 
-    row = lay.row(align=True)
-    # Boolean props shift a custom icon_value by one when on, so draw toggles as operators
-    for path, on, art, fallback in (
-            ("use_snap", ts.use_snap, "snap_3d" if ts.use_snap else "snap_off", "SNAP_ON" if ts.use_snap else "SNAP_OFF"),
-            ("use_snap_rotate", ts.use_snap_rotate, "angle_snap", "DRIVER_ROTATIONAL_DIFFERENCE"),
-            ("use_snap_scale", ts.use_snap_scale, "percent_snap", "MOD_PHYSICS")):
-        row.operator("wm.context_toggle", text="", depress=on,
-                     **max_icons.ui(art, fallback)).data_path = "tool_settings." + path
+    from . import snaps
+    snaps.draw_toolbar(lay, context)
 
     row = lay.row(align=True)
     row.operator("max.object_cmd", text="", **max_icons.ui("mirror", "MOD_MIRROR")).cmd = "MIRROR"
@@ -600,8 +595,12 @@ def draw_statusbar(self, context):
         row.prop(ob, "location", index=1, text="Y")
         row.prop(ob, "location", index=2, text="Z")
     space = context.space_data if context.space_data and context.space_data.type == "VIEW_3D" else None
-    unit = context.scene.unit_settings.scale_length or 1.0
-    lay.label(text=f"Grid = {unit:g}m")
+    from . import snaps
+    units = context.scene.unit_settings
+    spacing = snaps.settings(context).grid_spacing
+    value = (bpy.utils.units.to_string(units.system, "LENGTH", spacing * units.scale_length)
+             if units.system != "NONE" else f"{spacing:g}")
+    lay.label(text=f"Grid = {value}")
     ts = context.tool_settings
     row = lay.row(align=True)
     row.alert = ts.use_keyframe_insert_auto

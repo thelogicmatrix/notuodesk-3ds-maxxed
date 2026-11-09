@@ -12,6 +12,7 @@ from mathutils import Matrix, Vector
 from mathutils.geometry import intersect_line_plane
 
 from .operators import max_name
+from . import snaps
 
 from .prims import PRIMITIVES, set_params
 from . import keyboard_entry
@@ -229,6 +230,7 @@ class MAX_OT_create(Operator):
         return Vector((event.mouse_x - r.x, event.mouse_y - r.y))
 
     def _finish(self, context):
+        snaps.clear_preview()
         MAX_OT_create.active_kind = ""
         try:
             context.workspace.status_text_set(None)
@@ -253,9 +255,10 @@ class MAX_OT_create(Operator):
         p = ray_plane(region, self.rv3d, self._co(event), Vector((0, 0, 0)), self.n)
         if p is None:
             return False
-        if context.scene.tool_settings.use_snap:
-            p = Vector([round(c) for c in p])   # snap to home grid units
+        p = snaps.snap_point(context, region, self.rv3d, self._co(event), p,
+                             (Vector((0, 0, 0)), self.n))
         self.p0 = p
+        snaps.consume_override(context)
         label = PRIMITIVES[self.kind][0]
         extended = self.kind in extended_primitives.PRIMITIVES
         mesh = bpy.data.meshes.new(label) if extended else build_unit_mesh(self.kind, self.segments)
@@ -279,8 +282,8 @@ class MAX_OT_create(Operator):
         p = ray_plane(self.region, self.rv3d, self._co(event), self.p0, self.n)
         if p is None:
             return
-        if context.scene.tool_settings.use_snap:
-            p = Vector([round(c) for c in p])
+        p = snaps.snap_point(context, self.region, self.rv3d, self._co(event), p,
+                             (self.p0, self.n), exclude=(self.obj,), base=self.p0)
         center, scale = keyboard_entry.base_size(
             self.kind, self.creation_method, self.p0, p, self.u, self.v, self.height)
         self.obj.location = center
@@ -298,8 +301,13 @@ class MAX_OT_create(Operator):
             h = (self._co(event).y - co0.y) * (b - a).length
         else:
             h = ray_line_height(self.region, self.rv3d, self._co(event), base, self.n)
-        if context.scene.tool_settings.use_snap:
-            h = round(h)
+        pixels_per_unit = None
+        if not self.rv3d.is_perspective or abs(view_dir.dot(self.n)) > 0.97:
+            pixels_per_unit = 1 / max((b - a).length, 1e-9)
+        p = snaps.snap_point(context, self.region, self.rv3d, self._co(event), base + self.n * h,
+                             (self.p0, self.n), exclude=(self.obj,), base=base,
+                             axis=self.n, pixels_per_unit=pixels_per_unit)
+        h = (p - base).dot(self.n)
         self.height = h if abs(h) > 1e-4 else 1e-4
         sx, sy, _ = self.obj.scale
         self.obj.scale = (sx, sy, self.height)
@@ -328,6 +336,8 @@ class MAX_OT_create(Operator):
         finalize_new_object(context, ob)
         bpy.ops.ed.undo_push(message=f"Create {PRIMITIVES[self.kind][0]}")
         self.obj = None
+        snaps.consume_override(context)
+        snaps.clear_preview()
 
     def _extended_base(self, context, event):
         p = ray_plane(self.region, self.rv3d, self._co(event), self.p0, self.n)
@@ -402,7 +412,11 @@ class MAX_OT_create(Operator):
     def modal(self, context, event):
         if self.session != MAX_OT_create._session:   # another Create button was pressed
             self._cancel_object()
+            snaps.clear_preview()
             return {"FINISHED"}
+
+        if snaps.override_event(self, context, event, dragging=self.state == "BASE"):
+            return {"RUNNING_MODAL"}
 
         if event.type in {"RIGHTMOUSE", "ESC"} and event.value == "PRESS":
             if self.state != "WAIT":
@@ -429,6 +443,8 @@ class MAX_OT_create(Operator):
             if event.type == "MOUSEMOVE":
                 self._update_base(context, event)
             elif event.type == "LEFTMOUSE" and event.value == "RELEASE":
+                self._update_base(context, event)
+                snaps.consume_override(context)
                 if max(self.size) < 1e-3:          # a click without a drag creates nothing
                     self._cancel_object()
                     self.state = "WAIT"
@@ -456,6 +472,7 @@ class MAX_OT_create(Operator):
             if event.type == "MOUSEMOVE":
                 self._update_height(context, event)
             elif event.type == "LEFTMOUSE" and event.value == "PRESS":
+                self._update_height(context, event)
                 self._bake(context)
                 self.state = "WAIT"
                 self._status(context)
