@@ -24,6 +24,21 @@ feedback = FeedbackFixture()
 
 
 class ChromeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from notuodesk_3ds_maxxed import max_rotate
+        cls.owns_transform_settings = not hasattr(bpy.types.Scene, 'max_rotate')
+        if cls.owns_transform_settings:
+            bpy.utils.register_class(max_rotate.MaxRotateSettings)
+            bpy.types.Scene.max_rotate = bpy.props.PointerProperty(type=max_rotate.MaxRotateSettings)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.owns_transform_settings:
+            from notuodesk_3ds_maxxed import max_rotate
+            del bpy.types.Scene.max_rotate
+            bpy.utils.unregister_class(max_rotate.MaxRotateSettings)
+
     def test_region_overlap_restores_after_file_load(self):
         system = bpy.context.preferences.system
         original = system.use_region_overlap

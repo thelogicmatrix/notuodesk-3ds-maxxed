@@ -21,9 +21,9 @@ class G:
             'FLOAT': 'NodeSocketFloat', 'INT': 'NodeSocketInt',
             'BOOL': 'NodeSocketBool', 'VECTOR': 'NodeSocketVector'}[kind])
         socket.default_value = default
-        if lo is not None:
+        if lo is not None and hasattr(socket, 'min_value'):
             socket.min_value = lo
-        if hi is not None:
+        if hi is not None and hasattr(socket, 'max_value'):
             socket.max_value = hi
         if subtype is not None:
             socket.subtype = subtype
