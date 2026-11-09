@@ -14,6 +14,20 @@ class ModeFeedbackTests(unittest.TestCase):
         bpy.ops.object.delete(use_global=False)
         bpy.ops.mesh.primitive_cube_add()
 
+    def test_deleted_hover_object_is_cleared(self):
+        from types import SimpleNamespace
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        ob = bpy.context.object
+        key = bpy.context.window.as_pointer()
+        pointer = SimpleNamespace(window=bpy.context.window, hit=ob)
+        mf._pointers[key] = pointer
+        bpy.data.objects.remove(ob, do_unlink=True)
+        try:
+            self.assertIs(mf.pointer_state(key), pointer)
+            self.assertIsNone(pointer.hit)
+        finally:
+            mf._pointers.pop(key, None)
+
     def test_base_stack_click_leaves_subobject(self):
         bpy.ops.max.subobject(level=2)
         bpy.ops.max.modifier_set_active(name='')

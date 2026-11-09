@@ -35,6 +35,11 @@ def pointer_state(key):
         except ReferenceError:
             _pointers.pop(key,None)
             return None
+        try:
+            if pointer.hit is not None:
+                pointer.hit.name
+        except ReferenceError:
+            pointer.hit = None
     return pointer
 
 def level(context):

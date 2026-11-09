@@ -32,7 +32,7 @@ class Integration(unittest.TestCase):
         bm.verts.ensure_lookup_table()
         return bm.verts[i].co.copy()
     def operator(self,tx):
-        return SimpleNamespace(matrices=[],meshes=[(self.ob,[(0,Vector())])],constraint_tx=tx,kind='MOVE',normal_distance=None)
+        return SimpleNamespace(matrices=[],meshes=[(self.ob,[(0,Vector())])],poly_targets=tx,individual=False,kind='MOVE',normal_distance=None)
     def test_shared_snap_apply_constrains_requested_positions(self):
         tx=pc.MoveSession(bpy.context)
         op=self.operator(tx)
