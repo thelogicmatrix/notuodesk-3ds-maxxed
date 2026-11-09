@@ -16,6 +16,7 @@ _handle = None
 _cursor_handle = None
 _last_state = None
 _batches = {}
+_selection_summaries = {}
 _pointers = {}
 _active_views = {}
 _link_drags = {}
@@ -80,11 +81,7 @@ def selection_text(context):
         return 'None Selected' if not n else f"{n} Object{'s' if n != 1 else ''} Selected"
     if context.mode == 'EDIT_MESH':
         lev = level(context)
-        count = 0
-        for ob in context.objects_in_mode_unique_data:
-            bm = bmesh.from_edit_mesh(ob.data)
-            seq = bm.verts if lev == 1 else bm.edges if lev in (2, 3) else bm.faces
-            count += sum(item.select and not item.hide for item in seq)
+        count, _ = _selection_summary(context, lev)
         noun = {1: ('Vertex', 'Vertices'), 2: ('Edge', 'Edges'), 3: ('Edge', 'Edges'),
                 4: ('Polygon', 'Polygons'), 5: ('Polygon', 'Polygons')}[lev]
         return f'{count} {noun[count != 1]} Selected'
@@ -95,15 +92,31 @@ def rollout_selection_text(context):
     if context.mode != 'EDIT_MESH':
         return 'Whole Object Selected'
     lev = level(context)
-    selected = []
-    for ob in context.objects_in_mode_unique_data:
-        bm = bmesh.from_edit_mesh(ob.data)
-        seq = bm.verts if lev == 1 else bm.edges if lev in (2, 3) else bm.faces
-        selected.extend(i+1 for i, item in enumerate(seq) if item.select and not item.hide)
-    if len(selected) == 1 and len(context.objects_in_mode_unique_data) == 1:
+    count, single_id = _selection_summary(context, lev)
+    if count == 1 and len(context.objects_in_mode_unique_data) == 1:
         noun = 'Vertex' if lev == 1 else 'Edge' if lev in (2, 3) else 'Polygon'
-        return f'{noun} {selected[0]} Selected'
+        return f'{noun} {single_id} Selected'
     return selection_text(context)
+
+def _selection_summary(context, lev):
+    """Share a scan between status and rollout until selection/geometry changes."""
+    count, single_id = 0, None
+    for ob in context.objects_in_mode_unique_data:
+        mesh = ob.data
+        key = mesh.as_pointer()
+        # Native counters catch changes even before depsgraph callbacks run.
+        state = (lev, mesh.total_vert_sel, mesh.total_edge_sel, mesh.total_face_sel)
+        cached = _selection_summaries.get(key)
+        if cached is None or cached[0] != state:
+            bm = bmesh.from_edit_mesh(mesh)
+            seq = bm.verts if lev == 1 else bm.edges if lev in (2, 3) else bm.faces
+            selected = [i+1 for i, item in enumerate(seq) if item.select and not item.hide]
+            cached = (state, len(selected), selected[0] if len(selected) == 1 else None)
+            _selection_summaries[key] = cached
+        count += cached[1]
+        if cached[1]:
+            single_id = cached[2]
+    return count, single_id
 
 def prompt_text(context):
     kind = active_tool(context)
@@ -274,6 +287,13 @@ def _draw_selection():
 @persistent
 def invalidate(*_):
     _batches.clear()
+    _selection_summaries.clear()
+
+@persistent
+def on_history(*_):
+    from .operators import sync_sublevel
+    invalidate()
+    sync_sublevel(bpy.context)
 
 def refresh():
     """Tool switches do not always emit depsgraph updates. Watch actual state."""
@@ -281,6 +301,8 @@ def refresh():
     ctx = bpy.context
     if not ctx.window_manager or not hasattr(ctx.window_manager, 'max_sublevel'):
         return .1
+    from .operators import sync_sublevel
+    sync_sublevel(ctx)
     for wm in bpy.data.window_managers:
         if len(wm.max_feedback_levels) != 5:
             wm.max_feedback_levels.clear()
@@ -316,7 +338,7 @@ def refresh():
 def on_load(*_):
     global _last_state
     _last_state = None
-    _batches.clear()
+    on_history()
     _pointers.clear()
     _active_views.clear()
     for wm in bpy.data.window_managers:
@@ -363,6 +385,7 @@ class MAX_OT_feedback_pointer(Operator):
     def invoke(self, context, event):
         self.window = context.window
         self.area = context.area
+        self.region = context.region
         self.hit = None
         self.xy = (0, 0)
         self.cursor = 'DEFAULT'
@@ -398,13 +421,16 @@ class MAX_OT_feedback_pointer(Operator):
                            r.x <= event.mouse_x < r.x+r.width and r.y <= event.mouse_y < r.y+r.height), None) if area else None
             if region:
                 self.area = area
+                self.region = region
                 self.xy = (event.mouse_x-region.x, event.mouse_y-region.y)
                 from types import SimpleNamespace
                 pos = SimpleNamespace(mouse_region_x=self.xy[0], mouse_region_y=self.xy[1])
                 with context.temp_override(window=self.window, area=area, region=region):
                     kind = active_tool(bpy.context)
                     if kind in {'SELECT', 'MOVE', 'ROTATE', 'SCALE', 'LINK'}:
-                        self.hit = object_under_mouse(bpy.context, pos)
+                        # Object picking adds no component information in Edit Poly.
+                        self.hit = (bpy.context.edit_object if bpy.context.mode == 'EDIT_MESH'
+                                    else object_under_mouse(bpy.context, pos))
                         self.cursor = cursor_kind(kind, self.hit is not None,
                                                   bool(self.hit and self.hit.select_get()))
                 area.tag_redraw()
@@ -418,12 +444,13 @@ def _draw_cursor():
         return
     _draw_view_border(ctx)
     link = _link_drags.get(ctx.window.as_pointer())
-    if link and link.area == ctx.area and link.region == ctx.region:
+    if link and link.window == ctx.window and link.area == ctx.area and link.region == ctx.region:
         _draw_link_drag(link)
     pointer = pointer_state(ctx.window.as_pointer()) if ctx.window else None
-    if link:
+    if link and link.window == ctx.window and link.area == ctx.area and link.region == ctx.region:
         xy, kind = link.mouse, 'LINK'
-    elif pointer and pointer.area == ctx.area:
+    elif (not link and pointer and pointer.window == ctx.window
+          and pointer.area == ctx.area and pointer.region == ctx.region):
         xy, kind = pointer.xy, pointer.cursor
     else:
         return
@@ -566,6 +593,8 @@ def register():
     bpy.types.WindowManager.max_feedback_levels = CollectionProperty(type=MAX_PG_feedback_level)
     bpy.types.WindowManager.max_feedback_index = IntProperty(get=_index_get, set=_index_set)
     bpy.app.handlers.depsgraph_update_post.append(invalidate)
+    bpy.app.handlers.undo_post.append(on_history)
+    bpy.app.handlers.redo_post.append(on_history)
     bpy.app.handlers.load_post.append(on_load)
     if not bpy.app.background:
         _handle = bpy.types.SpaceView3D.draw_handler_add(_draw_selection, (), 'WINDOW', 'POST_VIEW')
@@ -594,10 +623,13 @@ def unregister():
     for link in list(_link_drags.values()):
         link.finish('CANCELLED')
     for handlers, fn in ((bpy.app.handlers.depsgraph_update_post, invalidate),
+                         (bpy.app.handlers.undo_post, on_history),
+                         (bpy.app.handlers.redo_post, on_history),
                          (bpy.app.handlers.load_post, on_load)):
         if fn in handlers:
             handlers.remove(fn)
     _batches.clear()
+    _selection_summaries.clear()
     for cls, name in ((bpy.types.Scene, 'max_selection_brackets'),
                       (bpy.types.Object, 'max_feedback_expanded'),
                       (bpy.types.WindowManager, 'max_feedback_levels'),

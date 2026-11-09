@@ -51,6 +51,57 @@ class ModeFeedbackTests(unittest.TestCase):
         bm.verts[0].hide_set(True)
         self.assertEqual(mf.selection_text(bpy.context), '0 Vertices Selected')
 
+    def test_status_and_rollout_share_one_selection_scan(self):
+        from unittest.mock import patch
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        bpy.ops.max.subobject(level=1)
+        bm = bmesh.from_edit_mesh(bpy.context.object.data)
+        for vert in bm.verts:
+            vert.select_set(False)
+        bm.verts.ensure_lookup_table()
+        bm.verts[0].select_set(True)
+        bmesh.update_edit_mesh(bpy.context.object.data)
+        bpy.context.view_layer.update()
+        # Count the real component iteration, including the single-ID rollout.
+        scans = []
+        original = bmesh.from_edit_mesh
+        # current_level also reads the edit mesh once saved level data is added.
+        # Only track iterations using the BMVertSeq iterator, not metadata reads.
+        class CountedSequence:
+            def __init__(self, seq):
+                self.seq = seq
+            def __iter__(self):
+                scans.append(True)
+                return iter(self.seq)
+            def __getattr__(self, name):
+                return getattr(self.seq, name)
+        class MeshProxy:
+            def __init__(self, bm):
+                self.verts = CountedSequence(bm.verts)
+                self.edges, self.faces = bm.edges, bm.faces
+        with patch.object(bmesh, 'from_edit_mesh', side_effect=lambda mesh: MeshProxy(original(mesh))):
+            self.assertEqual(mf.selection_text(bpy.context), '1 Vertex Selected')
+            self.assertEqual(mf.rollout_selection_text(bpy.context), 'Vertex 1 Selected')
+            self.assertEqual(mf.rollout_selection_text(bpy.context), 'Vertex 1 Selected')
+        self.assertLessEqual(len(scans), 1, 'status and rollout repeatedly walked the edit mesh')
+
+    def test_selection_summary_changes_after_mesh_update(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        bpy.ops.max.subobject(level=1)
+        bm = bmesh.from_edit_mesh(bpy.context.object.data)
+        bm.verts.ensure_lookup_table()
+        for vert in bm.verts:
+            vert.select_set(False)
+        bm.verts[0].select_set(True)
+        bmesh.update_edit_mesh(bpy.context.object.data)
+        bpy.context.view_layer.update()
+        self.assertEqual(mf.rollout_selection_text(bpy.context), 'Vertex 1 Selected')
+        bm.verts[0].select_set(False)
+        bm.verts[1].select_set(True)
+        bmesh.update_edit_mesh(bpy.context.object.data)
+        bpy.context.view_layer.update()
+        self.assertEqual(mf.rollout_selection_text(bpy.context), 'Vertex 2 Selected')
+
     def test_panel_change_leaves_edit_and_clears_level(self):
         from notuodesk_3ds_maxxed import mode_feedback as mf
         bpy.ops.max.subobject(level=4)
@@ -65,6 +116,41 @@ class ModeFeedbackTests(unittest.TestCase):
         self.assertEqual(mf.level(bpy.context), 4)
         bpy.ops.object.mode_set(mode='OBJECT')
         self.assertEqual(mf.level(bpy.context), 0)
+
+    def test_saved_level_read_before_edit_bmesh_is_ready(self):
+        from notuodesk_3ds_maxxed.operators import stored_mesh_level
+        bpy.ops.max.subobject(level=3)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        self.assertEqual(stored_mesh_level(bpy.context.object), 3)
+
+    def test_native_mode_change_does_not_revive_old_border(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        bpy.ops.max.subobject(level=3)
+        bpy.ops.mesh.select_mode(type='FACE')
+        mf.refresh()
+        bpy.ops.mesh.select_mode(type='EDGE')
+        self.assertEqual(mf.level(bpy.context), 2)
+
+    def test_level_storage_survives_an_empty_mesh(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        from notuodesk_3ds_maxxed.operators import stored_mesh_level
+        bpy.ops.max.subobject(level=1)
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.delete(type='VERT')
+        bpy.ops.max.subobject(level=3)
+        self.assertEqual(mf.level(bpy.context), 3)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        self.assertEqual(stored_mesh_level(bpy.context.object), 3)
+
+    def test_multi_object_edit_stores_each_mesh_level(self):
+        from notuodesk_3ds_maxxed.operators import stored_mesh_level
+        first = bpy.context.object
+        bpy.ops.mesh.primitive_cube_add(location=(3, 0, 0))
+        second = bpy.context.object
+        first.select_set(True)
+        bpy.ops.max.subobject(level=5)
+        self.assertEqual(stored_mesh_level(first), 5)
+        self.assertEqual(stored_mesh_level(second), 5)
 
     def test_tool_aliases_and_cursor_policy(self):
         from notuodesk_3ds_maxxed import mode_feedback as mf

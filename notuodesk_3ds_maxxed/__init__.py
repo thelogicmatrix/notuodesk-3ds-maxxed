@@ -224,7 +224,7 @@ def register():
     wm = bpy.types.WindowManager
     wm.max_cmd_tab = EnumProperty(name="Command Panel", items=max_icons.enum_items(ui_panel.TABS), default="CREATE", update=mode_feedback.command_tab_changed)
     wm.max_create_cat = EnumProperty(name="Category", items=max_icons.enum_items(ui_panel.CREATE_CATS), default="GEOMETRY")
-    wm.max_sublevel = IntProperty(default=0)
+    wm.max_sublevel = IntProperty(default=0, update=operators.sublevel_changed)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""),
                                     ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", ""), ("JOKERMARTINI", "JokerMartini", ""), ("COMPOUND", "Compound Objects", "")])
     editable_poly.register_props()
