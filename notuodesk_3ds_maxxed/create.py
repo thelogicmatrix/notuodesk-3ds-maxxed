@@ -233,6 +233,8 @@ class MAX_OT_create(bpy.types.Operator):
         if getattr(self, 'stage_prop', '') == 'height' and self.obj.max_prim.height == 0:
             context.workspace.status_text_set('Set a non-zero height, or right-click to cancel')
             return
+        from . import snaps
+        snaps.consume_override(context)
         stages = extended_primitives.STAGES.get(self.kind)
         if stages is None:
             stages = {'CONE': ('height', 'radius2'), 'TUBE': ('radius2', 'height'),
@@ -259,6 +261,10 @@ class MAX_OT_create(bpy.types.Operator):
         value = (b - a).length * (-1 if co.y < self.release_co.y else 1)
         unit = view3d_utils.region_2d_to_location_3d(self.region, self.rv3d, self.release_co + Vector((0, 1)), self.p0)
         pixels = 1 / max((unit - a).length, 1e-8)
+        if (self.stage_prop == 'height' and self.rv3d.is_perspective
+                and abs((self.rv3d.view_rotation @ Vector((0, 0, 1))).dot(self.n)) < .97):
+            value = ray_line_height(self.region, self.rv3d, co, self.obj.matrix_world.translation, self.n)
+            pixels = None
         point = self.p0 + self.n * value
         point = snaps.snap_point(context, self.region, self.rv3d, co, point, (self.p0, self.n),
                                  exclude=(self.obj,), base=self.p0, axis=self.n, pixels_per_unit=pixels)
@@ -311,6 +317,9 @@ class MAX_OT_create(bpy.types.Operator):
     def modal(self, context, event):
         if self.session != MAX_OT_create._session or context.window.screen != self.screen:
             return self._leave(context)
+        from . import snaps
+        if snaps.override_event(self, context, event, dragging=self.state != 'WAIT'):
+            return {'RUNNING_MODAL'}
         if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
             if self.obj:
                 self._discard()
