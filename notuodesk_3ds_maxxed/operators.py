@@ -90,6 +90,9 @@ class MAX_OT_subobject(Operator):
 
     def execute(self, context):
         obj = context.active_object
+        from . import symmetry
+        if symmetry.editing(context):
+            obj = symmetry.leave(context)
         wm = context.window_manager
         lvl = self.level
 
@@ -588,16 +591,20 @@ class MAX_OT_object_cmd(Operator):
 
     def run(self, context, how):
         c = self.cmd
+        from . import symmetry
+        symmetry.leave(context)
         if context.mode != "OBJECT" and c not in {"ISOLATE", "MIRROR"}:
             bpy.ops.object.mode_set(mode="OBJECT")
             context.window_manager.max_sublevel = 0
         sel = context.selected_objects
         try:
             if c == "CONVERT_POLY":
-                bpy.ops.object.convert(target="MESH")
+                if bpy.ops.object.convert(target="MESH") != {"FINISHED"}:
+                    return {"CANCELLED"}
                 for ob in context.selected_objects:
                     if ob.type == "MESH":
                         ob.max_prim.kind = ""
+                symmetry.reconcile()
             elif c == "CONVERT_SPLINE":
                 bpy.ops.object.convert(target="CURVE")
                 from . import poly_tools
@@ -870,7 +877,16 @@ class MAX_OT_add_modifier(Operator):
     def execute(self, context):
         spec, label = self.kind.split("|")
         mtype, _, option = spec.partition(":")
-        ob = context.active_object
+        from . import symmetry
+        ob = symmetry.leave(context)
+        if mtype == "SYMMETRY":
+            if ob.type != "MESH":
+                self.report({"WARNING"}, "Symmetry works on mesh objects")
+                return {"CANCELLED"}
+            if context.mode != "OBJECT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+            symmetry.add(ob)
+            return {"FINISHED"}
         if mtype == "TURBOSMOOTH":
             if ob.type != "MESH":
                 self.report({"WARNING"}, "TurboSmooth works on mesh objects")
@@ -1067,7 +1083,10 @@ class MAX_OT_modifier_set_active(Operator):
     name: StringProperty()
 
     def execute(self, context):
-        ob = context.active_object
+        from . import symmetry
+        ob = symmetry.leave(context)
+        if context.mode.startswith("EDIT"):
+            bpy.ops.object.mode_set(mode="OBJECT")
         mod = ob.modifiers.get(self.name) if ob else None
         from . import poly_tools
         if mod is not None and poly_tools.is_font_pivot(mod):

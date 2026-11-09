@@ -214,6 +214,18 @@ Object Type follows Max's button order. Parameters use compact labelled fields. 
 
 Parameter names and segment defaults follow [Autodesk's Extended Primitives reference](https://help.autodesk.com/cloudhelp/2015/ENU/3DSMax/files/GUID-BF868DCF-12E3-431C-A73B-C16C0FD67C98.htm). Types whose Max constructor starts with zero dimensions start at one Blender unit here. ChamferBox, Capsule, Hedra and Prism keep their documented nonzero dimensions. Click-drag creation replaces these dimensions with the size you draw.
 
+## Symmetry
+
+Choose **Modifier List > Symmetry** in the Modify panel. Its Parameters rollout has **Planar** and **Radial** types. Planar supports X, Y and Z together, with Flip per axis. Radial repeats a segment around X, Y or Z, with **Count**, **Mirror Symmetry** and **Flip**. Mirror Symmetry reflects half of each segment so its adjacent boundaries match. Slice Along Mirror and Weld Seam start on. Both Threshold fields start at **0.01 object-space Blender units**, matching Autodesk's 2026 rollout image. Use Proximity Weld starts off. No physical unit conversion is applied.
+
+Expand Symmetry in the stack and click **Mirror**. Press **W** to move or **E** to rotate its yellow mirror plane with the viewport gizmo. Click Symmetry or Editable Poly to return to the mesh. The original mesh stays editable at Vertex, Edge, Border, Polygon and Element levels, with the symmetric result visible. Align to Face picks a surface point and normal. Pick Object copies a reference object's current transform. Reset Gizmo restores the object's local origin and axes. Right-click cancels picking.
+
+Saved Geometry Nodes supply the geometry. Exact Boolean cuts mark seam boundaries, remove construction caps and reflect or rotate the segment. Default welding joins the marked boundaries. Proximity welding also accepts nearby vertices in the seam band, without merging thin faces elsewhere on the source. Each Symmetry has an independent, parented centre helper in the hidden-from-render `.3ds Maxxed Symmetry` collection. Helpers stay hidden and unselectable except while editing Mirror. A lost helper recovers from the saved plane record. Removing, applying or converting the modifier removes its helper. Convert to Editable Poly also works from Mirror level. Save/reload and undo retain the centre and parameters. Disabling the add-on keeps its native scene dependencies and evaluated geometry. Re-enabling restores the UI without making duplicate helpers. Older Symmetry scenes upgrade while retaining their plane and proximity weld setting.
+
+Reference: [Autodesk 3ds Max 2026 Symmetry](https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modifiers/files/GUID-EB0B7B9B-117D-4CC3-A966-A3E007E0C68A.htm).
+
+Cut welding adjusts its numerical tolerance to the coordinates in the Mirror frame, up to the Weld Threshold. It still selects only marked seam vertices. Geometry wholly inside a retained half-space skips the Boolean cut, so editing an open segment does not repeatedly intersect it with a solid cutter. Moving geometry across the plane uses the cut again. Saved node graphs upgrade with their centre and parameters intact.
+
 ## Poly tools and pivots
 
 - **Quad Cap:** in Edit Poly at Border level, next to Cap, or in the modeling quad menu. Select the border edges or just one edge of a hole. It fills each selected hole with a quad grid and chooses the grid corners from the border angles. An odd edge count uses triangles and quads, with a warning.
@@ -406,6 +418,8 @@ Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments*
 Keep Scene Upright also controls clicked views. Turn it off to carry the current roll into an edge or corner view. Dark text and outlines use slightly higher opacity than the faces so they stay readable over bright viewports. Opening a saved file rebuilds the cube's drawing resources. Files keep each viewport's original navigation gizmo setting, so turning the ViewCube or add-on off after reopening restores that setting.
 
 ## Known differences from 3ds Max
+
+- Symmetry uses Blender's exact Boolean and mesh-merge operations. Cut-aware welding uses a coordinate-relative numerical tolerance, limited by Weld Threshold. This is not Autodesk's private vertex-tracking implementation. Unmatched radial boundaries can stay open with Mirror Symmetry off. Blender supplies the spinners and transform gizmos. A helper collection remains visible in the Outliner. Pick Object samples the reference transform once. Radial starts at Count 2, Z and Mirror Symmetry off. Autodesk's 2026 help states X as the general default axis but does not separately explain the switch to Radial. These Radial startup values remain unverified against Max.
 
 - Shapes, helpers, lights, cameras and V-Ray objects use the world origin instead of interactive placement. Target lights and cameras keep a preset target offset.
 - The cursor policy checks new viewports and scene switches every 0.2 seconds. Other workspaces keep their cursor display settings. A scene shared with the 3ds Max workspace shares its cursor location too.

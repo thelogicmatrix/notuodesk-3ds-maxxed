@@ -7,7 +7,7 @@ from bpy.types import Menu
 # (Max name, "BLENDER_TYPE[:option]") grouped like the 3ds Max Modifier List
 MODIFIER_LIST = [
     ("MESH EDITING", [
-        ("Edit Poly", "EDIT_POLY"), ("Symmetry", "MIRROR"), ("Mirror", "MIRROR"),
+        ("Edit Poly", "EDIT_POLY"), ("Symmetry", "SYMMETRY"), ("Mirror", "MIRROR"),
         ("Vertex Weld", "WELD"), ("ProOptimizer", "DECIMATE"), ("Optimize", "DECIMATE:PLANAR"),
         ("MultiRes", "DECIMATE"), ("Turn to Mesh", "TRIANGULATE"), ("Delete Mesh", "MASK"),
         ("Smooth", "EDGE_SPLIT"), ("Edit Normals", "NORMAL_EDIT"), ("Weighted Normals", "WEIGHTED_NORMAL"),
