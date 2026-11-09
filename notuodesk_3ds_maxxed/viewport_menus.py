@@ -152,7 +152,10 @@ class MAX_MT_vp_general(Menu):
         lay.separator()
         lay.operator("max.toggle", text="Show Grids                        G").what = "GRID"
         if sp:
-            lay.prop(sp, "show_gizmo_navigate", text="ViewCube / Navigation Gizmo")
+            from . import get_prefs
+            prefs = get_prefs()
+            if prefs:
+                lay.prop(prefs, "show_viewcube", text="Show the ViewCube       Alt+Ctrl+V")
             lay.prop(sp, "show_gizmo", text="Transform Gizmo                X")
             lay.prop(sp.overlay, "show_stats", text="xView: Show Statistics       7")
             lay.prop(sp.overlay, "show_axis_x", text="World Axis X")

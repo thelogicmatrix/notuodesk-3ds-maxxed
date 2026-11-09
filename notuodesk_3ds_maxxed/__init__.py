@@ -36,6 +36,7 @@ from . import cursor_policy
 from . import max_icons
 from . import shift_clone
 from . import max_export
+from . import viewcube
 
 
 _prefs_cache = [None]
@@ -96,6 +97,14 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
                ("BOTTOM", "Bottom", "Bottom center of the world bounding box"),
                ("CENTER", "Center", "Center of the world bounding box")],
         description="Set the pivot when finishing an add-on primitive or spline")
+    show_viewcube: BoolProperty(name="Show the ViewCube", default=True, update=viewcube.update)
+    viewcube_size: EnumProperty(name="ViewCube Size", items=[(s, s.title(), "") for s in
+                                ("TINY", "SMALL", "NORMAL", "LARGE")], default="SMALL", update=viewcube.update)
+    viewcube_opacity: EnumProperty(name="Inactive Opacity", items=[(str(n), f"{n}%", "") for n in
+                                   (0, 25, 50, 70)], default="50", update=viewcube.update,
+                                   description="Inactive opacity, below the fixed 80% active opacity")
+    viewcube_snap: BoolProperty(name="Snap to Closest View", default=True)
+    viewcube_upright: BoolProperty(name="Keep Scene Upright", default=True)
 
     def draw(self, context):
         lay = self.layout
@@ -107,6 +116,9 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
         for p in ("use_keymap", "max_menubar", "show_toolbar", "show_statusbar", "show_labels", "random_colors"):
             col.prop(self, p)
         col.prop(self, "auto_pivot_on_create")
+        box = lay.box()
+        box.label(text="ViewCube")
+        viewcube.draw_settings(box, self)
 
         updater.draw_update_box(lay, self)
         hsx_import.draw_preferences(lay, self)
@@ -126,6 +138,7 @@ HOTKEY_CHEATSHEET = (
     ("Ctrl+Alt+MMB, Wheel", "Zoom"),
     ("Z / Ctrl+Shift+Z", "Zoom Extents Sel / All"),
     ("Alt+W", "Maximize viewport (quad)"),
+    ("Alt+Ctrl+V / H", "ViewCube visibility / Home"),
     ("T F L B K P U C", "Top Front Left Bottom Back Persp User Camera"),
     ("1 2 3 4 5 (6)", "Vertex Edge Border Poly Element (exit)"),
     ("H", "Select From Scene"),
@@ -166,6 +179,7 @@ _classes = (
     + hsx_import.classes
     + poly_tools.classes
     + shift_clone.classes
+    + viewcube.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
     + max_export.classes
 )
@@ -224,6 +238,7 @@ def register():
     p = get_prefs()
     if p is None or p.use_keymap:
         keymap.register_keymaps()
+    viewcube.register()
     if not bpy.app.background:
         bpy.app.timers.register(_first_run, first_interval=0.5)
         bpy.app.timers.register(_unlock_quads_once, first_interval=1.0)
@@ -233,6 +248,7 @@ def register():
 def unregister():
     cursor_policy.unregister()
     cut_loop.cancel_active()
+    viewcube.unregister()
     _prefs_cache[0] = None
     shift_clone.unregister()
     keymap.unregister_keymaps()
