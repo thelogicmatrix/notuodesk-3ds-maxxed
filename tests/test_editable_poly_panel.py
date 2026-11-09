@@ -116,6 +116,7 @@ def more_actions():
         assert len(bm.faces) == 5, action
         print(f"PASS {action}: quad to 5 faces", flush=True)
     ob, bm = mesh(QUAD, faces=[(0, 1, 2, 3)])
+    ep.settings(bpy.context, "OUTLINE").amount = 0.1
     act("OUTLINE")
     assert len(bm.faces) == 1 and min(v.co.x for v in bm.verts) < -0.09
     print("PASS Outline expands boundary without adding faces", flush=True)

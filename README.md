@@ -87,9 +87,37 @@ levels. Subdivision Surface, Subdivision Displacement and Paint Deformation are
 available at every level. Unmapped controls remain visible and disabled. Adding
 Edit Poly still edits the base mesh.
 
-The small settings button beside an operation opens its options. Click OK to
-apply them. The main button reuses the accepted values for that operation and
-sub-object level. Values live in the scene and are saved in the blend file.
+The small settings button beside an operation opens a floating viewport caddy
+for Extrude, Chamfer, Connect, Bevel, Inset, Outline, Bridge, Weld, Tessellate,
+MSmooth and Relax. Shift-click the main button to open its caddy too, except
+Outline. Drag a spinner's icon vertically or click its value and type. Changes
+preview from the original mesh, so adjusting an amount never repeats the operation.
+Choice arrows open dropdowns. Drag the title to move the caddy.
+Select another part of the mesh while the caddy stays open. It removes the
+temporary preview before selecting, then previews once on the new selection.
+Sub-object keys rebuild the controls for the new level. A level key that leaves
+sub-object mode cancels the current preview. Ctrl+A, Ctrl+D and Ctrl+I select
+all, none and inverse.
+
+The bottom buttons are OK, Apply and Continue, and Cancel. Enter accepts. Ctrl+Enter
+applies and previews another iteration. Right-click or Esc cancels the current
+preview and keeps earlier Apply and Continue operations. Each accepted operation
+has one undo step. While typing, Enter accepts the number and leaves the caddy open.
+Ctrl+Z restores the previous completed value edit. Ctrl+Shift+Z redoes it.
+Arrow keys, Home, End, Delete, Shift selection and clipboard shortcuts work in
+numeric fields. Right-click an idle spinner's arrows to reset its value.
+Right-click during a drag restores the starting value. Right-click elsewhere cancels.
+The main button reuses the accepted values for that operation and sub-object
+level. Values live in the scene and are saved in the blend file. Detach, Create
+Shape and Slice Plane keep their separate dialogs.
+
+Fresh caddy distances use one Max world unit per Blender unit. This is a numeric
+mapping, without assuming meters or inches. Extrude and Bevel heights start at
+10, Bevel and Outline amounts at -1, Chamfer and Inset at 1, and Weld at 0.1.
+Extrusion Base Width shows 3 but remains disabled. Relax starts with one iteration.
+Stored values take priority over fresh defaults. Tessellate has its own signed
+Tension, starting at zero for flat subdivision. Negative values pull new vertices
+inward and positive values push them outward. Chamfer Tension stays separate.
 
 Material IDs use Blender's material slots, numbered from 1. Smoothing groups use
 the face attribute `max_smoothing_group`, including group 32. Faces that share a
@@ -425,6 +453,17 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
   G and tools selected directly from Blender's toolbar bypass these Max tools.
   The rebuilt Max tools use the same geometry hook. See
   [transform integration](docs/poly-constraints-integration.md) for merge details.
+- Caddies use a custom viewport overlay with vector icons, not Autodesk's native
+  controls. The icon shapes and spacing differ. Numeric input accepts
+  plain numbers in Blender units, without Max unit expressions. Click selection
+  and selection shortcuts work on the clean mesh while the caddy stays open.
+  Box and lasso selection are not implemented inside a caddy. Numeric undo stays
+  local to the caddy until acceptance. Each Apply starts a new value history.
+  Caddies support one mesh in Edit mode. Shape-key meshes are rejected before preview.
+- Caddies expose the existing operation settings. Chamfer's newer mitering,
+  end/radial bias and smoothing controls are not implemented. MSmooth's Separate
+  by Smoothing Groups and Materials, and Bridge's pick controls, appear disabled.
+  Weld shows total vertex or edge counts before and after its preview.
 - Editable Poly's By Vertex click filter, Ignore Backfacing, hover Preview
   Selection and Preserve UVs channel settings are disabled.
   By Angle expands the current face selection with a separate button.

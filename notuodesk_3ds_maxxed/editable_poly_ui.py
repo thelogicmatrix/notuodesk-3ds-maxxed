@@ -40,7 +40,7 @@ def button(layout, action, text=None):
         row.enabled = False
         row.operator("max.poly_unavailable", text=label).reason = ep.UNSUPPORTED[action]
     else:
-        row.operator_context = "EXEC_DEFAULT"
+        row.operator_context = "INVOKE_DEFAULT" if action in ep.poly_caddies.SHIFT_ACTIONS else "EXEC_DEFAULT"
         if action == "TARGET_WELD":
             from .target_weld import is_active
             row.operator("max.edit_poly", text=label, depress=is_active(bpy.context)).op = action

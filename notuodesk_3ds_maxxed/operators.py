@@ -443,6 +443,8 @@ class MAX_OT_edit_poly(Operator):
         return dict((k, n) for k, n, _ in EDIT_POLY_OPS).get(props.op, "Edit Poly")
 
     def invoke(self, context, event):
+        if event.type == "LEFTMOUSE" and event.shift and self.op in editable_poly.poly_caddies.SHIFT_ACTIONS:
+            return bpy.ops.max.poly_settings("INVOKE_DEFAULT", action=self.op)
         return self.run(context, "INVOKE_DEFAULT")
 
     def execute(self, context):
