@@ -518,9 +518,18 @@ def run(operator, context, how, operation_settings=None):
             for seq in (bm.faces, bm.edges, bm.verts):
                 for item in seq:
                     item.select_set(False)
-            for item in geom:
-                if item.is_valid:
-                    item.select_set(True)
+            if mode == "VERT":
+                for vert in verts:
+                    vert.select_set(True)
+            elif mode == "EDGE":
+                top = set(verts)
+                for edge in geom:
+                    if isinstance(edge, bmesh.types.BMEdge) and all(v in top for v in edge.verts):
+                        edge.select_set(True)
+            else:
+                for item in geom:
+                    if item.is_valid:
+                        item.select_set(True)
             bm.select_flush_mode()
         elif action == "CHAMFER":
             before = set(bm.faces)
