@@ -26,6 +26,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import max_export
 
 
 _prefs_cache = [None]
@@ -144,6 +145,7 @@ _classes = (
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
+    + max_export.classes
 )
 
 
@@ -182,8 +184,10 @@ def register():
     mtl_editor.register_props()
     turbosmooth.register_props()
     ffd.register_props()
+    max_export.register_props()
     ui_menus.register_draw()
     max_import.register_menus()
+    max_export.register_menus()
     overlay.register()
     p = get_prefs()
     if p is None or p.use_keymap:
@@ -198,9 +202,11 @@ def unregister():
     _prefs_cache[0] = None
     keymap.unregister_keymaps()
     overlay.unregister()
+    max_export.unregister_menus()
     max_import.unregister_menus()
     ui_menus.unregister_draw()
     wm = bpy.types.WindowManager
+    max_export.unregister_props()
     ffd.unregister_props()
     turbosmooth.unregister_props()
     mtl_editor.unregister_props()

@@ -15,6 +15,7 @@ V-Ray / Corona materials. This module wraps it the 3ds Max way:
 
 import os
 import re
+import struct
 
 import bpy
 from bpy.props import BoolProperty, CollectionProperty, EnumProperty, FloatProperty, StringProperty
@@ -81,23 +82,41 @@ def _material_has_image(mat):
     return mat.use_nodes and any(n.type == "TEX_IMAGE" and n.image for n in mat.node_tree.nodes)
 
 
+def _find_image(index, stem):
+    path = index.get(stem.lower())
+    if path:
+        return path
+    # Only accept the known renamed-copy suffix, not unrelated fuzzy matches.
+    original = re.sub(r" \(\d+\)$", "", stem.lower())
+    return next((path for key, path in sorted(index.items())
+                 if re.sub(r" \(\d+\)$", "", key) == original), None)
+
+
 def relink_textures(materials, folders):
     """Wire missing bitmaps into the materials' base color. Returns (linked, missing)."""
     from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
     index = _index_images(folders)
     linked, missing = [], []
     for mat in materials:
+        if mat.use_nodes:
+            for node in mat.node_tree.nodes:
+                if node.type != "TEX_IMAGE" or not node.image or node.image.packed_file:
+                    continue
+                image = node.image
+                if not image.filepath or os.path.isfile(bpy.path.abspath(image.filepath, library=image.library)):
+                    continue
+                stem = os.path.splitext(image.filepath.replace("\\", "/").rsplit("/", 1)[-1])[0]
+                path = _find_image(index, stem)
+                if path:
+                    image.filepath = path
+                    image.reload()
+                    linked.append(stem)
+                else:
+                    missing.append(stem)
         stem = mat.get("max_bitmap")
         if not stem or _material_has_image(mat):
             continue
-        path = index.get(stem.lower())
-        if path is None:
-            # tolerate renamed copies: "name (1).png", different case/separators, small edits
-            import difflib
-            norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower())
-            by_norm = {norm(k): v for k, v in index.items()}
-            close = difflib.get_close_matches(norm(stem), list(by_norm), n=1, cutoff=0.8)
-            path = by_norm[close[0]] if close else None
+        path = _find_image(index, stem)
         if path is None:
             missing.append(stem)
             continue
@@ -108,7 +127,7 @@ def relink_textures(materials, folders):
     return linked, sorted(set(missing))
 
 
-def _post_process(context, before_objs, before_mats, label, zoom=True):
+def _post_process(context, before_objs, before_mats, label, zoom=True, max_material_names=True):
     """Max-style cleanup of whatever the import just created."""
     from .create import random_color
     new_objs = [o for o in context.scene.objects if o.name not in before_objs]
@@ -120,10 +139,11 @@ def _post_process(context, before_objs, before_mats, label, zoom=True):
     for mat in new_mats:
         if mat.use_nodes and any(n.type == "BSDF_PRINCIPLED" for n in mat.node_tree.nodes):
             mat["max_vray"] = 1          # editable in Modify > Material with V-Ray names
-        base, stem = _split_bitmap_name(mat.name)
-        if stem:
-            mat["max_bitmap"] = stem
-        mat.name = _max_display_name(base)
+        if max_material_names:
+            base, stem = _split_bitmap_name(mat.name)
+            if stem:
+                mat["max_bitmap"] = stem
+            mat.name = _max_display_name(base)
     for o in context.selected_objects:
         o.select_set(False)
     for ob in new_objs:
@@ -156,6 +176,8 @@ def _report_textures(op, materials, folder):
 def _new_scene(context, name):
     scene = bpy.data.scenes.new(name)
     scene.unit_settings.system = context.scene.unit_settings.system
+    scene.unit_settings.scale_length = context.scene.unit_settings.scale_length
+    scene.max_system_units = context.scene.max_system_units
     if context.scene.world:
         scene.world = context.scene.world
     context.window.scene = scene
@@ -263,6 +285,8 @@ class _MaxImportBase(ImportHelper):
             box.operator("max.install_max_reader", icon="IMPORT")
 
     def invoke(self, context, event):
+        if not self.properties.is_property_set("units"):
+            self.units = context.scene.max_system_units
         if self.filepath and os.path.isfile(self.filepath):   # drag & drop
             return context.window_manager.invoke_props_dialog(self, width=320)
         return ImportHelper.invoke(self, context, event)
@@ -273,6 +297,7 @@ class _MaxImportBase(ImportHelper):
         return [self.filepath]
 
     def run(self, context, new_scene):
+        from . import max_reader
         if not reader_available():
             self.report({"ERROR"}, "Install the .max reader first (File > Import > Install .max Reader)")
             bpy.ops.max.install_max_reader()
@@ -287,6 +312,7 @@ class _MaxImportBase(ImportHelper):
         if self.primitives:
             filters.add("PRIMITIVE")
         total = 0
+        units = self.units if self.properties.is_property_set("units") else context.scene.max_system_units
         for path in self._paths():
             name = os.path.splitext(os.path.basename(path))[0]
             if new_scene:
@@ -295,7 +321,8 @@ class _MaxImportBase(ImportHelper):
             before_m = {m.name for m in bpy.data.materials}
             try:
                 result = bpy.ops.import_scene.max(
-                    filepath=path, scale_objects=UNIT_SCALE[self.units], use_image_search=self.textures,
+                    filepath=path, scale_objects=1.0, use_image_search=self.textures,
+                    axis_forward="Y", axis_up="Z",
                     object_filter=filters, use_collection=not new_scene, use_apply_matrix=True)
             except (RuntimeError, TypeError) as exc:
                 self.report({"ERROR"}, f"{os.path.basename(path)}: {str(exc).splitlines()[-1]}")
@@ -303,7 +330,24 @@ class _MaxImportBase(ImportHelper):
             if "FINISHED" not in result:
                 self.report({"WARNING"}, f"{os.path.basename(path)} could not be read")
                 continue
+            try:
+                max_reader.recover_materials([m for m in bpy.data.materials if m.name not in before_m])
+            except (AttributeError, IndexError, TypeError, ValueError) as exc:
+                self.report({"WARNING"}, f"Source material names could not be recovered: {exc}")
+            objs = [o for o in context.scene.objects if o.name not in before_o]
+            meters = context.scene.unit_settings.scale_length if context.scene.unit_settings.system != "NONE" else 1.0
+            max_reader.scale_roots(context, objs, UNIT_SCALE[units] / meters)
+            try:
+                restored = max_reader.recover_smoothing(objs)
+                print(f"[3ds Maxxed] Recovered smoothing groups on {restored} meshes")
+                missing = max_reader.missing_nodes(objs)
+                if missing:
+                    self.report({"WARNING"}, f"{len(missing)} source nodes were not imported: {', '.join(missing[:8])}. "
+                                             "Use FBX from 3ds Max for unsupported objects")
+            except (AttributeError, IndexError, TypeError, ValueError, struct.error) as exc:
+                self.report({"WARNING"}, f"Smoothing groups could not be recovered: {exc}")
             objs, mats = _post_process(context, before_o, before_m, name)
+            context.scene.max_system_units = units
             _report_textures(self, mats, os.path.dirname(path))
             total += len(objs)
         if total == 0:
@@ -413,12 +457,15 @@ class MAX_OT_import_max_fbx(Operator, ImportHelper):
         before_m = {m.name for m in bpy.data.materials}
         try:
             bpy.ops.import_scene.fbx(filepath=self.filepath, use_custom_normals=True, use_image_search=True,
-                                     use_anim=self.animation, use_subsurf=True,
+                                     use_anim=self.animation, anim_offset=0.0, use_subsurf=True,
+                                     use_manual_orientation=False,
                                      automatic_bone_orientation=True, use_custom_props=True)
         except RuntimeError as exc:
             self.report({"ERROR"}, str(exc).splitlines()[-1])
             return {"CANCELLED"}
-        objs, mats = _post_process(context, before_o, before_m, name)
+        objs, mats = _post_process(context, before_o, before_m, name, max_material_names=False)
+        from .max_export import remember_fbx_units
+        remember_fbx_units(context.scene, self.filepath)
         self.report({"INFO"}, f"Imported {len(objs)} objects from {os.path.basename(self.filepath)}")
         return {"FINISHED"}
 
