@@ -1,6 +1,7 @@
 """3ds Max FBX export, with shared System Units and Z-up coordinates."""
 
 import os
+from contextlib import contextmanager
 
 import bpy
 from bpy.props import BoolProperty, EnumProperty, StringProperty
@@ -10,6 +11,116 @@ from bpy_extras.io_utils import ExportHelper
 from .max_import import UNITS, UNIT_SCALE
 
 UNIT_ITEMS = [(k, n, d) for k, n, d, _ in UNITS]
+MESH_TYPES = {"MESH", "CURVE", "SURFACE", "FONT", "META"}
+
+
+def _export_objects(context, roots):
+    """Include instance sources even when hiding prevents depsgraph instances."""
+    objects = set(roots)
+    pending = list(roots)
+    while pending:
+        obj = pending.pop()
+        sources = ()
+        if obj.instance_type == "COLLECTION" and obj.instance_collection:
+            sources = obj.instance_collection.all_objects
+        elif obj.is_instancer:
+            sources = obj.children
+        for source in sources:
+            if source not in objects:
+                objects.add(source)
+                pending.append(source)
+    instancers = {obj for obj in objects if obj.is_instancer}
+    if instancers:
+        objects.update(instance.instance_object.original
+                       for instance in context.evaluated_depsgraph_get().object_instances
+                       if instance.is_instance and instance.parent
+                       and instance.parent.original in instancers)
+    return objects
+
+
+def _subdivision_export_safe(obj, exported_objects=()):
+    """Allow only a control mesh and subdivision settings FBX can reproduce."""
+    if obj.type != "MESH" or obj.hide_viewport or obj.hide_render or obj.hide_get():
+        return False
+    # Instance sources outside the view layer are visible through their instancer.
+    if obj.name in bpy.context.view_layer.objects and not obj.visible_get():
+        return False
+    enabled = [mod for mod in obj.modifiers if mod.show_viewport or mod.show_render]
+    # Earlier arbitrary modifiers can create unsupported evaluated crease attributes.
+    # Keep the allow-list to one enabled modifier, including only one SUBSURF.
+    if len(enabled) != 1 or enabled[0].type != "SUBSURF":
+        return False
+    sub = enabled[0]
+    if not (sub.show_viewport and sub.show_render and sub.subdivision_type == "CATMULL_CLARK"
+            and sub.use_limit_surface and sub.quality == 3
+            and sub.uv_smooth == "PRESERVE_BOUNDARIES" and sub.boundary_smooth == "ALL"
+            and sub.levels == sub.render_levels and not getattr(sub, "use_custom_normals", False)):
+        return False
+    if obj.animation_data or obj.data.animation_data or obj.data.shape_keys:
+        return False
+    edge_creases = obj.data.attributes.get("crease_edge")
+    vertex_creases = obj.data.attributes.get("crease_vert")
+    # FBX carries edge creases, but does not carry vertex creases or use_creases=False.
+    if vertex_creases and any(v.value != 0 for v in vertex_creases.data):
+        return False
+    if not sub.use_creases and edge_creases and any(v.value != 0 for v in edge_creases.data):
+        return False
+    # Native FBX can share one Geometry record between linked Mesh objects.
+    fields = ("subdivision_type", "levels", "render_levels", "show_viewport", "show_render",
+              "use_limit_surface", "quality", "uv_smooth", "boundary_smooth", "use_creases")
+    signature = tuple(getattr(sub, field) for field in fields)
+    for other in exported_objects:
+        if other == obj or other.type != "MESH" or other.data != obj.data:
+            continue
+        other_subs = [mod for mod in other.modifiers if mod.type == "SUBSURF"
+                      and (mod.show_viewport or mod.show_render)]
+        if len(other_subs) != 1 or tuple(getattr(other_subs[0], field) for field in fields) != signature:
+            return False
+    return True
+
+
+@contextmanager
+def _export_evaluation(context, objects):
+    """Enable exported objects for viewport evaluation, then restore exactly."""
+    saved = []
+
+    def enable(owner, prop):
+        old = getattr(owner, prop)
+        if old:
+            saved.append((owner, prop, old))
+            setattr(owner, prop, False)
+
+    def enable_layers(layer):
+        # Never include excluded objects that native FBX would not export.
+        if layer.exclude:
+            return
+        if any(obj in objects for obj in layer.collection.all_objects):
+            enable(layer, "hide_viewport")
+            for child in layer.children:
+                enable_layers(child)
+
+    hidden = [(obj, obj.hide_get()) for obj in objects if obj.name in context.view_layer.objects]
+    try:
+        for collection in bpy.data.collections:
+            if any(obj in objects for obj in collection.all_objects):
+                enable(collection, "hide_viewport")
+        enable_layers(context.view_layer.layer_collection)
+        for obj in objects:
+            enable(obj, "hide_viewport")
+        for obj, was_hidden in hidden:
+            if was_hidden:
+                obj.hide_set(False)
+        context.view_layer.update()
+        context.evaluated_depsgraph_get().update()
+        yield
+    finally:
+        for obj, was_hidden in hidden:
+            if was_hidden:
+                obj.hide_set(True)
+        for owner, prop, old in reversed(saved):
+            setattr(owner, prop, old)
+        context.view_layer.update()
+        context.evaluated_depsgraph_get().update()
 
 
 def fbx_settings(selected=False, subdivision="APPLY", embed=False, animation=True):
@@ -44,8 +155,8 @@ class _MaxExportBase(ExportHelper):
                         description="Match System Unit Setup in 3ds Max. FBX carries this unit scale")
     subdivision: EnumProperty(name="TurboSmooth / Subdivision", items=(
         ("APPLY", "Apply to Mesh", "Export evaluated geometry for a matching shape"),
-        ("KEEP", "Keep Editable", "Keep final enabled Catmull-Clark modifiers editable on meshes. "
-         "Converted objects or subdivision before another enabled modifier apply subdivision for the entire export")),
+        ("KEEP", "Keep Editable", "Keep subdivision editable only for meshes passing the FBX settings allow-list. "
+         "Any incompatible exported geometry applies subdivision for the entire export")),
         default="APPLY")
     embed_media: BoolProperty(name="Embed Media", default=False,
                              description="Embed image files used by supported FBX materials")
@@ -57,8 +168,8 @@ class _MaxExportBase(ExportHelper):
         for prop in ("units", "subdivision", "embed_media", "animation"):
             lay.prop(self, prop)
         if self.subdivision == "KEEP":
-            lay.label(text="Editable only on meshes, as final modifier", icon="INFO")
-            lay.label(text="Otherwise apply for the entire export")
+            lay.label(text="Editable requires supported FBX mesh settings", icon="INFO")
+            lay.label(text="Other geometry applies the entire export")
 
     def invoke(self, context, event):
         if not self.properties.is_property_set("units"):
@@ -79,36 +190,26 @@ class _MaxExportBase(ExportHelper):
         old_system, old_scale = scene_units.system, scene_units.scale_length
         meters = old_scale if old_system != "NONE" else 1.0
         settings = fbx_settings(selected, self.subdivision, self.embed_media, self.animation)
+        roots = tuple(context.selected_objects if selected else context.view_layer.objects)
+        objects = _export_objects(context, roots)
         if settings["use_subsurf"]:
-            # Match native FBX's view-layer/selection scope and its depsgraph instances.
-            objects = set(context.selected_objects if selected else context.view_layer.objects)
-            instancers = {ob for ob in objects if ob.is_instancer}
-            if instancers:
-                objects.update(instance.instance_object.original
-                               for instance in context.evaluated_depsgraph_get().object_instances
-                               if instance.is_instance and instance.parent
-                               and instance.parent.original in instancers)
-            unsafe = []
-            for ob in objects:
-                if ob.type not in {"MESH", "CURVE", "SURFACE", "FONT", "META"}:
-                    continue
-                enabled = [m for m in ob.modifiers if m.show_render or m.show_viewport]
-                subsurf = [m for m in enabled if m.type == "SUBSURF" and m.subdivision_type == "CATMULL_CLARK"]
-                # Non-mesh conversion already evaluates subdivision. FBX must not add it again.
-                if subsurf and (ob.type != "MESH" or subsurf[-1] != enabled[-1]):
-                    unsafe.append(ob.name)
+            # Cameras, lights and instance carriers have no subdivision geometry.
+            unsafe = [obj.name for obj in objects if obj.type in MESH_TYPES
+                      and not _subdivision_export_safe(obj, objects)]
             if unsafe:
                 # Native FBX has one subdivision switch for the entire export.
                 settings["use_subsurf"] = False
-                self.report({"WARNING"}, "Applied subdivision for the entire export to preserve evaluated geometry. "
-                            "Editable subdivision requires a mesh with subdivision as its final enabled modifier: "
-                            f"{', '.join(sorted(unsafe))}")
+                self.report({"WARNING"}, "Applied subdivision for the entire export. "
+                            "Objects outside the editable FBX allow-list: " + ", ".join(sorted(unsafe)))
         try:
             # Native FBX writes System Units into UnitScaleFactor, separately from geometry.
             scene_units.system = "METRIC"
             scene_units.scale_length = UNIT_SCALE[units]
             settings["global_scale"] = meters / UNIT_SCALE[units]
-            result = bpy.ops.export_scene.fbx(filepath=self.filepath, **settings)
+            with _export_evaluation(context, objects):
+                # Enabling visibility must not expand Export Selected's original scope.
+                with context.temp_override(selected_objects=roots):
+                    result = bpy.ops.export_scene.fbx(filepath=self.filepath, **settings)
         except (RuntimeError, OSError, ValueError) as exc:
             self.report({"ERROR"}, str(exc).splitlines()[-1])
             return {"CANCELLED"}

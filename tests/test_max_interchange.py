@@ -505,6 +505,259 @@ class InterchangeTests(unittest.TestCase):
         self.assertEqual(bpy.context.scene.unit_settings.system, "IMPERIAL")
         self.assertAlmostEqual(bpy.context.scene.unit_settings.scale_length, 0.01)
 
+    def clear_objects(self):
+        for ob in list(bpy.data.objects):
+            bpy.data.objects.remove(ob, do_unlink=True)
+
+    def subdivision_fixture(self, case):
+        """Independent geometry fixtures, not derived from the export predicate."""
+        self.clear_objects()
+        if case == "CURVE":
+            bpy.ops.curve.primitive_bezier_circle_add()
+        elif case == "FONT":
+            bpy.ops.object.text_add()
+            bpy.context.object.data.body = "Max"
+        elif case == "SURFACE":
+            bpy.ops.surface.primitive_nurbs_surface_surface_add()
+            bpy.context.object.data.splines[0].points[5].co.z = 0.7
+        elif case == "META":
+            bpy.ops.object.metaball_add()
+            bpy.context.object.data.resolution = 0.4
+        elif case.startswith("BOUNDARY"):
+            bpy.ops.mesh.primitive_grid_add(x_subdivisions=3, y_subdivisions=3)
+            bpy.context.object.data.vertices[0].co.z = 0.7
+        else:
+            self.cube()
+        ob = bpy.context.object
+        ob.name = "MatrixSource"
+        if ob.type in {"CURVE", "FONT"}:
+            ob.data.extrude = 0.2
+            ob.data.resolution_u = 4
+        sub = None
+        if case not in {"META", "PLAIN"}:
+            sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
+            sub.levels = sub.render_levels = 2
+        if case == "SHELL" or case == "HIDDEN_SHELL":
+            ob.modifiers.new("Shell", "SOLIDIFY").thickness = 0.4
+        elif case == "MULTIPLE":
+            other = ob.modifiers.new("Second subdivision", "SUBSURF")
+            other.levels = other.render_levels = 1
+        elif case == "PREFIX":
+            mirror = ob.modifiers.new("Mirror", "MIRROR")
+            mirror.use_mirror_merge = False
+            bpy.ops.object.modifier_move_up(modifier=mirror.name)
+        elif case == "DISABLED_TRAILING":
+            shell = ob.modifiers.new("Shell", "SOLIDIFY")
+            shell.show_viewport = shell.show_render = False
+        elif case == "SIMPLE":
+            sub.subdivision_type = "SIMPLE"
+        elif case == "LIMIT_OFF":
+            sub.use_limit_surface = False
+        elif case == "QUALITY":
+            sub.quality = 1
+        elif case == "UNEQUAL_LEVELS":
+            sub.render_levels = 1
+        elif case == "VIEWPORT_ONLY":
+            sub.show_render = False
+        elif case == "RENDER_ONLY":
+            sub.show_viewport = False
+        elif case == "CUSTOM_NORMALS":
+            sub.use_custom_normals = True
+        elif case.startswith("UV_"):
+            sub.uv_smooth = case[3:]
+        elif case == "BOUNDARY_CORNERS":
+            sub.boundary_smooth = "PRESERVE_CORNERS"
+        if case in {"CREASES_ON", "CREASES_OFF", "VERTEX_CREASE", "CREASES_OFF_ZERO"}:
+            attr = ob.data.attributes.new("crease_vert" if case == "VERTEX_CREASE" else "crease_edge",
+                                          "FLOAT", "POINT" if case == "VERTEX_CREASE" else "EDGE")
+            for value in attr.data:
+                value.value = 0 if case == "CREASES_OFF_ZERO" else 0.7
+        if case in {"CREASES_OFF", "CREASES_OFF_ZERO", "CREASES_OFF_EMPTY"}:
+            sub.use_creases = False
+        targets = [(ob.name, self.evaluated_geometry(ob))]
+        if case.startswith("LINKED_"):
+            linked = bpy.data.objects.new("LinkedSource", ob.data)
+            bpy.context.collection.objects.link(linked)
+            linked.location.x = 4
+            if case != "LINKED_NONE":
+                mod = linked.modifiers.new("TurboSmooth", "SUBSURF")
+                mod.levels = mod.render_levels = 2 if case == "LINKED_EQUAL" else 1
+            linked.select_set(True)
+            targets.append((linked.name, self.evaluated_geometry(linked)))
+        if case in {"HIDDEN_SHELL", "HIDDEN_MIXED", "HIDDEN_SAFE"}:
+            ob.hide_viewport = True
+        elif case == "HIDE_SET":
+            ob.hide_set(True)
+        elif case == "HIDE_RENDER":
+            ob.hide_render = True
+        if case == "HIDDEN_MIXED":
+            bpy.ops.curve.primitive_bezier_circle_add()
+            curve = bpy.context.object
+            curve.name = "UnrelatedCurve"
+            curve.data.extrude = 0.2
+            mod = curve.modifiers.new("TurboSmooth", "SUBSURF")
+            mod.levels = mod.render_levels = 1
+            targets.append((curve.name, self.evaluated_geometry(curve)))
+        if case in {"COLLECTION_HIDDEN", "LAYER_HIDDEN"}:
+            collection = bpy.data.collections.new("HiddenExportCollection")
+            bpy.context.scene.collection.children.link(collection)
+            collection.objects.link(ob)
+            for owner in list(ob.users_collection):
+                if owner != collection:
+                    owner.objects.unlink(ob)
+            if case == "COLLECTION_HIDDEN":
+                collection.hide_viewport = True
+            else:
+                bpy.context.view_layer.layer_collection.children[collection.name].hide_viewport = True
+        bpy.context.view_layer.update()
+        return targets
+
+    def export_state(self):
+        def layers(layer):
+            return [(layer.name, layer.hide_viewport, layer.exclude)] + [
+                item for child in layer.children for item in layers(child)]
+        return ([(ob.name, ob.hide_viewport, ob.hide_render, ob.hide_get(), ob.select_get(),
+                  [(m.name, m.type, m.show_viewport, m.show_render) for m in ob.modifiers])
+                 for ob in bpy.data.objects],
+                [(c.name, c.hide_viewport, c.hide_render) for c in bpy.data.collections],
+                layers(bpy.context.view_layer.layer_collection),
+                bpy.context.view_layer.objects.active)
+
+    def subdivision_roundtrip(self, case, export, choice="KEEP", editable=False):
+        targets = self.subdivision_fixture(case)
+        state = self.export_state()
+        path = str(pathlib.Path(self.tmp.name) / (case + ".fbx"))
+        # Explicit selection allows hidden sources to exercise the public EXEC path too.
+        selected = list(bpy.context.scene.objects)
+        with bpy.context.temp_override(selected_objects=selected):
+            self.assertEqual(export(filepath=path, subdivision=choice, animation=False), {"FINISHED"})
+        self.assertEqual(state, self.export_state(), "Export must restore all visibility and selection")
+        # Remove fixture-only visibility barriers before checking the imported geometry.
+        for c in bpy.data.collections:
+            c.hide_viewport = False
+        for layer in bpy.context.view_layer.layer_collection.children:
+            layer.hide_viewport = False
+        self.clear_objects()
+        self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=False), {"FINISHED"})
+        self.assertEqual({name for name, _ in targets}, set(bpy.context.scene.objects.keys()))
+        for name, before in targets:
+            imported = bpy.context.scene.objects[name]
+            imported.hide_viewport = False
+            imported.hide_set(False)
+            self.assert_geometry_matches(before, imported)
+            self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), int(editable))
+
+    def test_linked_subdivision_settings_roundtrip(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for case in ("LINKED_DIFFERENT", "LINKED_NONE", "LINKED_EQUAL"):
+                with self.subTest(export=export.idname(), case=case):
+                    self.subdivision_roundtrip(case, export, editable=case == "LINKED_EQUAL")
+        print("VERIFIED linked meshes: different levels or absent subdivision bake, identical settings stay editable", flush=True)
+
+    def test_disabled_objects_bake_evaluated_geometry(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for case in ("HIDDEN_SHELL", "HIDDEN_MIXED"):
+                for choice in ("KEEP", "APPLY"):
+                    with self.subTest(export=export.idname(), case=case, choice=choice):
+                        self.subdivision_roundtrip(case, export, choice=choice)
+        print("VERIFIED disabled objects: Shell and unrelated Curve fallback preserve evaluated geometry and visibility", flush=True)
+
+    def test_unsupported_subdivision_settings_bake_shape(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for case in ("LIMIT_OFF", "CREASES_OFF"):
+                with self.subTest(export=export.idname(), case=case):
+                    self.subdivision_roundtrip(case, export)
+        print("VERIFIED limit surface off and disabled nonzero creases bake matching geometry", flush=True)
+
+    def test_subdivision_export_geometry_matrix(self):
+        # Every row compares real evaluated geometry after both public export operators.
+        cases = ("SAFE", "PLAIN", "SHELL", "MULTIPLE", "PREFIX", "DISABLED_TRAILING", "SIMPLE",
+                 "QUALITY", "UNEQUAL_LEVELS", "VIEWPORT_ONLY", "RENDER_ONLY", "CUSTOM_NORMALS",
+                 "UV_NONE", "UV_PRESERVE_CORNERS", "UV_PRESERVE_CORNERS_AND_JUNCTIONS", "UV_SMOOTH_ALL",
+                 "BOUNDARY_ALL", "BOUNDARY_CORNERS", "CREASES_ON", "CREASES_OFF_EMPTY",
+                 "CREASES_OFF_ZERO", "VERTEX_CREASE", "CURVE", "FONT", "SURFACE", "META",
+                 "HIDDEN_SAFE", "HIDE_SET", "HIDE_RENDER", "COLLECTION_HIDDEN", "LAYER_HIDDEN")
+        live = {"SAFE", "DISABLED_TRAILING", "BOUNDARY_ALL", "CREASES_ON", "CREASES_OFF_EMPTY", "CREASES_OFF_ZERO"}
+        passed = 0
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for case in cases:
+                print(f"MATRIX [{passed + 1}/{len(cases) * 2}] {export.idname()} {case}", flush=True)
+                with self.subTest(export=export.idname(), case=case):
+                    self.subdivision_roundtrip(case, export, editable=case in live)
+                    passed += 1
+        print(f"VERIFIED subdivision geometry matrix: {passed}/{len(cases) * 2} real round trips within 2e-5", flush=True)
+
+    def test_failed_export_restores_visibility_and_selection(self):
+        from io_scene_fbx import export_fbx_bin
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for case in ("HIDDEN_SHELL", "HIDE_SET", "COLLECTION_HIDDEN", "LAYER_HIDDEN"):
+                self.subdivision_fixture(case)
+                state = self.export_state()
+                def fail(*args, **kwargs):
+                    self.assertTrue(bpy.data.objects["MatrixSource"].visible_get())
+                    raise RuntimeError("injected visibility cleanup failure")
+                with bpy.context.temp_override(selected_objects=list(bpy.context.scene.objects)):
+                    with patch.object(export_fbx_bin, "save", side_effect=fail):
+                        with self.assertRaises(RuntimeError):
+                            export(filepath=str(pathlib.Path(self.tmp.name) / "fail.fbx"), subdivision="KEEP")
+                self.assertEqual(state, self.export_state())
+                for c in bpy.data.collections:
+                    c.hide_viewport = False
+                for layer in bpy.context.view_layer.layer_collection.children:
+                    layer.hide_viewport = False
+        print("VERIFIED failed exports restore visibility and selection through both operators", flush=True)
+
+    def test_linked_instance_sources_and_selection_scope(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for hidden in (False, True):
+                for equal in (False, True):
+                    with self.subTest(export=export.idname(), hidden=hidden, equal=equal):
+                        targets = self.subdivision_fixture("LINKED_EQUAL" if equal else "LINKED_DIFFERENT")
+                        collection = bpy.data.collections.new("LinkedInstanceSources")
+                        for name, _ in targets:
+                            ob = bpy.data.objects[name]
+                            collection.objects.link(ob)
+                            for owner in list(ob.users_collection):
+                                if owner != collection:
+                                    owner.objects.unlink(ob)
+                            ob.hide_viewport = hidden
+                        instance = bpy.data.objects.new("InstanceCarrier", None)
+                        instance.instance_type = "COLLECTION"
+                        instance.instance_collection = collection
+                        bpy.context.collection.objects.link(instance)
+                        instance.select_set(True)
+                        bpy.context.view_layer.update()
+                        state = self.export_state()
+                        path = str(pathlib.Path(self.tmp.name) / "linked-instance.fbx")
+                        self.assertEqual(export(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+                        self.assertEqual(state, self.export_state())
+                        self.clear_objects()
+                        self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=False), {"FINISHED"})
+                        meshes = [ob for ob in bpy.context.scene.objects if ob.type == "MESH"]
+                        self.assertEqual(len(meshes), 2)
+                        for name, before in targets:
+                            # Native FBX names duplis after their carrier. Match the known origins.
+                            origin_x = 4 if name == "LinkedSource" else 0
+                            imported = next(ob for ob in meshes if abs(ob.matrix_world.translation.x - origin_x) < 2e-5)
+                            imported.hide_viewport = False
+                            imported.hide_set(False)
+                            self.assert_geometry_matches(before, imported)
+                            self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers),
+                                             int(equal and not hidden))
+        # An unselected linked object must not influence the exported geometry record.
+        self.subdivision_fixture("LINKED_DIFFERENT")
+        bpy.data.objects["LinkedSource"].select_set(False)
+        source = bpy.data.objects["MatrixSource"]
+        before = self.evaluated_geometry(source)
+        path = str(pathlib.Path(self.tmp.name) / "selected-linked.fbx")
+        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+        self.clear_objects()
+        bpy.ops.max.import_max_fbx(filepath=path, animation=False)
+        self.assertEqual(set(bpy.context.scene.objects.keys()), {"MatrixSource"})
+        self.assert_geometry_matches(before, bpy.data.objects["MatrixSource"])
+        self.assertEqual(len(bpy.data.objects["MatrixSource"].modifiers), 1)
+        print("VERIFIED linked instance sources, hidden source evaluation, and selected-only linked mesh scope", flush=True)
+
 
 if __name__ == "__main__":
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(InterchangeTests))
