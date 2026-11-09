@@ -43,6 +43,7 @@ from . import editable_poly
 from . import snaps
 from . import symmetry
 from . import max_rotate, max_gizmos
+from . import max_widgets
 from . import mode_feedback
 
 
@@ -193,6 +194,7 @@ _classes = (
     + xview.classes
     + symmetry.classes
     + max_rotate.classes + max_gizmos.classes
+    + max_widgets.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
     + max_export.classes
 )
@@ -241,6 +243,8 @@ def register():
     snaps.register_props()
     max_rotate.register()
     max_gizmos.register()
+    max_widgets.set_spinner_policy(lambda context, data, prop: (
+        snaps.settings(context).spinner_snap, snaps.settings(context).spinner_increment))
     ui_panel.register_props()
     mode_feedback.register()
     vray.register_props()
@@ -296,6 +300,7 @@ def unregister():
     freezing.unregister_props()
     plane_plus.unregister_props()
     max_gizmos.unregister()
+    max_widgets.set_spinner_policy()
     max_rotate.unregister()
     snaps.unregister_props()
     prims.unregister_props()

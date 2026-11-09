@@ -266,7 +266,9 @@ def reconcile():
                 elif mod.node_group.get('max_symmetry_revision', 0) < symmetry_nodes.REVISION:
                     # Node graphs persist in .blend files. Rebuild older
                     # engines so existing scenes receive numerical/perf fixes.
-                    values = {key: getattr(settings(mod), key) for key in _INPUTS}
+                    values = {key: (tuple(getattr(settings(mod), key))
+                                    if key in {'use_axis', 'use_bisect_flip_axis'}
+                                    else getattr(settings(mod), key)) for key in _INPUTS}
                     mod.node_group = symmetry_nodes.build(mod.node_group[symmetry_nodes.MARKER])
                     mod.node_group.nodes['Mirror frame'].inputs['Object'].default_value = plane
                     for key, value in values.items():
