@@ -57,77 +57,30 @@ The comparison matches objects by name, matrices element by element, mesh vertic
 
 ## Exporter regression tests
 
+Keep Editable was removed in fix round 4. It repeatedly changed exported geometry, and sending an evaluated FBX to Max does not need editable subdivision. There is no subdivision export preference, UI choice, allow-list or subdivision-attribute export path.
+
+Both public operators always bake the current viewport-evaluated mesh before calling native FBX. Every source mesh is evaluated before any data is swapped, so dependency targets still refer to the original scene. Armature modifier targets are detached only during the native handoff. Native FBX therefore cannot re-evaluate those meshes in rest pose or attach skin that deforms the baked pose a second time. A `finally` block restores the original mesh data, modifier visibility and armature targets, then removes the temporary meshes. The outer guard also restores armature pose modes, selection, active object, interaction mode, frame and subframe. Unit and visibility guards still restore their own state.
+
+Loose edges are exported. FBX represents object transforms as translation, rotation and scale. When that decomposition loses parent-relative shear, the bake compensates mesh vertices and corner normals for the lost transform. Object origins and exported parent links remain, while local mesh coordinates can change.
+
+Before production edits, the new public-operator tests failed on the posed Armature-before-TurboSmooth fixture by 0.15108180046081543 Blender units. Evaluation failure left both source rigs in REST. The additional geometry regressions caught four lost loose edges and parent-inverse shape changes. Logs are `fix-round-4-red.log` and `fix-round-4-all-red.log` in the sandbox outputs.
+
 ```text
-Ran 24 tests in 5.926s
+Ran 27 tests in 5.008s
 OK
-VERIFIED baked animation endpoints across FBX unit conversion
-VERIFIED media embedded byte-for-byte and material name preserved
-VERIFIED missing texture relink: existing image node and renamed copy, no fuzzy substitution
-VERIFIED public relink operator repairs image-only FBX material without max_bitmap
-VERIFIED hierarchy scales once and overlapping smoothing masks become sharp edges
-VERIFIED shared System Units and centimeter Blender scene scale
-VERIFIED selected export: names, hierarchy, offset pivot, camera and light
-VERIFIED subdivision: editable or applied evaluated vertices match within 2e-5, source unchanged
-VERIFIED TurboSmooth then Shell: both export operators bake matching evaluated vertices within 2e-5
-VERIFIED disabled trailing Shell does not prevent editable subdivision
-VERIFIED unselected unsafe stack does not force selected subdivision to bake
-VERIFIED unit metadata and transform roundtrip: all 6 system units
-```
-
-The tests inspect FBX `UnitScaleFactor`, Z-up metadata, settings for geometry/modifiers/selection/media/animation, source mesh preservation, and restoration of Blender units after an injected exporter failure. Expected exception output appears in that failure test. All tests pass.
-
-The fix-round tests first reproduced both review findings. The image-only material made `bpy.ops.max.relink_textures` return `CANCELLED`. TurboSmooth followed by Shell failed the evaluated vertex comparison despite matching face counts. Geometry checks now compare world-space vertex positions in both directions within 0.00002 Blender units, independently of FBX vertex order, plus vertex and face counts. Both subdivision choices, the Shell stack through both export operators, a mixed export with another editable mesh, disabled trailing modifiers, and an excluded unsafe stack pass. Source meshes and modifiers stay unchanged. The public relink operator finds the matching PNG without `max_bitmap`, updates the existing image path, and loads its pixels.
-
-Fix-round evidence is in `sb-max-interchange/outputs/fix-round-red.log`, `fix-round-final.log`, `fix-round-reference/` and `fix-round-max-scenes.json`. The reference FBX comparison was rerun with the same results above. The repeated scene audit passed all 17 existing sandbox copies with finite transforms and uniform hierarchy unit conversion.
-
-Fix round 2 checks the same objects as native FBX, using the active view layer or selection and the dependency graph instances belonging to those exported instancers. This includes nested collection sources outside the scene hierarchy. Converted Curve, Surface, Text and Metaball objects cannot keep subdivision attributes because FBX already evaluates their modifiers during mesh conversion. Any exported converted object with enabled Catmull-Clark subdivision now triggers the same whole-export baking fallback, even if subdivision is its final modifier.
-
-The two new geometry regressions failed before production changes. Instanced TurboSmooth followed by Shell differed by 0.20612430572509766 Blender units through both public export operators. Curve and Text objects received subdivision twice, producing four times the expected face count, both with final subdivision and with trailing Shell. These cases now match evaluated world-space vertices in both directions within 0.00002 Blender units, with matching vertex and face counts. The instance cases cover linked sources, sources outside the scene, and nested collections. Safe instances still import with one editable subdivision modifier. Source objects and stacks stay unchanged. A third new test confirms an unselected unsafe collection instance does not force Export Selected to bake.
-
-Representative output from `fix-round-2-final.log`:
-
-```text
-VERIFIED collection instance: MAX_OT_export_selected_fbx, source_in_scene=False, nested=True, trailing_shell=True, evaluated geometry within 2e-5
-VERIFIED collection instance: MAX_OT_export_max_fbx, source_in_scene=False, nested=True, trailing_shell=False, evaluated geometry within 2e-5
-VERIFIED converted CURVE: MAX_OT_export_selected_fbx, trailing_shell=False, evaluated geometry within 2e-5
-VERIFIED converted FONT: MAX_OT_export_max_fbx, trailing_shell=True, evaluated geometry within 2e-5
-VERIFIED unselected unsafe collection instance does not force selected subdivision to bake
-Ran 18 tests in 1.919s
-OK
-```
-
-Fix-round-2 evidence is in `sb-max-interchange/outputs/fix-round-2-red.log`, `fix-round-2-final.log`, `fix-round-2-reference.log`, `fix-round-2-reference/`, `fix-round-2-max-scenes.log` and `fix-round-2-max-scenes.json`. All 15 existing tests and the three additions pass. The copied 3World reference comparison has the same results shown above. The 17-scene audit JSON is unchanged from fix round 1. Only sandbox copies were opened. Surface and Metaball conversion use the same guarded path but do not have dedicated round-trip fixtures.
-
-Blender 5.0.1's bundled FBX light importer assigns `lamp.cycles.cast_shadow`, a removed property. The camera/light test disables Cycles only inside the isolated test around re-import, then restores it. The shipped wrapper does not disable Cycles or patch Blender. Exporting lights works, but importing a file containing lights with Cycles enabled remains a Blender limitation.
-
-## Fix round 3
-
-The old rejection rules have been replaced by `_subdivision_export_safe`. Every exported geometry object must pass it. The check includes linked, nested and hidden collection instance sources. Cameras, lights, armatures and empty instance carriers have no subdivision geometry and do not participate.
-
-The allow-list accepts a mesh that is visible and enabled for export, with exactly one enabled modifier. That modifier must be Catmull-Clark Subdivision Surface, enabled in both viewport and render, with equal levels, Limit Surface on, Quality 3, UV smoothing Preserve Boundaries and boundary smoothing All. Custom normals must be off. Edge creases may be enabled, or disabled if no nonzero edge crease data exists. Nonzero vertex creases, shape keys and object/mesh animation data require baking. Other enabled modifiers require baking even when they precede subdivision. This deliberately accepts a smaller set than Blender's exporter. Disabled modifiers do not count. Linked meshes must have identical enabled subdivision settings within the exported set. An unselected linked object does not affect Export Selected.
-
-Anything outside the allow-list bakes the whole export and names the objects in the warning. This includes plain meshes and converted Curve, Text, Surface and Metaball geometry. The native FBX subdivision option is global. `_export_evaluation` temporarily enables exported objects and their collections for viewport evaluation, updates the dependency graph, and restores object, collection and layer visibility in `finally`. Excluded layers remain excluded. Export Selected keeps its original selection scope while objects are enabled.
-
-The new regressions ran before production edits. Linked meshes with levels 2 and 1 re-imported with 24 rather than 96 faces on the level-2 object. A disabled TurboSmooth/Shell object re-imported with 6 rather than 192 faces. An unrelated subdivided Curve caused a disabled mesh to re-import with 6 rather than 96 faces. Limit Surface off changed vertex positions by 0.047604192 Blender units. Disabled nonzero creases also changed shape. The failing run is `fix-round-3-red.log`.
-
-All 18 existing tests and six additions pass. The parameterised matrix makes 62 real export/import comparisons through both public export operators. It covers Mesh, Curve, Text, Surface and Metaball geometry, subdivision modes, modifier order, levels, UV/boundary modes, edge/vertex creases and visibility. Separate cases cover the three review failures, linked instance sources with equal/different settings, hidden instance sources and selected-only linked scope. Comparisons use matching vertex/face counts and bidirectional nearest world-space vertex distances below 0.00002 Blender units. This does not measure full surface distance or establish Max-side UV, shading or subdivision fidelity. Hidden selected objects use an explicit context selection in the public EXEC path because Blender's normal selection omits hidden objects.
-
-Success and injected-failure tests verify restoration of object, collection and layer visibility, selection and active object. Source modifier enable flags also remain unchanged. Representative output from `fix-round-3-final.log`:
-
-```text
-VERIFIED linked meshes: different levels or absent subdivision bake, identical settings stay editable
-VERIFIED disabled objects: Shell and unrelated Curve fallback preserve evaluated geometry and visibility
-VERIFIED limit surface off and disabled nonzero creases bake matching geometry
+VERIFIED posed Armature before TurboSmooth: both operators and animation settings match current evaluated pose
+VERIFIED evaluation failure: both public operators restore source rig, data, modifiers and scene state
+VERIFIED real write failures restore pose mode, subframe, units, mesh data, rig and modifiers through both operators
 VERIFIED subdivision geometry matrix: 62/62 real round trips within 2e-5
-VERIFIED linked instance sources, hidden source evaluation, and selected-only linked mesh scope
-VERIFIED failed exports restore visibility and selection through both operators
-Ran 24 tests in 5.926s
-OK
 ```
 
-The three validation commands were rerun on 2026-11-10. `fix-round-3-max-scenes.json` matches round 2 exactly for all 17 sandbox copies. `fix-round-3-reference/fbx-comparison.json` matches the reference comparison above. Adjacent `.log` files contain the fresh command output. Originals and the real Blender profile were not opened. No Max-side run, Blender 4.2 run or file-browser interaction was performed. The existing reader and Cycles light-import limitations still apply.
+The baked matrix retains Mesh, Curve, Text, Surface and Metaball cases, modifier order and levels, UV/boundary modes, creases, hidden sources, linked geometry, nested collection instances and selected-only scope. Separate tests compare loose-edge counts and flat corner normals at matching evaluated vertex positions. Both public operators preserve the parent-inverse fixture's world-space geometry and corner normals. The armature test runs with Animation both enabled and disabled. Failure tests cover the first and second mesh evaluations, partial temporary-mesh cleanup, native write failure, pose interaction mode and a nonzero subframe. Other tests retain all six units, axis metadata, object animation, pivots, hierarchy, camera/light records, embedded images, material names, smoothing and texture relinking.
 
-Source review on 2026-11-10 used Autodesk's linked FBX Geometry page and Blender 5.0.1's installed `export_fbx_bin.py` (subdivision metadata, shared geometry and modifier evaluation) and `import_fbx.py` (subdivision reconstruction). Blender writes levels, boundary rule and edge creases. It does not reconstruct Limit Surface off, ignored edge creases, vertex creases, nondefault UV smoothing, quality or custom subdivision normals.
+Geometry comparisons require matching vertex and face counts and bidirectional nearest world-space vertex distances below 0.00002 Blender units. The loose-edge regression also checks edge counts. Corner normals match corresponding positions in both directions within 0.0001. These comparisons do not measure full surface distance or prove Max-side appearance.
+
+The independent round-3 review scripts were copied into `outputs/fix-round-4-review/` and adapted to the baked-only public API. Their geometry sweep reports `PROBE_COMPLETE 32 32`. Their restoration sweep covers success, a real unwritable output, and injected evaluation failure through both operators. The injection targets the wrapper as well as native FBX because the wrapper now evaluates mesh geometry first. The original review scripts and results remain unchanged.
+
+All 17 copied Max scenes were re-imported in this round. Their audit JSON matches round 3 exactly. The copied 3World reference comparison is unchanged. Outputs are `fix-round-4-final.log`, `fix-round-4-max-scenes.json`, `fix-round-4-reference/`, `fix-round-4-probe.log` and `fix-round-4-restoration.log`.
 
 ## Commands
 
@@ -148,11 +101,11 @@ Full JSON and logs are in the sandbox's `outputs` directory. `max-scenes.json` i
 
 Autodesk documents a default system unit of one inch. FBX writes the selected System Units into `UnitScaleFactor`, with geometry converted separately. The exporter restores Blender's scene units afterward. It uses Y-forward and Z-up, which is the identity axis conversion for Blender. Import reads FBX axis metadata and applies no extra manual rotation. FBX animation import uses a zero frame offset.
 
-Apply to Mesh is the default subdivision choice. Keep Editable uses the strict allow-list described below. Blender's subdivision export switch is global, so any incompatible geometry object makes all exported meshes bake. Disabled modifiers do not prevent an otherwise supported mesh from remaining editable. Baking follows viewport modifier evaluation, even when render settings differ. Autodesk documents exporting a control mesh plus TurboSmooth attributes, but a Max import of Blender's attributes was not run. Other modifier settings, Max plug-in materials, constraints, rigs and procedural texture graphs do not have general parity. Curves use Blender FBX's mesh conversion.
+Geometry is frozen at the current viewport-evaluated frame, even when render modifier settings differ. Transform animation still uses native FBX baking. Mesh deformation, shape-key animation and skin bindings are not exported. No subdivision attributes or editable modifier stacks are written. Curves use Blender FBX's evaluated mesh conversion. Other modifier settings, Max plug-in materials, constraints, rigs and procedural texture graphs do not have general parity. Parent-relative mesh shear is compensated at the exported frame, with no claim of animated shear parity.
 
 Blender 5.0.1 supports face smoothing-group bitflags. On versions without that exporter enum, the add-on falls back to face smoothing plus explicit normals. Blender 4.2 was not run, and reconstructed Max group numbers are not guaranteed. Export Selected includes selected objects only, so parent links survive between exported objects. An unselected ancestor is not added automatically.
 
-The menus are registered additively in File, File > Export and Customize. Operators and file output were tested headlessly. File-browser clicking was not driven. Max-side appearance, units, camera/light semantics, and reconstruction of TurboSmooth remain unverified. The reader code and Alt+R operator were not changed.
+The menus are registered additively in File, File > Export and Customize. Operators and file output were tested headlessly. File-browser clicking was not driven. Max-side appearance, units and camera/light semantics remain unverified. The reader code and Alt+R operator were not changed.
 
 ## Sources
 

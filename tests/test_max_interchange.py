@@ -35,13 +35,14 @@ class InterchangeTests(unittest.TestCase):
 
     def test_export_settings(self):
         from notuodesk_3ds_maxxed import max_export
-        settings = max_export.fbx_settings(selected=True, subdivision="KEEP", embed=True, animation=False)
+        settings = max_export.fbx_settings(selected=True, embed=True, animation=False)
         self.assertEqual(settings["axis_up"], "Z")
         self.assertEqual(settings["axis_forward"], "Y")
         self.assertEqual(settings["apply_scale_options"], "FBX_SCALE_UNITS")
         self.assertTrue(settings["apply_unit_scale"])
         self.assertTrue(settings["use_selection"])
-        self.assertTrue(settings["use_subsurf"])
+        self.assertFalse(settings["use_subsurf"])
+        self.assertTrue(settings["use_mesh_edges"])
         self.assertTrue(settings["use_mesh_modifiers"])
         self.assertEqual(settings["path_mode"], "COPY")
         self.assertTrue(settings["embed_textures"])
@@ -50,7 +51,6 @@ class InterchangeTests(unittest.TestCase):
         self.assertEqual(settings["object_types"], {"EMPTY", "CAMERA", "LIGHT", "ARMATURE", "MESH", "OTHER"})
         smoothing = bpy.ops.export_scene.fbx.get_rna_type().properties["mesh_smooth_type"].enum_items.keys()
         self.assertEqual(settings["mesh_smooth_type"], "SMOOTH_GROUP" if "SMOOTH_GROUP" in smoothing else "FACE")
-        self.assertFalse(max_export.fbx_settings(subdivision="APPLY")["use_subsurf"])
         self.assertFalse(settings["bake_space_transform"])
 
     def test_scale_hierarchy_once_and_smoothing_masks(self):
@@ -261,25 +261,6 @@ class InterchangeTests(unittest.TestCase):
         self.assertLess((ob.matrix_world @ ob.data.vertices[0].co - vertex).length, 2e-5)
         print("VERIFIED selected export: names, hierarchy, offset pivot, camera and light", flush=True)
 
-    def test_subdivision_choice(self):
-        for choice, faces, mods in [("KEEP", 6, 1), ("APPLY", 24, 0)]:
-            ob = self.cube()
-            mod = ob.modifiers.new("TurboSmooth", "SUBSURF")
-            mod.levels = mod.render_levels = 1
-            before = self.evaluated_geometry(ob)
-            path = str(pathlib.Path(self.tmp.name) / (choice + ".fbx"))
-            self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision=choice, animation=False), {"FINISHED"})
-            self.assertEqual(len(ob.data.polygons), 6)
-            self.assertEqual(len(ob.modifiers), 1)
-            bpy.data.objects.remove(ob, do_unlink=True)
-            bpy.ops.max.import_max_fbx(filepath=path, animation=False)
-            imported = bpy.context.scene.objects["Box001"]
-            self.assertEqual(len(imported.data.polygons), faces)
-            self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), mods)
-            self.assert_geometry_matches(before, imported)
-            bpy.data.objects.remove(imported, do_unlink=True)
-        print("VERIFIED subdivision: editable or applied evaluated vertices match within 2e-5, source unchanged", flush=True)
-
     def evaluated_geometry(self, ob, matrix_world=None):
         bpy.context.view_layer.update()
         evaluated = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
@@ -317,7 +298,7 @@ class InterchangeTests(unittest.TestCase):
                 safe_before = self.evaluated_geometry(safe)
                 ob.select_set(True)
                 path = str(pathlib.Path(self.tmp.name) / "shell.fbx")
-                self.assertEqual(export(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+                self.assertEqual(export(filepath=path, animation=False), {"FINISHED"})
                 self.assertEqual([m.type for m in ob.modifiers], ["SUBSURF", "SOLIDIFY"])
                 self.assertEqual(sub.levels, 2)
                 self.assertAlmostEqual(shell.thickness, 0.4)
@@ -376,7 +357,7 @@ class InterchangeTests(unittest.TestCase):
                                            if i.is_instance and i.object.original == source)
                     before = self.evaluated_geometry(source, instance_matrix)
                     path = str(pathlib.Path(self.tmp.name) / "instance.fbx")
-                    self.assertEqual(export(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+                    self.assertEqual(export(filepath=path, animation=False), {"FINISHED"})
                     self.assertEqual([m.type for m in source.modifiers],
                                      ["SUBSURF", "SOLIDIFY"] if trailing_shell else ["SUBSURF"])
                     self.assertEqual(sub.levels, 2)
@@ -391,7 +372,7 @@ class InterchangeTests(unittest.TestCase):
                     imported = next(ob for ob in bpy.context.scene.objects if ob.type == "MESH"
                                     and (ob.matrix_world.translation - instance_position).length < 2e-5)
                     self.assert_geometry_matches(before, imported)
-                    self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 0 if trailing_shell else 1)
+                    self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 0)
                     print(f"VERIFIED collection instance: {export.idname()}, source_in_scene={linked}, "
                           f"nested={nested}, trailing_shell={trailing_shell}, evaluated geometry within 2e-5", flush=True)
 
@@ -417,7 +398,7 @@ class InterchangeTests(unittest.TestCase):
                             shell.thickness = 0.4
                         before = self.evaluated_geometry(ob)
                         path = str(pathlib.Path(self.tmp.name) / "converted.fbx")
-                        self.assertEqual(export(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+                        self.assertEqual(export(filepath=path, animation=False), {"FINISHED"})
                         self.assertEqual(ob.type, kind)
                         self.assertEqual(sub.levels, 1)
                         self.assertEqual(len(ob.modifiers), 2 if trailing_shell else 1)
@@ -430,7 +411,7 @@ class InterchangeTests(unittest.TestCase):
                         print(f"VERIFIED converted {kind}: {export.idname()}, trailing_shell={trailing_shell}, "
                               "evaluated geometry within 2e-5", flush=True)
 
-    def test_subdivision_with_disabled_trailing_modifier_stays_editable(self):
+    def test_bake_ignores_disabled_trailing_modifier(self):
         ob = self.cube()
         sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
         sub.levels = sub.render_levels = 1
@@ -438,16 +419,16 @@ class InterchangeTests(unittest.TestCase):
         shell.show_viewport = shell.show_render = False
         before = self.evaluated_geometry(ob)
         path = str(pathlib.Path(self.tmp.name) / "disabled-shell.fbx")
-        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, animation=False), {"FINISHED"})
         self.assertFalse(shell.show_viewport or shell.show_render)
         bpy.data.objects.remove(ob, do_unlink=True)
         bpy.ops.max.import_max_fbx(filepath=path, animation=False)
         imported = bpy.context.scene.objects["Box001"]
-        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 1)
+        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 0)
         self.assert_geometry_matches(before, imported)
-        print("VERIFIED disabled trailing Shell does not prevent editable subdivision", flush=True)
+        print("VERIFIED evaluated bake ignores disabled trailing Shell", flush=True)
 
-    def test_selected_subdivision_ignores_unselected_unsafe_stack(self):
+    def test_selected_bake_excludes_unselected_stack(self):
         unsafe = self.cube("Excluded")
         unsafe.modifiers.new("TurboSmooth", "SUBSURF")
         unsafe.modifiers.new("Shell", "SOLIDIFY")
@@ -457,15 +438,15 @@ class InterchangeTests(unittest.TestCase):
         before = self.evaluated_geometry(ob)
         self.assertFalse(unsafe.select_get())
         path = str(pathlib.Path(self.tmp.name) / "selected-subdivision.fbx")
-        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, animation=False), {"FINISHED"})
         bpy.data.objects.remove(ob, do_unlink=True)
         bpy.ops.max.import_max_fbx(filepath=path, animation=False)
         imported = bpy.context.scene.objects["Box001"]
-        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 1)
+        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 0)
         self.assert_geometry_matches(before, imported)
-        print("VERIFIED unselected unsafe stack does not force selected subdivision to bake", flush=True)
+        print("VERIFIED selected bake excludes unselected stack", flush=True)
 
-    def test_selected_subdivision_ignores_unselected_unsafe_instance(self):
+    def test_selected_bake_excludes_unselected_instance(self):
         source = self.cube("ExcludedInstanceSource")
         source.modifiers.new("TurboSmooth", "SUBSURF")
         source.modifiers.new("Shell", "SOLIDIFY")
@@ -484,15 +465,15 @@ class InterchangeTests(unittest.TestCase):
         before = self.evaluated_geometry(ob)
         self.assertEqual(list(bpy.context.selected_objects), [ob])
         path = str(pathlib.Path(self.tmp.name) / "selected-instance-scope.fbx")
-        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, animation=False), {"FINISHED"})
         for ob in list(bpy.data.objects):
             bpy.data.objects.remove(ob, do_unlink=True)
         self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=False), {"FINISHED"})
         self.assertEqual(set(bpy.context.scene.objects.keys()), {"Box001"})
         imported = bpy.context.scene.objects["Box001"]
-        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 1)
+        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 0)
         self.assert_geometry_matches(before, imported)
-        print("VERIFIED unselected unsafe collection instance does not force selected subdivision to bake", flush=True)
+        print("VERIFIED selected bake excludes unselected collection instance", flush=True)
 
     def test_failed_export_restores_units(self):
         self.cube()
@@ -509,8 +490,175 @@ class InterchangeTests(unittest.TestCase):
         for ob in list(bpy.data.objects):
             bpy.data.objects.remove(ob, do_unlink=True)
 
+    def posed_mesh(self):
+        self.clear_objects()
+        ob = self.cube("PosedMesh")
+        bpy.ops.object.armature_add()
+        rig = bpy.context.object
+        rig.name = "SourceRig"
+        bpy.ops.object.mode_set(mode="EDIT")
+        lower = rig.data.edit_bones[0]
+        lower.head, lower.tail = (0, 0, -1), (0, 0, 0)
+        upper = rig.data.edit_bones.new("Top")
+        upper.head, upper.tail, upper.parent = (0, 0, 0), (0, 0, 1), lower
+        bpy.ops.object.mode_set(mode="OBJECT")
+        for name in ("Bone", "Top"):
+            group = ob.vertex_groups.new(name=name)
+            group.add([v.index for v in ob.data.vertices if (v.co.z > 0) == (name == "Top")], 1, "REPLACE")
+        arm = ob.modifiers.new("Skin", "ARMATURE")
+        arm.object = rig
+        sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
+        sub.levels = sub.render_levels = 2
+        rig.pose.bones["Top"].rotation_mode = "XYZ"
+        rig.pose.bones["Top"].rotation_euler.y = 0.8
+        ob.select_set(True)
+        bpy.context.view_layer.update()
+        return ob, rig
+
+    def test_posed_armature_before_subdivision_bakes_current_pose(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for animation in (False, True):
+                with self.subTest(export=export.idname(), animation=animation):
+                    ob, rig = self.posed_mesh()
+                    before = self.evaluated_geometry(ob)
+                    state = self.export_state()
+                    path = str(pathlib.Path(self.tmp.name) / "posed.fbx")
+                    self.assertEqual(export(filepath=path, animation=animation), {"FINISHED"})
+                    self.assertEqual(rig.data.pose_position, "POSE")
+                    self.assertEqual(state, self.export_state())
+                    self.assert_geometry_matches(before, ob)
+                    self.clear_objects()
+                    self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=animation), {"FINISHED"})
+                    self.assert_geometry_matches(before, bpy.data.objects["PosedMesh"])
+        print("VERIFIED posed Armature before TurboSmooth: both operators and animation settings match current evaluated pose", flush=True)
+
+    def test_mesh_evaluation_failure_restores_source_rig(self):
+        from io_scene_fbx import export_fbx_bin
+        from notuodesk_3ds_maxxed import max_export
+
+        class Proxy:
+            def __init__(self, base, **overrides):
+                self.base, self.overrides = base, overrides
+
+            def __getattr__(self, name):
+                return self.overrides.get(name, getattr(self.base, name))
+
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for failure_at in (1, 2):
+                with self.subTest(export=export.idname(), failure_at=failure_at):
+                    ob, rig = self.posed_mesh()
+                    self.cube("SecondMesh")
+                    ob.select_set(True)
+                    before = self.evaluated_geometry(ob)
+                    state = self.export_state()
+                    mesh_ids = set(bpy.data.meshes)
+                    new_mesh = bpy.data.meshes.new_from_object
+                    calls = 0
+
+                    def fail_mesh(*args, **kwargs):
+                        nonlocal calls
+                        calls += 1
+                        if calls == failure_at:
+                            raise RuntimeError("injected mesh evaluation failure")
+                        return new_mesh(*args, **kwargs)
+
+                    proxy = Proxy(bpy, data=Proxy(bpy.data, meshes=Proxy(bpy.data.meshes, new_from_object=fail_mesh)))
+                    # Before the fix this reaches native FBX after its real POSE -> REST change.
+                    # After the fix the same failure reaches the wrapper's evaluated bake.
+                    with patch.object(export_fbx_bin, "bpy", proxy), patch.object(max_export, "bpy", proxy):
+                        with self.assertRaises(RuntimeError):
+                            export(filepath=str(pathlib.Path(self.tmp.name) / "failure.fbx"), animation=False)
+                    self.assertEqual(rig.data.pose_position, "POSE")
+                    self.assertEqual(state, self.export_state())
+                    self.assertEqual(set(bpy.data.meshes), mesh_ids)
+                    self.assertEqual(ob.modifiers[0].object, rig)
+                    self.assert_geometry_matches(before, ob)
+        print("VERIFIED evaluation failure: both public operators restore source rig, data, modifiers and scene state", flush=True)
+
+    def test_unwritable_bake_restores_pose_mode_and_complete_state(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            with self.subTest(export=export.idname()):
+                ob, rig = self.posed_mesh()
+                bpy.context.view_layer.objects.active = rig
+                bpy.ops.object.mode_set(mode="POSE")
+                bpy.context.scene.frame_set(2, subframe=0.375)
+                before = self.evaluated_geometry(ob)
+                state = self.export_state()
+                mesh_ids = set(bpy.data.meshes)
+                path = pathlib.Path(self.tmp.name) / "directory.fbx"
+                path.mkdir(exist_ok=True)
+                with self.assertRaises(RuntimeError):
+                    export(filepath=str(path), units="FEET", animation=True)
+                self.assertEqual(state, self.export_state())
+                self.assertEqual(set(bpy.data.meshes), mesh_ids)
+                self.assert_geometry_matches(before, ob)
+                bpy.ops.object.mode_set(mode="OBJECT")
+        print("VERIFIED real write failures restore pose mode, subframe, units, mesh data, rig and modifiers through both operators", flush=True)
+
+    def mesh_signature(self, ob):
+        bpy.context.view_layer.update()
+        graph = bpy.context.evaluated_depsgraph_get()
+        evaluated = ob.evaluated_get(graph)
+        mesh = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=graph)
+        try:
+            matrix = evaluated.matrix_world
+            normals = matrix.to_3x3().inverted().transposed()
+            return (len(mesh.edges), [(matrix @ mesh.vertices[loop.vertex_index].co,
+                                      (normals @ mesh.corner_normals[i].vector).normalized())
+                                     for i, loop in enumerate(mesh.loops)])
+        finally:
+            evaluated.to_mesh_clear()
+
+    def test_baked_loose_edges_parent_inverse_and_flat_normals(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for case in ("LOOSE_EDGES", "PARENT_INVERSE", "FLAT_NORMALS"):
+                with self.subTest(export=export.idname(), case=case):
+                    self.clear_objects()
+                    ob = self.cube("ReviewSource")
+                    ob.data.vertices[0].co.x -= 0.37
+                    if case == "LOOSE_EDGES":
+                        mesh = bpy.data.meshes.new("Loose")
+                        mesh.from_pydata([tuple(v.co) for v in ob.data.vertices] + [(4, 0, 0), (5, 0, 0)],
+                                         [(8, 9)], [tuple(p.vertices) for p in ob.data.polygons])
+                        ob.data = mesh
+                    if case == "PARENT_INVERSE":
+                        parent = bpy.data.objects.new("Parent", None)
+                        bpy.context.collection.objects.link(parent)
+                        parent.scale = (2, 0.7, 1.3)
+                        parent.rotation_euler = (0.2, 0.4, 0.7)
+                        ob.parent = parent
+                        ob.location = (1, 2, 0.3)
+                        ob.rotation_euler = (0.7, 0.3, 0.1)
+                        bpy.context.view_layer.update()
+                        ob.matrix_parent_inverse = parent.matrix_world.inverted()
+                        parent.select_set(True)
+                    sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
+                    sub.levels = sub.render_levels = 2
+                    before = self.evaluated_geometry(ob)
+                    edges, corners = self.mesh_signature(ob)
+                    path = str(pathlib.Path(self.tmp.name) / (case + ".fbx"))
+                    self.assertEqual(export(filepath=path, animation=False), {"FINISHED"})
+                    self.assert_geometry_matches(before, ob)
+                    self.clear_objects()
+                    self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=False), {"FINISHED"})
+                    imported = bpy.data.objects["ReviewSource"]
+                    self.assert_geometry_matches(before, imported)
+                    after_edges, after_corners = self.mesh_signature(imported)
+                    self.assertEqual(edges, after_edges)
+                    self.assertEqual(len(imported.modifiers), 0)
+                    for source, target in ((corners, after_corners), (after_corners, corners)):
+                        tree = KDTree(len(target))
+                        for i, (position, _normal) in enumerate(target):
+                            tree.insert(position, i)
+                        tree.balance()
+                        for position, normal in source:
+                            matches = tree.find_range(position, 3e-5)
+                            self.assertTrue(matches)
+                            self.assertLess(min((normal - target[i][1]).length for _, i, _ in matches), 1e-4)
+                    print(f"VERIFIED baked {case}: {export.idname()} vertices/faces/edges and corner normals match evaluated scene", flush=True)
+
     def subdivision_fixture(self, case):
-        """Independent geometry fixtures, not derived from the export predicate."""
+        """Independent evaluated geometry fixtures for the baked export."""
         self.clear_objects()
         if case == "CURVE":
             bpy.ops.curve.primitive_bezier_circle_add()
@@ -613,24 +761,37 @@ class InterchangeTests(unittest.TestCase):
         return targets
 
     def export_state(self):
+        def props(owner):
+            result = []
+            for prop in owner.bl_rna.properties:
+                if prop.type in {"BOOLEAN", "INT", "FLOAT", "ENUM", "STRING"}:
+                    value = getattr(owner, prop.identifier)
+                    result.append((prop.identifier, tuple(value) if getattr(prop, "is_array", False) else value))
+            return result
+
         def layers(layer):
             return [(layer.name, layer.hide_viewport, layer.exclude)] + [
                 item for child in layer.children for item in layers(child)]
         return ([(ob.name, ob.hide_viewport, ob.hide_render, ob.hide_get(), ob.select_get(),
-                  [(m.name, m.type, m.show_viewport, m.show_render) for m in ob.modifiers])
+                  ob.mode, ob.data.as_pointer() if ob.data else None,
+                  tuple(tuple(row) for row in ob.matrix_world),
+                  [props(m) for m in ob.modifiers])
                  for ob in bpy.data.objects],
                 [(c.name, c.hide_viewport, c.hide_render) for c in bpy.data.collections],
                 layers(bpy.context.view_layer.layer_collection),
-                bpy.context.view_layer.objects.active)
+                bpy.context.view_layer.objects.active,
+                [(a.name, a.pose_position) for a in bpy.data.armatures],
+                (bpy.context.scene.frame_current, bpy.context.scene.frame_subframe),
+                (bpy.context.scene.unit_settings.system, bpy.context.scene.unit_settings.scale_length))
 
-    def subdivision_roundtrip(self, case, export, choice="KEEP", editable=False):
+    def subdivision_roundtrip(self, case, export):
         targets = self.subdivision_fixture(case)
         state = self.export_state()
         path = str(pathlib.Path(self.tmp.name) / (case + ".fbx"))
         # Explicit selection allows hidden sources to exercise the public EXEC path too.
         selected = list(bpy.context.scene.objects)
         with bpy.context.temp_override(selected_objects=selected):
-            self.assertEqual(export(filepath=path, subdivision=choice, animation=False), {"FINISHED"})
+            self.assertEqual(export(filepath=path, animation=False), {"FINISHED"})
         self.assertEqual(state, self.export_state(), "Export must restore all visibility and selection")
         # Remove fixture-only visibility barriers before checking the imported geometry.
         for c in bpy.data.collections:
@@ -645,22 +806,21 @@ class InterchangeTests(unittest.TestCase):
             imported.hide_viewport = False
             imported.hide_set(False)
             self.assert_geometry_matches(before, imported)
-            self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), int(editable))
+            self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 0)
 
     def test_linked_subdivision_settings_roundtrip(self):
         for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
             for case in ("LINKED_DIFFERENT", "LINKED_NONE", "LINKED_EQUAL"):
                 with self.subTest(export=export.idname(), case=case):
-                    self.subdivision_roundtrip(case, export, editable=case == "LINKED_EQUAL")
-        print("VERIFIED linked meshes: different levels or absent subdivision bake, identical settings stay editable", flush=True)
+                    self.subdivision_roundtrip(case, export)
+        print("VERIFIED linked meshes bake independent evaluated geometry for equal/different/absent modifiers", flush=True)
 
     def test_disabled_objects_bake_evaluated_geometry(self):
         for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
             for case in ("HIDDEN_SHELL", "HIDDEN_MIXED"):
-                for choice in ("KEEP", "APPLY"):
-                    with self.subTest(export=export.idname(), case=case, choice=choice):
-                        self.subdivision_roundtrip(case, export, choice=choice)
-        print("VERIFIED disabled objects: Shell and unrelated Curve fallback preserve evaluated geometry and visibility", flush=True)
+                with self.subTest(export=export.idname(), case=case):
+                    self.subdivision_roundtrip(case, export)
+        print("VERIFIED disabled objects: Shell and unrelated Curve preserve evaluated geometry and visibility", flush=True)
 
     def test_unsupported_subdivision_settings_bake_shape(self):
         for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
@@ -677,13 +837,12 @@ class InterchangeTests(unittest.TestCase):
                  "BOUNDARY_ALL", "BOUNDARY_CORNERS", "CREASES_ON", "CREASES_OFF_EMPTY",
                  "CREASES_OFF_ZERO", "VERTEX_CREASE", "CURVE", "FONT", "SURFACE", "META",
                  "HIDDEN_SAFE", "HIDE_SET", "HIDE_RENDER", "COLLECTION_HIDDEN", "LAYER_HIDDEN")
-        live = {"SAFE", "DISABLED_TRAILING", "BOUNDARY_ALL", "CREASES_ON", "CREASES_OFF_EMPTY", "CREASES_OFF_ZERO"}
         passed = 0
         for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
             for case in cases:
                 print(f"MATRIX [{passed + 1}/{len(cases) * 2}] {export.idname()} {case}", flush=True)
                 with self.subTest(export=export.idname(), case=case):
-                    self.subdivision_roundtrip(case, export, editable=case in live)
+                    self.subdivision_roundtrip(case, export)
                     passed += 1
         print(f"VERIFIED subdivision geometry matrix: {passed}/{len(cases) * 2} real round trips within 2e-5", flush=True)
 
@@ -699,7 +858,7 @@ class InterchangeTests(unittest.TestCase):
                 with bpy.context.temp_override(selected_objects=list(bpy.context.scene.objects)):
                     with patch.object(export_fbx_bin, "save", side_effect=fail):
                         with self.assertRaises(RuntimeError):
-                            export(filepath=str(pathlib.Path(self.tmp.name) / "fail.fbx"), subdivision="KEEP")
+                            export(filepath=str(pathlib.Path(self.tmp.name) / "fail.fbx"))
                 self.assertEqual(state, self.export_state())
                 for c in bpy.data.collections:
                     c.hide_viewport = False
@@ -729,7 +888,7 @@ class InterchangeTests(unittest.TestCase):
                         bpy.context.view_layer.update()
                         state = self.export_state()
                         path = str(pathlib.Path(self.tmp.name) / "linked-instance.fbx")
-                        self.assertEqual(export(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+                        self.assertEqual(export(filepath=path, animation=False), {"FINISHED"})
                         self.assertEqual(state, self.export_state())
                         self.clear_objects()
                         self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=False), {"FINISHED"})
@@ -743,19 +902,19 @@ class InterchangeTests(unittest.TestCase):
                             imported.hide_set(False)
                             self.assert_geometry_matches(before, imported)
                             self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers),
-                                             int(equal and not hidden))
+                                             0)
         # An unselected linked object must not influence the exported geometry record.
         self.subdivision_fixture("LINKED_DIFFERENT")
         bpy.data.objects["LinkedSource"].select_set(False)
         source = bpy.data.objects["MatrixSource"]
         before = self.evaluated_geometry(source)
         path = str(pathlib.Path(self.tmp.name) / "selected-linked.fbx")
-        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, animation=False), {"FINISHED"})
         self.clear_objects()
         bpy.ops.max.import_max_fbx(filepath=path, animation=False)
         self.assertEqual(set(bpy.context.scene.objects.keys()), {"MatrixSource"})
         self.assert_geometry_matches(before, bpy.data.objects["MatrixSource"])
-        self.assertEqual(len(bpy.data.objects["MatrixSource"].modifiers), 1)
+        self.assertEqual(len(bpy.data.objects["MatrixSource"].modifiers), 0)
         print("VERIFIED linked instance sources, hidden source evaluation, and selected-only linked mesh scope", flush=True)
 
 
