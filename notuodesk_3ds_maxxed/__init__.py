@@ -185,6 +185,7 @@ def register():
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""), ("VRAY", "V-Ray", "")])
     prims.register_props()
+    poly_tools.register()
     ui_panel.register_props()
     vray.register_props()
     mtl_editor.register_props()
@@ -215,6 +216,7 @@ def unregister():
     vray.unregister_props()
     ui_panel.unregister_props()
     prims.unregister_props()
+    poly_tools.unregister()
     for prop in ("max_cmd_tab", "max_create_cat", "max_create_sub", "max_sublevel"):
         if hasattr(wm, prop):
             delattr(wm, prop)

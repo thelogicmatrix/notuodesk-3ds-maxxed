@@ -4,12 +4,16 @@ blender -b --factory-startup --python-exit-code 1 --python tests/test_poly_tools
 
 import math
 import sys
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
 import addon_utils
 import bmesh
 import bpy
 from mathutils import Matrix, Vector
+from mathutils.kdtree import KDTree
 
 addon_utils.enable("notuodesk_3ds_maxxed", default_set=True)
 
@@ -71,7 +75,44 @@ def evaluated_world_vertices(ob):
         evaluated.to_mesh_clear()
 
 
+def text_with_pivot():
+    from notuodesk_3ds_maxxed import get_prefs
+    get_prefs().auto_pivot_on_create = "OFF"
+    bpy.ops.max.create_shape(kind="TEXT")
+    ob = bpy.context.object
+    ob.data.size = 2.5
+    ob.data.extrude = .15
+    ob.matrix_world = Matrix.Translation((5, -3, 2)) @ Matrix.Rotation(.7, 4, "Y") @ Matrix.Diagonal((2, .5, 1, 1))
+    before = evaluated_world_vertices(ob)
+    bpy.ops.max.pivot_bounds(mode="BOTTOM")
+    return ob, before
+
+
+def visible_modifiers(ob):
+    from notuodesk_3ds_maxxed.ui_panel import MAX_UL_stack
+    flags, _ = MAX_UL_stack.filter_items(SimpleNamespace(bitflag_filter_item=1), bpy.context, ob, "modifiers")
+    return [mod for mod, flag in zip(ob.modifiers, flags) if flag & 1]
+
+
 class PolyToolsTests(unittest.TestCase):
+    def assert_glyphs(self, ob, before, action, reordered=False):
+        after = evaluated_world_vertices(ob)
+        self.assertEqual(len(before), len(after), action)
+        if reordered:
+            # FONT-to-CURVE regenerates the same tessellation in a different
+            # vertex order. Compare both point sets in world space.
+            distances = []
+            for source, target in ((before, after), (after, before)):
+                tree = KDTree(len(source))
+                for i, point in enumerate(source):
+                    tree.insert(point, i)
+                tree.balance()
+                distances.append(max(tree.find(point)[2] for point in target))
+            displacement = max(distances)
+        else:
+            displacement = max((a - b).length for a, b in zip(before, after))
+        self.assertLess(displacement, 1e-5, f"{action}: glyphs moved {displacement:.6f} Blender units")
+
     def tearDown(self):
         if bpy.context.object and bpy.context.object.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
@@ -321,6 +362,133 @@ class PolyToolsTests(unittest.TestCase):
         finally:
             prefs.auto_pivot_on_create = "OFF"
         print("PASS creation finalizer and Shapes Text: Off/Center/Bottom preserve evaluated glyphs and set expected origins", flush=True)
+
+    def test_text_pivot_stack_cannot_disable_or_remove_compensation(self):
+        from notuodesk_3ds_maxxed import ui_panel
+        ob, before = text_with_pivot()
+        self.assert_glyphs(ob, before, "Pivot to Bottom")
+        # Every exposed row offers a viewport bulb and Remove Modifier.
+        for mod in visible_modifiers(ob):
+            mod.show_viewport = False
+            self.assert_glyphs(ob, before, "Modify stack disable " + mod.name)
+            mod.show_viewport = True
+            bpy.ops.object.modifier_remove(modifier=mod.name)
+            self.assert_glyphs(ob, before, "Modify stack Remove Modifier")
+        for mod in ob.modifiers:
+            ob.modifiers.active = mod
+            self.assertEqual(ui_panel._stack_get(ob), -1)
+            ob.max_stack_index = ob.modifiers.find(mod.name)
+            self.assertEqual(ui_panel._stack_get(ob), -1)
+            self.assertEqual(bpy.ops.max.modifier_set_active(name=mod.name), {"CANCELLED"})
+            self.assertEqual(bpy.ops.max.stack_move(modifier=mod.name, direction="DOWN"), {"CANCELLED"})
+        self.assertEqual(visible_modifiers(ob), [])
+        print("PASS Text pivot: no compensation row, bulb, selection or Remove Modifier in Max stack", flush=True)
+
+    def test_text_pivot_other_stack_actions(self):
+        from notuodesk_3ds_maxxed.gn_mods import G
+        ob, before = text_with_pivot()
+        for name in ("Other A", "Other B"):
+            g = G(name)
+            g.out(g.g("Geometry"))
+            mod = ob.modifiers.new(name, "NODES")
+            mod.node_group = g.ng
+        self.assertEqual([m.name for m in visible_modifiers(ob)], ["Other A", "Other B"])
+        for name in ("Other A", "Other B"):
+            bpy.ops.max.modifier_set_active(name=name)
+            mod = ob.modifiers[name]
+            for prop in ("show_viewport", "show_in_editmode", "show_on_cage"):
+                setattr(mod, prop, not getattr(mod, prop))
+                self.assert_glyphs(ob, before, prop)
+                setattr(mod, prop, not getattr(mod, prop))
+            for direction in ("UP", "UP", "DOWN", "DOWN"):
+                self.assertEqual(bpy.ops.max.stack_move(modifier=name, direction=direction), {"FINISHED"})
+                self.assert_glyphs(ob, before, "Reorder " + direction)
+                self.assertNotIn(ob.modifiers[0], visible_modifiers(ob))
+        self.assertEqual(bpy.ops.object.make_single_user(object=True), {"FINISHED"})
+        ob = bpy.context.object
+        self.assert_glyphs(ob, before, "Make Unique")
+        # Blender cannot apply individual modifiers to FONT objects. The offered
+        # action must reject without disturbing the pivot or glyphs.
+        with self.assertRaisesRegex(RuntimeError, "Cannot apply modifier for this object type"):
+            bpy.ops.object.modifier_apply(modifier="Other A")
+        self.assert_glyphs(ob, before, "Apply other modifier rejected")
+        for name in ("Other A", "Other B"):
+            self.assertEqual(bpy.ops.object.modifier_remove(modifier=name), {"FINISHED"})
+            self.assert_glyphs(ob, before, "Remove Modifier " + name)
+        self.assertEqual(visible_modifiers(ob), [])
+        self.assertEqual(ob.type, "FONT")
+        ob.data.body = "Still editable"
+        self.assertGreater(len(evaluated_world_vertices(ob)), 0)
+        # Creating the compensation after user modifiers must still put it first.
+        bpy.ops.max.create_shape(kind="TEXT")
+        ob = bpy.context.object
+        g = G("Existing user modifier")
+        g.out(g.g("Geometry"))
+        mod = ob.modifiers.new("Existing user modifier", "NODES")
+        mod.node_group = g.ng
+        before = evaluated_world_vertices(ob)
+        bpy.ops.max.pivot_bounds(mode="CENTER")
+        self.assert_glyphs(ob, before, "Pivot with existing modifier")
+        self.assertNotIn(ob.modifiers[0], visible_modifiers(ob))
+        print("PASS Text pivot: other modifier bulbs, edit/cage, reorder boundaries, Make Unique, apply rejection and removal preserve glyphs", flush=True)
+
+    def test_text_pivot_baked_on_conversion(self):
+        from notuodesk_3ds_maxxed.gn_mods import G
+        for cmd, expected_type in (("CONVERT_SPLINE", "CURVE"), ("CONVERT_POLY", "MESH")):
+            ob, before = text_with_pivot()
+            g = G("Conversion user modifier")
+            g.out(g.g("Geometry"))
+            mod = ob.modifiers.new("Conversion user modifier", "NODES")
+            mod.node_group = g.ng
+            origin = ob.matrix_world.translation.copy()
+            self.assertEqual(bpy.ops.max.object_cmd(cmd=cmd), {"FINISHED"})
+            self.assertEqual(ob.type, expected_type)
+            self.assertLess((ob.matrix_world.translation - origin).length, 1e-5)
+            self.assert_glyphs(ob, before, cmd, reordered=True)
+            for mod in list(ob.modifiers):
+                bpy.ops.object.modifier_remove(modifier=mod.name)
+            self.assert_glyphs(ob, before, cmd + " after removing all modifiers", reordered=True)
+        print("PASS Text pivot: Editable Spline and Editable Poly bake compensation, all modifiers removable", flush=True)
+
+    def test_text_pivot_legacy_load_migration(self):
+        from notuodesk_3ds_maxxed.gn_mods import G
+        bpy.ops.max.create_shape(kind="TEXT")
+        ob = bpy.context.object
+        ob.name = "Legacy Text pivot fixture"
+        ob.data.size = 2.5
+        ob.data.extrude = .15
+        user = G("Legacy user modifier")
+        user.out(user.g("Geometry"))
+        user_mod = ob.modifiers.new("Legacy user modifier", "NODES")
+        user_mod.node_group = user.ng
+        g = G("Text Pivot Offset")
+        transform = g.nodes.new("GeometryNodeTransform")
+        g.links.new(g.g("Geometry"), transform.inputs["Geometry"])
+        g.out(transform.outputs["Geometry"])
+        transform.inputs["Translation"].default_value = (-2, -.5, -.7)
+        mod = ob.modifiers.new("Text Pivot Offset", "NODES")
+        mod.node_group = g.ng
+        mod["max_font_pivot"] = True
+        ob.modifiers.active = mod
+        before = evaluated_world_vertices(ob)
+        with tempfile.TemporaryDirectory(prefix="maxxed-pivot-") as folder:
+            path = str(Path(folder) / "legacy.blend")
+            bpy.ops.wm.save_as_mainfile(filepath=path)
+            bpy.ops.wm.open_mainfile(filepath=path)
+            ob = bpy.data.objects["Legacy Text pivot fixture"]
+            self.assert_glyphs(ob, before, "Legacy file load")
+            self.assertEqual([m.name for m in visible_modifiers(ob)], ["Legacy user modifier"])
+            self.assertNotIn(ob.modifiers[0], visible_modifiers(ob))
+            self.assertNotIn("Text Pivot Offset", ob.modifiers)
+            bpy.ops.object.modifier_remove(modifier="Legacy user modifier")
+            self.assert_glyphs(ob, before, "Legacy user Remove Modifier")
+            bpy.ops.wm.save_as_mainfile(filepath=path)
+            bpy.ops.wm.open_mainfile(filepath=path)
+            ob = bpy.data.objects["Legacy Text pivot fixture"]
+            self.assert_glyphs(ob, before, "Migrated file reload")
+            self.assertEqual(len(ob.modifiers), 1)
+            self.assertEqual(visible_modifiers(ob), [])
+        print("PASS Text pivot: legacy offset migrates on load, glyphs unchanged across save/reload", flush=True)
 
 
 if __name__ == "__main__":

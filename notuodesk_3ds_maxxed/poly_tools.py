@@ -4,13 +4,103 @@ import math
 
 import bmesh
 import bpy
-from bpy.props import EnumProperty, FloatProperty
+from bpy.app.handlers import persistent
+from bpy.props import EnumProperty, FloatProperty, StringProperty
 from mathutils import Matrix, Vector
 from mathutils.geometry import normal
 
 
 PIVOT_OFFSET = "max_pivot_offset"
 FONT_PIVOT = "max_font_pivot"
+
+
+def is_font_pivot(modifier):
+    if modifier.type != "NODES" or modifier.node_group is None:
+        return False
+    group = modifier.node_group
+    # Blender rebuilds Geometry Nodes modifier socket properties on file load
+    # and Text conversion. Store the identity on the node group instead.
+    legacy = group.name.split(".")[0] == "3dsMaxxed Text Pivot Offset"
+    return bool(group.get(FONT_PIVOT) or modifier.get(FONT_PIVOT) or legacy)
+
+
+def _protect_font_pivot(ob, modifier):
+    """Keep the Text origin translation below every user modifier."""
+    modifier.name = "_MAX Text Origin"
+    modifier.node_group[FONT_PIVOT] = True
+    modifier.show_viewport = modifier.show_render = True
+    modifier.show_in_editmode = True
+    ob.modifiers.move(ob.modifiers.find(modifier.name), 0)
+    modifier.is_active = False
+
+
+def bake_converted_text_pivots(objects):
+    """Text-to-spline conversion keeps modifiers but regenerates curve data."""
+    for ob in objects:
+        if ob.type != "CURVE":
+            continue
+        modifiers = [mod for mod in ob.modifiers if is_font_pivot(mod)]
+        if not modifiers:
+            continue
+        if ob.data.users > 1:
+            ob.data = ob.data.copy()
+        for mod in modifiers:
+            transform = next(n for n in mod.node_group.nodes if n.bl_idname == "GeometryNodeTransform")
+            offset = Vector(transform.inputs["Translation"].default_value)
+            ob.data.transform(Matrix.Translation(offset), shape_keys=True)
+            ob.modifiers.remove(mod)
+        ob.data.update_tag()
+
+
+@persistent
+def _migrate_text_pivots(_=None):
+    for ob in bpy.data.objects:
+        if ob.library:
+            continue
+        if ob.type == "FONT":
+            for mod in ob.modifiers:
+                if is_font_pivot(mod):
+                    _protect_font_pivot(ob, mod)
+        elif ob.type == "CURVE":
+            bake_converted_text_pivots([ob])
+
+
+def register():
+    bpy.app.handlers.load_post.append(_migrate_text_pivots)
+    # Blender restricts bpy.data during add-on registration.
+    bpy.app.timers.register(_migrate_text_pivots, first_interval=0)
+
+
+def unregister():
+    bpy.app.handlers.load_post.remove(_migrate_text_pivots)
+    if bpy.app.timers.is_registered(_migrate_text_pivots):
+        bpy.app.timers.unregister(_migrate_text_pivots)
+
+
+class MAX_OT_stack_move(bpy.types.Operator):
+    """Reorder user modifiers without crossing the Text origin translation"""
+    bl_idname = "max.stack_move"
+    bl_label = "Move Modifier"
+    bl_options = {"REGISTER", "UNDO"}
+
+    modifier: StringProperty()
+    direction: EnumProperty(items=[("UP", "Up", ""), ("DOWN", "Down", "")])
+
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None and context.mode == "OBJECT"
+
+    def execute(self, context):
+        ob = context.active_object
+        mod = ob.modifiers.get(self.modifier)
+        if mod is None or is_font_pivot(mod):
+            return {"CANCELLED"}
+        first = sum(is_font_pivot(m) for m in ob.modifiers)
+        index = ob.modifiers.find(mod.name)
+        target = index + (-1 if self.direction == "UP" else 1)
+        if first <= target < len(ob.modifiers):
+            ob.modifiers.move(index, target)
+        return {"FINISHED"}
 
 
 def edge_chains(edges):
@@ -316,20 +406,20 @@ class MAX_OT_loop_regularize(bpy.types.Operator):
 
 def _offset_font_geometry(ob, delta):
     """Translate generated glyphs, including local Z for tilted/extruded Text."""
-    modifier = next((mod for mod in ob.modifiers if mod.type == "NODES" and mod.get(FONT_PIVOT)), None)
+    modifier = next((mod for mod in ob.modifiers if is_font_pivot(mod)), None)
     if modifier is None:
         from .gn_mods import G
-        g = G("Text Pivot Offset")
+        g = G("Text Origin")
         transform = g.nodes.new("GeometryNodeTransform")
         g.links.new(g.g("Geometry"), transform.inputs["Geometry"])
         g.out(transform.outputs["Geometry"])
-        modifier = ob.modifiers.new("Text Pivot Offset", "NODES")
+        modifier = ob.modifiers.new("_MAX Text Origin", "NODES")
         modifier.node_group = g.ng
-        modifier[FONT_PIVOT] = True
     elif modifier.node_group.users > 1:
         modifier.node_group = modifier.node_group.copy()
     transform = next(node for node in modifier.node_group.nodes if node.bl_idname == "GeometryNodeTransform")
     transform.inputs["Translation"].default_value -= delta
+    _protect_font_pivot(ob, modifier)
 
 
 def move_pivot(ob, mode):
@@ -414,4 +504,4 @@ class MAX_OT_pivot_bounds(bpy.types.Operator):
         return {"FINISHED"} if count else {"CANCELLED"}
 
 
-classes = (MAX_OT_quad_cap, MAX_OT_loop_regularize, MAX_OT_pivot_bounds)
+classes = (MAX_OT_quad_cap, MAX_OT_loop_regularize, MAX_OT_pivot_bounds, MAX_OT_stack_move)
