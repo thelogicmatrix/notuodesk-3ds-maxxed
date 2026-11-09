@@ -18,7 +18,7 @@ def K(idname, key, value="PRESS", ctrl=False, shift=False, alt=False, **props):
 VIEWPORT = [
     # Main toolbar tools
     K("wm.tool_set_by_id", "Q", name="builtin.select_box"),
-    K("wm.tool_set_by_id", "W", name="builtin.move"),
+    K("max.poly_move_tool", "W"),
     K("wm.tool_set_by_id", "E", name="builtin.rotate"),
     K("wm.tool_set_by_id", "R", name="builtin.scale"),
     # Selection

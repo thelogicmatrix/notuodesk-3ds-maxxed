@@ -220,8 +220,21 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
+- Editable Poly Constraints work with Select and Move (W), its gizmo and free
+  drag. Edge slides vertices along their original connected edges. Edge and
+  Border selections slide along adjoining unselected edges. Face projects each
+  vertex onto the object's original surface. Normal moves along the original
+  averaged vertex normals. Each object saves its own setting. None restores
+  ordinary Move. Right-click or Esc cancels, and each move is one undo step.
+  Constraints take priority over target snapping and restore the snap settings
+  after each drag. The solver uses BMesh edge rails, a frozen surface BVH and
+  normal offsets rather than Blender's modal Slide or Shrink/Fatten tools.
+  Edge rails stop at their original endpoints. Face uses the nearest original
+  surface, so closely spaced or disconnected faces can attract the projection.
+  Constrained Move currently affects the explicit selection, without Soft
+  Selection or Preserve UVs correction. Rotate and Scale do not use Constraints.
 - Editable Poly's By Vertex click filter, Ignore Backfacing, hover Preview
-  Selection, topology Constraints and Preserve UVs channel settings are disabled.
+  Selection and Preserve UVs channel settings are disabled.
   By Angle expands the current face selection with a separate button.
 - Soft Selection uses Blender proportional editing for transforms. Edge Distance
   means connected-only, with no edge-count cutoff. Falloff is Blender's radius.

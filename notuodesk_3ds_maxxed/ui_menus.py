@@ -178,7 +178,7 @@ class MAX_MT_quad(Menu):
             left.operator("max.object_cmd", text="See-Through").cmd = "SEE_THROUGH"
 
         _header(right, "transform")
-        right.operator("wm.tool_set_by_id", text="Move").name = "builtin.move"
+        right.operator("max.poly_move_tool", text="Move")
         right.operator("wm.tool_set_by_id", text="Rotate").name = "builtin.rotate"
         right.operator("wm.tool_set_by_id", text="Scale").name = "builtin.scale"
         right.operator("wm.tool_set_by_id", text="Select").name = "builtin.select_box"
@@ -316,7 +316,7 @@ class MAX_MT_edit(Menu):
         lay.operator("max.delete", text="Delete")
         lay.operator("max.clone", text="Clone")
         lay.separator()
-        lay.operator("wm.tool_set_by_id", text="Move").name = "builtin.move"
+        lay.operator("max.poly_move_tool", text="Move")
         lay.operator("wm.tool_set_by_id", text="Rotate").name = "builtin.rotate"
         lay.operator("wm.tool_set_by_id", text="Scale").name = "builtin.scale"
         lay.operator("max.transform_typein", text="Transform Type-In...")
@@ -530,7 +530,10 @@ def draw_main_toolbar(self, context):
     row.scale_x = 1.1
     for idname, icon in (("builtin.move", "OBJECT_ORIGIN"), ("builtin.rotate", "ORIENTATION_GIMBAL"),
                          ("builtin.scale", "FULLSCREEN_ENTER")):
-        row.operator("wm.tool_set_by_id", text="", icon=icon, depress=(tool == idname)).name = idname
+        if idname == "builtin.move":
+            row.operator("max.poly_move_tool", text="", icon=icon, depress=tool in {idname, "max.poly_move"})
+        else:
+            row.operator("wm.tool_set_by_id", text="", icon=icon, depress=(tool == idname)).name = idname
 
     slot = context.scene.transform_orientation_slots[0]
     sub = lay.row(align=True)
