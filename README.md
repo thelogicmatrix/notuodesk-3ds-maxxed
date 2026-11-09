@@ -34,6 +34,16 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 | Status bar | "1 Object Selected", X/Y/Z type-in, Grid, Auto Key, Set Key |
 | Look | Max dark UI, cyan selection outline, red sub-object selection, blue vertices, random object colors, names like Box001 |
 
+## PlanePlus reference images
+
+Choose **Create > Geometry > JokerMartini > PlanePlus** and click-drag in a viewport. Right-click stops creating. Hold Ctrl for a vertical plane, Shift for a square, or Alt to put the pivot at [0,0,0].
+
+In **Parameters**, pick an image. Width and Length fit its aspect ratio. **Uniform** locks the proportions while you resize. Choose Left, Center or Right for the pivot, or use **More** for the other corners and edge centers. Horizontal and Vertical change the plane's orientation. **Enable Image** hides or shows the bitmap, and **Opacity** controls its transparency.
+
+The image stays unlit in the default Solid viewport. An image draw handler supplies the viewport display, including opacity. A UV-mapped emission material supplies the rendered surface. Width, Length and the other parameters stay editable in Create and Modify until you convert to Editable Poly.
+
+**Freeze** keeps the image visible and locks selection and snapping. PlanePlus starts with **Show Frozen in Gray** off. Other objects start with it on. Change it in **Object Properties** or **Display > Display Properties**. **Display > Freeze** and the right-click Display quadrant also have Freeze Selection, Unfreeze All, Unfreeze by Name and Unfreeze by Hit. Right-click leaves Unfreeze by Hit.
+
 ## Compact Material Editor (M)
 
 <img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
@@ -157,6 +167,8 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
+- PlanePlus uses Width and Length, like the original plug-in. It always generates image UVs and does not expose its Real-World Map Size option. The image draw handler follows the parametric rectangle, so modifiers do not deform that viewport image. Convert to Editable Poly to use the material display for a modified mesh.
+- Show Frozen in Gray changes the viewport materials of meshes through a temporary copy. It preserves the render shaders and restores the original mesh and materials on unfreeze. Other object types use Blender's object color, which some viewport shading modes can override.
 
 ## Updating
 

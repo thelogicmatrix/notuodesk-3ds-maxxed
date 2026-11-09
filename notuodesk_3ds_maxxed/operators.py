@@ -546,7 +546,7 @@ OBJECT_CMDS = [
     ("PIVOT_TO_WORLD", "Pivot to World Origin", "Move the pivot to the world origin"),
     ("OBJECT_TO_PIVOT", "Center Object to Pivot", "Move the object so its center is at the pivot"),
     ("HIDE_SEL", "Hide Selection", ""), ("HIDE_UNSEL", "Hide Unselected", ""), ("UNHIDE", "Unhide All", ""),
-    ("FREEZE", "Freeze Selection", "Make the selection unselectable and grey"),
+    ("FREEZE", "Freeze Selection", "Lock selection and snapping, respecting Show Frozen in Gray"),
     ("UNFREEZE", "Unfreeze All", ""),
     ("DISPLAY_BOX", "Display as Box", "Toggle bounding box display"),
     ("SEE_THROUGH", "See-Through", "Toggle drawing the selection in front"),
@@ -614,18 +614,13 @@ class MAX_OT_object_cmd(Operator):
             elif c == "UNHIDE":
                 bpy.ops.object.hide_view_clear(select=False)
             elif c == "FREEZE":
+                from . import freezing
                 for ob in sel:
-                    ob["max_frozen_color"] = list(ob.color)
-                    ob.color = (0.55, 0.55, 0.55, 1.0)
-                    ob.select_set(False)
-                    ob.hide_select = True
+                    freezing.freeze(ob, context.scene)
             elif c == "UNFREEZE":
+                from . import freezing
                 for ob in context.scene.objects:
-                    if ob.hide_select:
-                        ob.hide_select = False
-                        if "max_frozen_color" in ob:
-                            ob.color = ob["max_frozen_color"]
-                            del ob["max_frozen_color"]
+                    freezing.unfreeze(ob, context.scene)
             elif c == "DISPLAY_BOX":
                 for ob in sel:
                     ob.display_type = "TEXTURED" if ob.display_type == "BOUNDS" else "BOUNDS"
