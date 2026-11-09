@@ -175,7 +175,7 @@ class MAX_OT_create(Operator):
     bl_idname = "max.create"
     bl_label = "Create Primitive"
 
-    kind: EnumProperty(items=[(k, v[0], "", v[1], i) for i, (k, v) in enumerate(PRIMITIVES.items())])
+    kind: EnumProperty(items=[(k, v[0], "", v[1], i) for i, (k, v) in enumerate(PRIMITIVES.items()) if k != "PLANEPLUS"])
     segments: IntProperty(default=24, min=3, max=256)
 
     _session = 0          # id of the creation session currently in charge

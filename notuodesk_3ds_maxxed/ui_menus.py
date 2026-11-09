@@ -138,6 +138,8 @@ class MAX_MT_quad(Menu):
         left.operator("max.object_cmd", text="Isolate Selection").cmd = "ISOLATE"
         left.operator("max.object_cmd", text="Unfreeze All").cmd = "UNFREEZE"
         left.operator("max.object_cmd", text="Freeze Selection").cmd = "FREEZE"
+        left.operator("max.unfreeze_by_name", text="Unfreeze by Name...")
+        left.operator("max.unfreeze_by_hit", text="Unfreeze by Hit")
         left.operator("max.select_by_name", text="Unhide by Name")
         left.operator("max.object_cmd", text="Unhide All").cmd = "UNHIDE"
         left.operator("max.object_cmd", text="Hide Unselected").cmd = "HIDE_UNSEL"
@@ -185,7 +187,8 @@ class MAX_MT_quad(Menu):
         if not edit:
             right.operator("object.select_grouped", text="Select Similar").type = "TYPE"
             right.operator("max.clone", text="Clone")
-            right.operator("max.transform_typein", text="Object Properties / Type-In")
+            right.operator("max.object_properties", text="Object Properties...")
+            right.operator("max.transform_typein", text="Transform Type-In")
             right.operator("max.open_editor", text="Curve Editor...").editor = "CURVE_EDITOR"
             right.operator("max.open_editor", text="Dope Sheet...").editor = "DOPE_SHEET"
             right.menu("MAX_MT_convert", text="Convert To:")
@@ -247,7 +250,12 @@ class MAX_MT_create(Menu):
         lay = self.layout
         lay.label(text="Standard Primitives")
         for k, (label, icon, _, _) in create.PRIMITIVES.items():
+            if k == "PLANEPLUS":
+                continue
             lay.operator("max.create", text=label, icon=icon).kind = k
+        lay.separator()
+        lay.label(text="JokerMartini")
+        lay.operator("max.plane_plus", text="PlanePlus", icon="MESH_PLANE")
         lay.separator()
         lay.label(text="Shapes")
         for k, label, icon in create.SHAPES:

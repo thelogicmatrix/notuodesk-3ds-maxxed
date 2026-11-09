@@ -22,6 +22,7 @@ PRIMITIVES = {
     "TORUS": ("Torus", "MESH_TORUS", "RADIUS", False),
     "PYRAMID": ("Pyramid", "MARKER", "RECT", True),
     "PLANE": ("Plane", "MESH_PLANE", "RECT", False),
+    "PLANEPLUS": ("PlanePlus", "MESH_PLANE", "RECT", False),
 }
 PRIMITIVES.update(extended_primitives.PRIMITIVES)
 
@@ -78,6 +79,9 @@ def _ring(bm, r, z, segs):
 def build_bmesh(kind, p):
     if kind in extended_primitives.PRIMITIVES:
         return extended_primitives.build_bmesh(kind, p)
+    if kind == "PLANEPLUS":
+        from . import plane_plus
+        return plane_plus.build_bmesh(p.id_data.max_plane_plus)
     bm = bmesh.new()
     h = p.height
     ah = abs(h) if abs(h) > 1e-6 else 1e-6
@@ -186,6 +190,10 @@ def rebuild(ob):
     if "max_pivot_offset" in ob:
         bmesh.ops.translate(bm, verts=bm.verts, vec=ob["max_pivot_offset"])
     bm.to_mesh(me)
+    if ob.max_frozen_mesh:
+        # Gray freeze displays a private mesh. Keep its editable source current.
+        bm.to_mesh(ob.max_frozen_mesh)
+        ob.max_frozen_mesh.update()
     bm.free()
     me.update()
     if p.kind in extended_primitives.PRIMITIVES:
@@ -209,7 +217,11 @@ def _update(self, context):
 
 
 class MaxPrimParams(bpy.types.PropertyGroup):
-    kind: StringProperty(default="")
+    def _kind_changed(self, context):
+        from . import plane_plus
+        plane_plus.kind_changed(self.id_data)
+
+    kind: StringProperty(default="", update=_kind_changed)
     vcount: IntProperty(default=0)
     length: FloatProperty(name="Length", default=1.0, min=0.0001, unit="LENGTH", update=_update)
     width: FloatProperty(name="Width", default=1.0, min=0.0001, unit="LENGTH", update=_update)

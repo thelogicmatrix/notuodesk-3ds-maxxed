@@ -88,7 +88,7 @@ class MAX_UL_stack(UIList):
 
 
 SUBTYPES = {
-    "GEOMETRY": (("STANDARD", "Standard Primitives"), ("EXTENDED", "Extended Primitives"), ("VRAY", "V-Ray")),
+    "GEOMETRY": (("STANDARD", "Standard Primitives"), ("EXTENDED", "Extended Primitives"), ("VRAY", "V-Ray"), ("JOKERMARTINI", "JokerMartini")),
     "LIGHTS": (("STANDARD", "Standard"), ("VRAY", "V-Ray")),
     "CAMERAS": (("STANDARD", "Standard"), ("VRAY", "V-Ray")),
     "SHAPES": (("STANDARD", "Splines"),),
@@ -194,6 +194,10 @@ def _split_col(layout):
 def draw_prim_params(layout, ob):
     if ob.max_prim.kind in prims.extended_primitives.PRIMITIVES:
         prims.extended_primitives.draw(layout, ob)
+        return
+    if ob.max_prim.kind == "PLANEPLUS":
+        from . import plane_plus
+        plane_plus.draw(layout, ob)
         return
     p = ob.max_prim
     col = _split_col(layout)
@@ -345,7 +349,10 @@ def create_object_type(layout, context):
     cat = wm.max_create_cat
     g = _grid(layout)
     vray_sub = wm.max_create_sub == "VRAY" and len(SUBTYPES[cat]) > 1
-    if vray_sub and cat == "GEOMETRY":
+    if cat == "GEOMETRY" and wm.max_create_sub == "JOKERMARTINI":
+        from . import plane_plus
+        g.operator("max.plane_plus", text="PlanePlus", depress=plane_plus.MAX_OT_plane_plus.active)
+    elif vray_sub and cat == "GEOMETRY":
         g.operator("max.vray_plane", text="VRayPlane")
     elif vray_sub and cat == "LIGHTS":
         for k, label in (("PLANE", "VRayLight"), ("DISC", "VRayLight Disc"), ("SPHERE", "VRayLight Sphere"),
@@ -357,6 +364,8 @@ def create_object_type(layout, context):
         kinds = (prims.extended_primitives.DISPLAY_ORDER if wm.max_create_sub == "EXTENDED"
                  else prims.PRIMITIVES)
         for k in kinds:
+            if k == "PLANEPLUS":
+                continue
             if (k in prims.extended_primitives.PRIMITIVES) != (wm.max_create_sub == "EXTENDED"):
                 continue
             label = prims.PRIMITIVES[k][0]
@@ -617,8 +626,10 @@ def disp_hide(layout, context):
 @rollout("Freeze", {"DISPLAY"}, 31)
 def disp_freeze(layout, context):
     g = _grid(layout)
-    g.operator("max.object_cmd", text="Freeze Selected").cmd = "FREEZE"
+    g.operator("max.object_cmd", text="Freeze Selection").cmd = "FREEZE"
     g.operator("max.object_cmd", text="Unfreeze All").cmd = "UNFREEZE"
+    g.operator("max.unfreeze_by_name", text="Unfreeze by Name...")
+    g.operator("max.unfreeze_by_hit", text="Unfreeze by Hit")
 
 
 @rollout("Display Properties", {"DISPLAY"}, 32)
@@ -632,6 +643,7 @@ def disp_props(layout, context):
     col.prop(ob, "show_name", text="Display Name")
     col.prop(ob, "show_axis", text="Show Pivot")
     col.prop(ob, "show_bounds", text="Display as Box Outline")
+    col.prop(ob, "max_show_frozen_gray")
     if context.space_data and context.space_data.type == "VIEW_3D":
         col.prop(context.space_data.shading, "show_backface_culling", text="Backface Cull")
 

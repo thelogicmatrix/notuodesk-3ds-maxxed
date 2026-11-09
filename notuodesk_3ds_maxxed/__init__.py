@@ -31,6 +31,7 @@ from . import cut_loop
 from . import keyboard_entry
 from . import line_tool
 from . import poly_tools
+from . import freezing, plane_plus
 
 
 _prefs_cache = [None]
@@ -154,7 +155,7 @@ HOTKEY_CHEATSHEET = (
 
 
 _classes = (
-    (MaxxedPreferences,) + prims.classes + keyboard_entry.classes + operators.classes + create.classes + vray.classes + max_import.classes
+    (MaxxedPreferences,) + prims.classes + keyboard_entry.classes + freezing.classes + plane_plus.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes + line_tool.classes
     + cut_loop.classes
@@ -193,10 +194,12 @@ def register():
     wm.max_create_cat = EnumProperty(name="Category", items=ui_panel.CREATE_CATS, default="GEOMETRY")
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""),
-                                    ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", "")])
+                                    ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", ""), ("JOKERMARTINI", "JokerMartini", "")])
     prims.register_props()
     keyboard_entry.register_props()
     poly_tools.register()
+    freezing.register_props()
+    plane_plus.register_props()
     ui_panel.register_props()
     vray.register_props()
     mtl_editor.register_props()
@@ -229,6 +232,8 @@ def unregister():
     mtl_editor.unregister_props()
     vray.unregister_props()
     ui_panel.unregister_props()
+    freezing.unregister_props()
+    plane_plus.unregister_props()
     prims.unregister_props()
     keyboard_entry.unregister_props()
     poly_tools.unregister()
