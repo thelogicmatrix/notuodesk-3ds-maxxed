@@ -784,7 +784,8 @@ def defer_unregister(cls):
         return False
     _retired.add(cls)
     if not bpy.app.timers.is_registered(_retire_dialogs):
-        bpy.app.timers.register(_retire_dialogs, first_interval=0.05)
+        # persistent: a file load after disable must not drop the retirement timer.
+        bpy.app.timers.register(_retire_dialogs, first_interval=0.05, persistent=True)
     return True
 
 
