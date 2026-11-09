@@ -20,6 +20,10 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 
 The 3ds Max workspace hides Blender's 3D cursor in every viewport, including new viewports and saved layouts. It keeps the active scene's cursor at the world origin. Shift+right-click cannot place or drag it. Shapes, helpers, lights, cameras and V-Ray objects start at the origin without reading the cursor. Primitive mouse creation still uses the point you click on the construction grid.
 
+Mode feedback follows the current tool and selection level. Select Object and Move, Rotate, Scale and Select and Link press their Main Toolbar buttons. The expanded Editable Poly stack marks the active level in yellow and puts its icon beside the base entry. The Selection rollout and quad menu show the same level. Click the active level, the base entry, press 6 or Ctrl+B to return to Object. Switching Command Panel tabs also leaves sub-object mode. Move, Rotate and Scale stay active when changing mesh levels.
+
+Selected objects have white edged faces and white wireframe selection. Press J for optional white selection brackets in shaded views. Brackets start off, as in Max 2026. Sub-object mode removes the object brackets and uses red vertices, edges or polygons with blue unselected vertices. The status bar shows the selection count and a prompt for the current tool. Hovering a selectable object changes the cursor. Select and Link stays active while you drag children onto a parent, with a dashed link line.
+
 | 3ds Max | In Blender |
 |---|---|
 | Menu bar: File, Edit, Tools, Group, Views, Create, Modifiers, Animation, Graph Editors, Rendering, Customize, Scripting, Help | Replaces Blender's top menus. Blender's own menus are still there as sub-menus |
@@ -378,6 +382,9 @@ Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments*
 Keep Scene Upright also controls clicked views. Turn it off to carry the current roll into an edge or corner view. Dark text and outlines use slightly higher opacity than the faces so they stay readable over bright viewports. Opening a saved file rebuilds the cube's drawing resources. Files keep each viewport's original navigation gizmo setting, so turning the ViewCube or add-on off after reopening restores that setting.
 
 ## Known differences from 3ds Max
+
+- Blender does not expose Max's native cursor artwork or Nitrous selection-preview silhouette. The add-on draws transform/link cursor symbols and yellow hovered mesh edges. Blender draws the native blue selection outline and sub-object dots. Small antialias fringes can remain around the white wireframe overlay. Helper and un-bevelled spline Link targets use their projected origins because Blender's scene ray cast has no pick surface there.
+- Blender themes colour list selections globally. The yellow stack-level selection uses that shared list colour. The base entry and toolbar buttons use blue. Modifier-specific levels such as an incoming Symmetry plane need the modifier's own state adapter. This branch's Edit Poly entry edits the base mesh, as before.
 
 - Shapes, helpers, lights, cameras and V-Ray objects use the world origin instead of interactive placement. Target lights and cameras keep a preset target offset.
 - The cursor policy checks new viewports and scene switches every 0.2 seconds. Other workspaces keep their cursor display settings. A scene shared with the 3ds Max workspace shares its cursor location too.

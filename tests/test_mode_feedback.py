@@ -1,0 +1,168 @@
+"""Run through the isolated run_checks.py launcher, tests test_mode_feedback."""
+import unittest
+import addon_utils
+import bpy
+import bmesh
+
+addon_utils.enable('notuodesk_3ds_maxxed', default_set=True)
+
+class ModeFeedbackTests(unittest.TestCase):
+    def setUp(self):
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='SELECT')
+        bpy.ops.object.delete(use_global=False)
+        bpy.ops.mesh.primitive_cube_add()
+
+    def test_base_stack_click_leaves_subobject(self):
+        bpy.ops.max.subobject(level=2)
+        bpy.ops.max.modifier_set_active(name='')
+        self.assertEqual(bpy.context.mode, 'OBJECT')
+
+    def test_exit_and_bracket_shortcuts(self):
+        from notuodesk_3ds_maxxed.keymap import VIEWPORT
+        self.assertTrue(any(k[0]=='max.subobject' and k[1]=='B' and k[3] and k[6].get('level')==0 for k in VIEWPORT))
+        self.assertTrue(any(k[0]=='max.selection_brackets' and k[1]=='J' for k in VIEWPORT))
+
+    def test_level_and_selection_summary_follow_real_mode(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        for lev, expected in ((1,'8 Vertices Selected'), (2,'12 Edges Selected'),
+                              (3,'12 Edges Selected'), (4,'6 Polygons Selected'),
+                              (5,'6 Polygons Selected')):
+            bpy.ops.max.subobject(level=lev)
+            self.assertEqual(mf.level(bpy.context), lev)
+            self.assertEqual(mf.selection_text(bpy.context), expected)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        self.assertEqual(mf.level(bpy.context), 0)
+        self.assertEqual(mf.selection_text(bpy.context), '1 Object Selected')
+        bpy.ops.object.select_all(action='DESELECT')
+        self.assertEqual(mf.selection_text(bpy.context), 'None Selected')
+
+    def test_hidden_subobjects_do_not_count(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        bpy.ops.max.subobject(level=1)
+        bm = bmesh.from_edit_mesh(bpy.context.object.data)
+        bm.verts.ensure_lookup_table()
+        for vert in bm.verts:
+            vert.select_set(False)
+        bm.verts[0].select_set(True)
+        self.assertEqual(mf.selection_text(bpy.context), '1 Vertex Selected')
+        self.assertEqual(mf.rollout_selection_text(bpy.context), 'Vertex 1 Selected')
+        bm.verts[0].hide_set(True)
+        self.assertEqual(mf.selection_text(bpy.context), '0 Vertices Selected')
+
+    def test_panel_change_leaves_edit_and_clears_level(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        bpy.ops.max.subobject(level=4)
+        bpy.context.window_manager.max_cmd_tab = 'CREATE'
+        self.assertEqual(bpy.context.mode, 'OBJECT')
+        self.assertEqual(mf.level(bpy.context), 0)
+
+    def test_native_mode_change_overrides_stale_level(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        bpy.ops.max.subobject(level=3)
+        bpy.ops.mesh.select_mode(type='FACE')
+        self.assertEqual(mf.level(bpy.context), 4)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        self.assertEqual(mf.level(bpy.context), 0)
+
+    def test_tool_aliases_and_cursor_policy(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        for kind in ('MOVE','ROTATE','SCALE'):
+            for prefix in ('builtin.', 'max.snap_', 'max.'):
+                self.assertEqual(mf.tool_kind(prefix+kind.lower()), kind)
+            self.assertEqual(mf.cursor_kind(kind, True, True), kind)
+            self.assertEqual(mf.cursor_kind(kind, True, False), 'CROSSHAIR')
+            self.assertEqual(mf.cursor_kind(kind, False, False), 'DEFAULT')
+        for ident in ('builtin.select','builtin.select_box','builtin.select_circle','builtin.select_lasso'):
+            self.assertEqual(mf.tool_kind(ident),'SELECT')
+        self.assertEqual(mf.tool_kind('max.select_link'),'LINK')
+        self.assertEqual(mf.tool_kind('builtin.knife'),'builtin.knife')
+
+    def test_brackets_have_three_strokes_at_each_corner(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        points = mf.bracket_segments(bpy.context.object.bound_box)
+        self.assertEqual(len(points),48)
+        for a,b in zip(points[::2],points[1::2]):
+            self.assertAlmostEqual((b-a).length,.36,places=5)
+
+    def test_passive_chrome_keeps_status_prompt(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        labels = []
+        layout = SimpleNamespace(label=lambda **kw: labels.append(kw['text']),
+                                 separator_spacer=lambda: None)
+        ctx = SimpleNamespace(workspace=SimpleNamespace(name='3ds Max'),
+                              window=SimpleNamespace(modal_operators=[
+                                  SimpleNamespace(bl_idname='MAX_OT_chrome_pointer')]))
+        original = []
+        with patch.object(mf, 'active_tool', return_value='MOVE'), \
+             patch.object(mf, 'prompt_text', return_value='Move prompt'):
+            mf.draw_status(SimpleNamespace(layout=layout), ctx,
+                           lambda *_: original.append(True), lambda *_: None)
+        self.assertEqual(labels, ['Move prompt'])
+        self.assertEqual(original, [])
+        ctx.window.modal_operators.append(SimpleNamespace(bl_idname='TRANSFORM_OT_translate'))
+        mf.draw_status(SimpleNamespace(layout=layout), ctx,
+                       lambda *_: original.append(True), lambda *_: None)
+        self.assertEqual(original, [True])
+
+    def test_brackets_toggle_without_selection_change(self):
+        selected = tuple(bpy.context.selected_objects)
+        initial = bpy.context.scene.max_selection_brackets
+        bpy.ops.max.selection_brackets()
+        self.assertEqual(bpy.context.scene.max_selection_brackets, not initial)
+        self.assertEqual(tuple(bpy.context.selected_objects),selected)
+        bpy.ops.max.selection_brackets()
+        self.assertEqual(bpy.context.scene.max_selection_brackets, initial)
+
+    def test_active_level_toggles_off(self):
+        for lev in range(1,6):
+            bpy.ops.max.subobject(level=lev)
+            bpy.ops.max.subobject(level=lev)
+            self.assertEqual(bpy.context.mode,'OBJECT')
+
+    def test_modifier_stack_click_leaves_edit(self):
+        ob=bpy.context.object
+        mod=ob.modifiers.new('Bend','SIMPLE_DEFORM')
+        bpy.ops.max.subobject(level=2)
+        bpy.ops.max.modifier_set_active(name=mod.name)
+        self.assertEqual(bpy.context.mode,'OBJECT')
+        self.assertEqual(ob.modifiers.active, mod)
+
+    def test_modifier_list_index_click_leaves_edit(self):
+        from notuodesk_3ds_maxxed.ui_panel import _stack_set
+        ob=bpy.context.object
+        mod=ob.modifiers.new('Bend','SIMPLE_DEFORM')
+        bpy.ops.max.subobject(level=2)
+        _stack_set(ob,0)
+        self.assertEqual(bpy.context.mode,'OBJECT')
+        self.assertEqual(ob.modifiers.active,mod)
+
+    def test_yellow_stack_theme_and_blue_buttons(self):
+        from notuodesk_3ds_maxxed import theme
+        theme.apply_theme()
+        ui=bpy.context.preferences.themes[0].user_interface
+        self.assertGreater(ui.wcol_list_item.inner_sel[0],.95)
+        self.assertGreater(ui.wcol_list_item.inner_sel[1],.75)
+        self.assertLess(ui.wcol_list_item.inner_sel[2],.1)
+        self.assertGreater(ui.wcol_tool.inner_sel[2],ui.wcol_tool.inner_sel[0])
+
+    def test_link_preserves_world_and_rejects_cycles(self):
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        child=bpy.context.object
+        child.location=(2,3,4)
+        bpy.ops.mesh.primitive_cube_add(location=(-3,7,2))
+        parent=bpy.context.object
+        bpy.context.view_layer.update()
+        original=child.matrix_world.copy()
+        mf.link_objects([child],parent)
+        bpy.context.view_layer.update()
+        self.assertEqual(child.parent,parent)
+        self.assertLess(sum(abs(child.matrix_world[i][j]-original[i][j]) for i in range(4) for j in range(4)),1e-5)
+        mf.link_objects([parent],child)
+        self.assertIsNone(parent.parent)
+
+if __name__ == '__main__':
+    unittest.main(argv=['test_mode_feedback'], exit=False)

@@ -75,7 +75,7 @@ def apply_theme():
     _widget(ui, "wcol_tooltip", (0.18, 0.18, 0.18))
     _widget(ui, "wcol_box", (0.30, 0.30, 0.30))
     _widget(ui, "wcol_tab", (0.22, 0.22, 0.22), inner_sel=BG)
-    _widget(ui, "wcol_list_item", BG)
+    _widget(ui, "wcol_list_item", BG, inner_sel=(1.0, .85, .0), text_sel=(0, 0, 0))
     _widget(ui, "wcol_scroll", (0.30, 0.30, 0.30), item=(0.45, 0.45, 0.45))
 
     _set(ui, "panel_header", (0.30, 0.30, 0.30, 1.0))

@@ -92,11 +92,17 @@ class MAX_OT_subobject(Operator):
         obj = context.active_object
         wm = context.window_manager
         lvl = self.level
+        from . import mode_feedback
+        tool = mode_feedback.active_tool(context)
+        if lvl:
+            wm.max_cmd_tab = "MODIFY"
+            obj.max_feedback_expanded = True
 
         if obj.type == "MESH":
             if lvl == 0 or (context.mode == "EDIT_MESH" and current_level(context) == lvl):
                 bpy.ops.object.mode_set(mode="OBJECT")
                 wm.max_sublevel = 0
+                mode_feedback.restore_tool(context, tool)
                 return {"FINISHED"}
             if context.mode != "EDIT_MESH":
                 if obj.max_prim.kind:     # editing a primitive turns it into an Editable Poly
@@ -109,6 +115,7 @@ class MAX_OT_subobject(Operator):
                 bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.select_mode(type=_MESH_MODE[lvl], use_extend=False, use_expand=False)
             wm.max_sublevel = lvl
+            mode_feedback.restore_tool(context, tool)
             if lvl == 3:
                 self.report({"INFO"}, "Border: click an open edge, then Alt+L / 'Loop' selects the whole border")
             elif lvl == 5:
@@ -579,6 +586,12 @@ class MAX_OT_object_cmd(Operator):
         return ""
 
     def invoke(self, context, event):
+        if self.cmd == "LINK":
+            override = viewport_override(context)
+            if override:
+                with context.temp_override(**override):
+                    bpy.ops.wm.tool_set_by_id(name="max.select_link")
+                return {"FINISHED"}
         return self.run(context, "INVOKE_DEFAULT")
 
     def execute(self, context):
@@ -1067,6 +1080,8 @@ class MAX_OT_modifier_set_active(Operator):
     def execute(self, context):
         ob = context.active_object
         mod = ob.modifiers.get(self.name) if ob else None
+        if ob and ob.mode == "EDIT":
+            bpy.ops.max.subobject(level=0)
         from . import poly_tools
         if mod is not None and poly_tools.is_font_pivot(mod):
             return {"CANCELLED"}
