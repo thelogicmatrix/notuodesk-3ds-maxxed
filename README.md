@@ -41,6 +41,8 @@ In **Create > Geometry > Standard Primitives**, pick a primitive and open **Keyb
 
 The rollout starts closed. Each type keeps its own values between creations and when you save the scene. New objects keep editable parameters and the default segment counts. **Creation Method** controls mouse creation only. GeoSphere calls its diameter method **Diameter**, as Max does. **Cube** creates equal sides in one drag.
 
+Tube accepts its radii in either order. Set the inner radius to zero for a solid cylinder that keeps editable Tube parameters. Equal Tube radii and a zero Torus Radius 2 are rejected before creating an object. Cone accepts either end radius at zero. A Torus with Radius 1 at zero becomes a sphere. Horn and spindle tori keep their touching or intersecting shape without collapsed edges at the axis.
+
 The Create rollouts follow Max's order: Object Type, Name and Color, Creation Method, Keyboard Entry, Parameters. Creation Method uses a row of radio buttons. Keyboard Entry has compact labelled spinners, with coordinates above dimensions and a full-width Create button. Numbers use the scene's display units.
 
 ## Compact Material Editor (M)
@@ -168,6 +170,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 - Keyboard Entry uses the existing viewport construction planes. It has no custom grid objects or AutoGrid. GeoSphere keeps Blender's icosphere tessellation.
 - Keyboard Entry uses Blender's numeric widgets and unit formatting. Spinner arrows and unit spacing differ from Max.
+- Keyboard Entry rejects equal Tube radii and a zero Torus cross-section radius rather than creating zero-thickness geometry.
 - Mouse creation still uses fixed second radii for Cone, Tube and Torus. Use Keyboard Entry to set both radii.
 
 ## Updating

@@ -154,6 +154,12 @@ class MAX_OT_keyboard_create(bpy.types.Operator):
                 "radius1" in params and max(params.get("radius1", 0), params.get("radius2", 0)) <= 0):
             self.report({"WARNING"}, "Enter a non-zero size before creating")
             return {"CANCELLED"}
+        if kind == "TUBE" and values.radius1 == values.radius2:
+            self.report({"WARNING"}, "Tube radii must differ to give the wall thickness")
+            return {"CANCELLED"}
+        if kind == "TORUS" and values.radius2 <= 0:
+            self.report({"WARNING"}, "Enter a non-zero Radius 2 for the torus cross section")
+            return {"CANCELLED"}
         if context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
             context.window_manager.max_sublevel = 0
