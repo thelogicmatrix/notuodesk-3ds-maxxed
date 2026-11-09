@@ -27,7 +27,8 @@ def draw_update_box(layout, settings=None):
     """Keep old drawing calls safe without reading saved repository or token data."""
     box = layout.box()
     box.label(text="Built-in updater retired")
-    box.label(text="Manage updates in application preferences or your distribution")
+    box.label(text="Use application preferences")
+    box.label(text="or your package distribution")
 
 
 def register_auto_check():
