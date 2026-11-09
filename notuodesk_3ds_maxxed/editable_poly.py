@@ -11,7 +11,7 @@ from mathutils import Vector
 
 SG_ATTRIBUTE = "max_smoothing_group"
 SMOOTH_BACKUP = "max_poly_original_smooth"
-OBJECT_ACTIONS = {"MSMOOTH", "TESSELLATE", "MAKE_PLANAR", "PLANAR_X", "PLANAR_Y", "PLANAR_Z", "VIEW_ALIGN", "GRID_ALIGN", "RELAX", "ATTACH"}
+OBJECT_ACTIONS = {"MSMOOTH", "TESSELLATE", "MAKE_PLANAR", "PLANAR_X", "PLANAR_Y", "PLANAR_Z", "VIEW_ALIGN", "GRID_ALIGN", "RELAX", "ATTACH", "CUT", "QUICK_SLICE"}
 
 
 def is_nurms(mod):
@@ -34,7 +34,7 @@ EXTRA_OPS = [
     ("VIEW_ALIGN", "View Align", "Flatten selection on the active view plane"),
     ("GRID_ALIGN", "Grid Align", "Flatten selection on the nearest principal view plane"),
     ("CREATE", "Create", "Create an edge or face from selected vertices"),
-    ("QUICK_SLICE", "QuickSlice", "Draw a Blender bisect plane"),
+    ("QUICK_SLICE", "QuickSlice", "Click two points to slice. Right-click to finish"),
     ("SLICE", "Slice", "Slice using the stored plane"),
     ("RESET_PLANE", "Reset Plane", "Reset the slice plane to local Z at the origin"),
     ("ATTACH", "Attach", "Attach other selected meshes"),
@@ -295,6 +295,38 @@ class MAX_OT_poly_settings(Operator):
         return result
 
 
+class MAX_OT_poly_hsx_settings(Operator):
+    """Imported settings shortcuts share the panel's persistent operation values"""
+    bl_idname = "max.hsx_settings"
+    bl_label = "Editable Poly Settings"
+    op: EnumProperty(items=[(key, key.title(), "") for key in ("CHAMFER", "EXTRUDE", "CONNECT", "BRIDGE", "TESSELLATE")])
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == "EDIT_MESH"
+
+    def invoke(self, context, event):
+        return bpy.ops.max.poly_settings("INVOKE_DEFAULT", action=self.op)
+
+    def execute(self, context):
+        return bpy.ops.max.edit_poly(op=self.op)
+
+
+def hsx_adapter_classes():
+    # Main owns hsx import/storage. Replace only its settings class, before
+    # __init__ assembles registrations, so the operator ID registers once.
+    try:
+        from . import hsx_import
+    except ImportError:
+        return (MAX_OT_poly_hsx_settings,)
+    original = hsx_import.MAX_OT_hsx_settings
+    hsx_import.classes = tuple(MAX_OT_poly_hsx_settings if cls is original else cls for cls in hsx_import.classes)
+    hsx_import.MAX_OT_hsx_settings = MAX_OT_poly_hsx_settings
+    hsx_import.DESCRIPTIONS["target weld"] = ("Mesh", "max.edit_poly", {"op": "TARGET_WELD"})
+    hsx_import.DESCRIPTIONS["target weld mode"] = ("Mesh", "max.edit_poly", {"op": "TARGET_WELD"})
+    return ()
+
+
 class MAX_OT_poly_unavailable(Operator):
     """This Max tool has no Blender equivalent"""
     bl_idname = "max.poly_unavailable"
@@ -403,13 +435,13 @@ def run(operator, context, how, operation_settings=None):
     """Return None for the legacy commands that need no new handling."""
     from .operators import mesh_select_mode
     action = operator.op
-    if action in {"CUT", "QUICK_SLICE", "TARGET_WELD"} and context.mode == "EDIT_MESH":
+    if action in {"CUT", "QUICK_SLICE", "TARGET_WELD"}:
         if action == "TARGET_WELD":
             from .operators import current_level
-            if current_level(context) not in (1, 2, 3):
+            if context.mode != "EDIT_MESH" or current_level(context) not in (1, 2, 3):
                 operator.report({"WARNING"}, "Target Weld is available at Vertex, Edge and Border levels")
                 return {"CANCELLED"}
-        if action == "TARGET_WELD" or how == "INVOKE_DEFAULT":
+        if action != "QUICK_SLICE" or how == "INVOKE_DEFAULT":
             from .operators import viewport_override
             override = viewport_override(context)
             if override is None or override["region"] is None:
@@ -418,8 +450,12 @@ def run(operator, context, how, operation_settings=None):
             with context.temp_override(**override):
                 if action == "TARGET_WELD":
                     return bpy.ops.max.target_weld("INVOKE_DEFAULT")
-                tool = bpy.ops.mesh.knife_tool if action == "CUT" else bpy.ops.mesh.bisect
-                return tool("INVOKE_DEFAULT")
+                if action == "QUICK_SLICE":
+                    return bpy.ops.max.poly_quick_slice("INVOKE_DEFAULT")
+                # Integration hook: main's Cut/SwiftLoop owns picking and Object return.
+                if hasattr(bpy.types, "MAX_OT_cut"):
+                    return bpy.ops.max.cut("INVOKE_DEFAULT")
+                return bpy.ops.max.poly_native_cut("INVOKE_DEFAULT")
     if context.mode == "OBJECT":
         if action not in OBJECT_ACTIONS:
             return {"CANCELLED"}
@@ -646,8 +682,6 @@ def run(operator, context, how, operation_settings=None):
         elif action == "CREATE":
             ops.edge_face_add()
         elif action in {"SLICE", "SLICE_PLANE", "QUICK_SLICE"}:
-            if action == "QUICK_SLICE" and how == "INVOKE_DEFAULT":
-                return ops.bisect(how)
             if action == "SLICE_PLANE":
                 ob.max_poly.slice_plane = not ob.max_poly.slice_plane
                 return {"FINISHED"}
@@ -893,9 +927,9 @@ class MAX_OT_poly_weight(Operator):
         return {"FINISHED"}
 
 
-from . import target_weld
+from . import target_weld, poly_modal
 
-classes = target_weld.classes + (MaxPolyOperation, MaxPolyState, MAX_OT_poly_settings, MAX_OT_poly_unavailable,
+classes = target_weld.classes + poly_modal.classes + hsx_adapter_classes() + (MaxPolyOperation, MaxPolyState, MAX_OT_poly_settings, MAX_OT_poly_unavailable,
            MAX_OT_poly_attach_list, MAX_OT_poly_smoothing, MAX_OT_poly_material, MAX_OT_poly_weight)
 
 

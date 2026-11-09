@@ -81,6 +81,7 @@ NAVIGATION = [
 ]
 
 OBJECT_MODE = [
+    K("max.edit_poly", "C", alt=True, op="CUT"),
     K("max.clone", "V", ctrl=True),
     K("max.camera_from_view", "C", ctrl=True),
     K("max.set_key", "K"),
@@ -93,7 +94,8 @@ MESH = [
     K("view3d.edit_mesh_extrude_move_normal", "E", shift=True),
     K("max.edit_poly", "E", ctrl=True, shift=True, op="CONNECT"),
     K("max.edit_poly", "C", ctrl=True, shift=True, op="CHAMFER"),
-    K("mesh.knife_tool", "C", alt=True),
+    K("max.edit_poly", "C", alt=True, op="CUT"),
+    K("max.edit_poly", "W", ctrl=True, shift=True, op="TARGET_WELD"),
     K("max.edit_poly", "BACK_SPACE", op="REMOVE"),
     K("max.edit_poly", "BACK_SPACE", ctrl=True, op="REMOVE_WITH_VERTS"),
     K("max.edit_poly", "L", alt=True, op="LOOP"),

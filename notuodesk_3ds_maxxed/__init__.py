@@ -177,6 +177,7 @@ def register():
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""), ("VRAY", "V-Ray", "")])
     editable_poly.register_props()
+    editable_poly.target_weld.register_handlers()
     prims.register_props()
     ui_panel.register_props()
     vray.register_props()
@@ -196,6 +197,8 @@ def register():
 
 
 def unregister():
+    editable_poly.poly_modal.teardown()
+    editable_poly.target_weld.unregister_handlers()
     _prefs_cache[0] = None
     keymap.unregister_keymaps()
     overlay.unregister()

@@ -338,7 +338,13 @@ class MAX_OT_delete(Operator):
             bpy.ops.object.delete(use_global=False, confirm=False)
         elif m == "EDIT_MESH":
             mode = mesh_select_mode(context)
-            bpy.ops.mesh.delete(type="ONLY_FACE" if mode == "FACE" and not context.active_object.max_poly.delete_isolated else mode)
+            if mode == "EDGE" and not context.active_object.max_poly.delete_isolated:
+                import bmesh
+                bm = bmesh.from_edit_mesh(context.active_object.data)
+                bmesh.ops.delete(bm, geom=[e for e in bm.edges if e.select and not e.hide], context="EDGES_FACES")
+                editable_poly.update_mesh(context)
+            else:
+                bpy.ops.mesh.delete(type="ONLY_FACE" if mode == "FACE" and not context.active_object.max_poly.delete_isolated else mode)
             editable_poly.cleanup_isolated(context)
         elif m == "EDIT_CURVE":
             bpy.ops.curve.delete(type="VERT")

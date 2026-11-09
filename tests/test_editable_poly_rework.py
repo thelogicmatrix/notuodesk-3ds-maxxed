@@ -46,7 +46,7 @@ class ReworkTests(unittest.TestCase):
             seen.append((bpy.context.area.type, bpy.context.region.type))
             self.assertEqual(seen[-1], ("VIEW_3D", "WINDOW"))
             return {"FINISHED"}
-        proxy = SimpleNamespace(ops=SimpleNamespace(mesh=SimpleNamespace(knife_tool=start_tool, bisect=start_tool)))
+        proxy = SimpleNamespace(types=SimpleNamespace(), ops=SimpleNamespace(max=SimpleNamespace(poly_native_cut=start_tool, poly_quick_slice=start_tool)))
         for action in ("CUT", "QUICK_SLICE"):
             with self.subTest(action=action), patch.object(ep, "bpy", proxy), patch.object(operators, "bpy", proxy):
                 with bpy.context.temp_override(area=area, region=sidebar):

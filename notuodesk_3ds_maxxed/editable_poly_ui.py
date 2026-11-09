@@ -18,6 +18,14 @@ LEVEL_ACTIONS = {
 }
 
 
+def icon(name, fallback):
+    try:
+        from . import max_icons
+    except ImportError:
+        return {"icon": fallback}
+    return max_icons.ui(name, fallback)
+
+
 def unavailable(layout, text, reason):
     row = layout.row(align=True)
     row.enabled = False
@@ -41,7 +49,7 @@ def button(layout, action, text=None):
     if action in ep.CADDIES:
         sub = row.row(align=True)
         sub.operator_context = "INVOKE_DEFAULT"
-        sub.operator("max.poly_settings", text="", icon="PREFERENCES").action = action
+        sub.operator("max.poly_settings", text="", **icon("settings", "PREFERENCES")).action = action
 
 
 def grid(layout, actions):
@@ -70,7 +78,8 @@ def selection(layout, context):
     p = context.active_object.max_poly
     row = layout.row(align=True)
     for i in range(1, 6):
-        row.operator("max.subobject", text="", icon=SUBLEVEL_ICONS[i], depress=(level == i)).level = i
+        name = {1: "vertex", 2: "edge", 3: "border", 4: "polygon", 5: "element"}[i]
+        row.operator("max.subobject", text="", **icon(name, SUBLEVEL_ICONS[i]), depress=(level == i)).level = i
     col = layout.column(align=True)
     col.enabled = level > 0
     row = col.row(align=True)
@@ -92,8 +101,8 @@ def selection(layout, context):
         sub = row.row(align=True)
         button(sub, action)
         arrows = sub.column(align=True)
-        for suffix, icon in (("UP", "TRIA_UP"), ("DOWN", "TRIA_DOWN")):
-            arrows.operator("max.edit_poly", text="", icon=icon).op = action + "_SHIFT_" + suffix
+        for suffix, fallback in (("UP", "TRIA_UP"), ("DOWN", "TRIA_DOWN")):
+            arrows.operator("max.edit_poly", text="", **icon(suffix.lower(), fallback)).op = action + "_SHIFT_" + suffix
     col.label(text="Preview Selection")
     row = col.row(align=True)
     row.enabled = False
@@ -218,7 +227,7 @@ def geometry(layout, context):
     else:
         row.operator("max.object_cmd", text="Attach").cmd = "ATTACH"
     row.operator_context = "INVOKE_DEFAULT"
-    row.operator("max.poly_attach_list", text="", icon="PRESET")
+    row.operator("max.poly_attach_list", text="", **icon("select_by_name", "PRESET"))
     sub = row.row(align=True)
     sub.enabled = level > 0
     button(sub, "DETACH")
@@ -231,7 +240,6 @@ def geometry(layout, context):
     button(row, "SLICE")
     button(row, "RESET_PLANE")
     row = layout.row(align=True)
-    row.enabled = level > 0
     for action in ("QUICK_SLICE", "CUT"):
         sub = row.row(align=True)
         sub.operator_context = "INVOKE_DEFAULT"
@@ -251,7 +259,8 @@ def geometry(layout, context):
     col.enabled = level > 0
     col.label(text="Named Selections")
     grid(col, ("COPY_SELECTION", "PASTE_SELECTION"))
-    layout.prop(context.active_object.max_poly, "delete_isolated")
+    if level in (2, 3, 4, 5):
+        layout.prop(context.active_object.max_poly, "delete_isolated")
     row = layout.row(align=True)
     row.enabled = False
     row.prop(context.active_object.max_poly, "full_interactivity")

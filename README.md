@@ -68,6 +68,23 @@ The source moves onto the target's exact position. Keep welding until you
 right-click in the viewport or click Target Weld again. Invalid targets explain
 the restriction in the status bar.
 
+Ctrl+Shift+W starts Target Weld. Undo, Redo and file load end it before Blender
+replaces the edit mesh. Each weld has one undo step. Right-click and disabling
+the add-on remove its viewport line and active state.
+
+QuickSlice uses two clicks. Click the start, move without holding a button,
+then click the endpoint. Keep slicing until right-click or click QuickSlice
+again. Polygon and Element levels affect selected visible polygons and retain
+the new polygons in the selection. Split uses the Slice Plane setting.
+Object-level QuickSlice affects the object and returns to Object level on exit.
+Cut also works at Object level. It calls the companion `max.cut` when installed.
+This branch otherwise uses Blender's knife, with Enter to accept the cut, and
+returns to Object level when the knife exits. Alt+C uses the same Cut route.
+
+Imported `.hsx` settings shortcuts use the same caddies and stored values as
+the panel. When the import module is present, its settings registration uses
+the compatibility adapter without changing imported assignments or storage.
+
 Delete Isolated Vertices is a checkbox, on by default. Delete and Remove clean
 up vertices that have no polygons when it is on. Remove Isolated Vertices at
 Vertex level remains a separate command. Slice at Polygon and Element levels
@@ -230,7 +247,8 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
   Insert Vertex splits selected edges at their midpoint, or pokes selected faces.
   Create Shape From Selection copies each selected edge to a separate poly spline.
 - Slice Plane uses numeric local coordinates without Max's plane gizmo. QuickSlice
-  uses Blender's interactive bisect. Ring and Loop shifts use quad topology and
+  cuts a view-aligned BMesh plane through two clicked screen points. Without the
+  companion Cut module, Cut uses Blender's knife gestures. Ring and Loop shifts use quad topology and
   Blender's face/vertex order, so direction can differ on irregular meshes.
   Named Selections Copy/Paste stores one selection per mesh and sub-object level.
 - Weight and Subdivision Surface Smoothness are disabled because Blender's

@@ -5,8 +5,51 @@ import bmesh
 from bpy.types import Operator
 from bpy_extras import view3d_utils
 from mathutils import Vector
+from bpy.app.handlers import persistent
+from types import SimpleNamespace
 
 _active = {}
+_resources = {}
+
+
+def teardown(*args):
+    """Release viewport resources before undo, file load or class removal."""
+    for key in list(_resources):
+        release(key)
+
+
+def release(key):
+    state = _resources.pop(key, None)
+    _active.pop(key, None)
+    if state is None:
+        return
+    bpy.types.SpaceView3D.draw_handler_remove(state.handler, "WINDOW")
+    for cleanup in (state.window.cursor_modal_restore,
+                    lambda: state.workspace.status_text_set(None), state.area.tag_redraw):
+        try:
+            cleanup()
+        except (ReferenceError, RuntimeError):
+            pass
+
+
+@persistent
+def before_restore(*args):
+    teardown()
+    from . import poly_modal
+    poly_modal.teardown(restore=False)
+
+
+def register_handlers():
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre, bpy.app.handlers.load_pre):
+        if before_restore not in handlers:
+            handlers.append(before_restore)
+
+
+def unregister_handlers():
+    teardown()
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre, bpy.app.handlers.load_pre):
+        if before_restore in handlers:
+            handlers.remove(before_restore)
 
 
 def is_active(context):
@@ -78,7 +121,8 @@ class MAX_OT_target_weld(Operator):
     """Weld a vertex to its neighbour or a border edge to a valid border edge. Right-click to finish"""
     bl_idname = "max.target_weld"
     bl_label = "Target Weld"
-    bl_options = {"REGISTER", "UNDO"}
+    # Each committed weld pushes its own undo state. Tool exit must not push one.
+    bl_options = set()
 
     @classmethod
     def poll(cls, context):
@@ -89,7 +133,7 @@ class MAX_OT_target_weld(Operator):
         from .operators import current_level, viewport_override
         key = context.window.as_pointer()
         if key in _active:
-            _active[key].stop_requested = True
+            release(key)
             return {"CANCELLED"}
         override = viewport_override(context)
         if override is None or override["region"] is None:
@@ -105,7 +149,10 @@ class MAX_OT_target_weld(Operator):
         self.source = selected[0] if len(selected) == 1 else None
         self.mouse = Vector((event.mouse_x-self.region.x, event.mouse_y-self.region.y))
         self.stop_requested = False
-        self.handler = bpy.types.SpaceView3D.draw_handler_add(self.draw_band, (), "WINDOW", "POST_PIXEL")
+        self.handler = bpy.types.SpaceView3D.draw_handler_add(self.draw_safe, (), "WINDOW", "POST_PIXEL")
+        self.key = key
+        _resources[key] = SimpleNamespace(handler=self.handler, window=self.window,
+                                         workspace=self.workspace, area=self.area)
         _active[key] = self
         self.window.cursor_modal_set("DEFAULT")
         self.workspace.status_text_set("Target Weld: pick target" if self.source else "Target Weld: pick source. Right-click to finish")
@@ -139,6 +186,8 @@ class MAX_OT_target_weld(Operator):
         return best
 
     def draw_band(self):
+        if self.key not in _resources:
+            return
         if bpy.context.area != self.area or bpy.context.region != self.region or not self.source or not self.source.is_valid:
             return
         import gpu
@@ -164,15 +213,28 @@ class MAX_OT_target_weld(Operator):
         finally:
             gpu.state.blend_set("NONE")
 
+    def draw_safe(self):
+        try:
+            self.draw_band()
+        except (ReferenceError, RuntimeError, ValueError):
+            release(self.key)
+
     def finish(self):
-        bpy.types.SpaceView3D.draw_handler_remove(self.handler, "WINDOW")
-        _active.pop(self.window.as_pointer(), None)
-        self.window.cursor_modal_restore()
-        self.workspace.status_text_set(None)
-        self.area.tag_redraw()
-        return {"FINISHED"}
+        release(self.key)
+        return {"CANCELLED"}
 
     def modal(self, context, event):
+        try:
+            if _active.get(context.window.as_pointer()) is not self:
+                return {"CANCELLED"}
+            return self.handle_event(context, event)
+        except (ReferenceError, RuntimeError, ValueError):
+            key = context.window.as_pointer()
+            if _active.get(key) is self:
+                release(key)
+            return {"CANCELLED"}
+
+    def handle_event(self, context, event):
         from .operators import current_level
         if (self.stop_requested or context.mode != "EDIT_MESH" or context.edit_object != self.obj
                 or current_level(context) != self.level or self.area not in context.screen.areas[:]):
