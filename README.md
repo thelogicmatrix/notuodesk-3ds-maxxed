@@ -117,6 +117,8 @@ These tools follow the public descriptions of [rapidTools](https://rapidmxs.com/
 
 Creation tools call `poly_tools.finalize_new_object(context, ob)` after setting the final geometry and transform, before recording creation undo. Standard and extended primitives, Keyboard Entry, Shapes and finished Lines share this function. It never runs during previews.
 
+PlanePlus keeps its own Pivot setting and bypasses Auto Pivot on Create.
+
 ## Opening 3ds Max files
 
 ![A 3ds Max 2015 character opened with File › Open 3ds Max File](docs/open-max-file.png)

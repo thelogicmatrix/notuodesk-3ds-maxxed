@@ -137,10 +137,10 @@ class MAX_MT_quad(Menu):
         # top-left: display  |  top-right: tools 1
         _header(left, "display")
         left.operator("max.object_cmd", text="Isolate Selection").cmd = "ISOLATE"
-        left.operator("max.object_cmd", text="Unfreeze All").cmd = "UNFREEZE"
-        left.operator("max.object_cmd", text="Freeze Selection").cmd = "FREEZE"
-        left.operator("max.unfreeze_by_name", text="Unfreeze by Name...")
-        left.operator("max.unfreeze_by_hit", text="Unfreeze by Hit")
+        left.operator("max.object_cmd", text="Unfreeze All", icon="UNLOCKED").cmd = "UNFREEZE"
+        left.operator("max.object_cmd", text="Freeze Selection", icon="LOCKED").cmd = "FREEZE"
+        left.operator("max.unfreeze_by_name", text="Unfreeze by Name...", **max_icons.ui("select_by_name", "VIEWZOOM"))
+        left.operator("max.unfreeze_by_hit", text="Unfreeze by Hit", **max_icons.ui("select_object", "RESTRICT_SELECT_OFF"))
         left.operator("max.select_by_name", text="Unhide by Name")
         left.operator("max.object_cmd", text="Unhide All").cmd = "UNHIDE"
         left.operator("max.object_cmd", text="Hide Unselected").cmd = "HIDE_UNSEL"
@@ -251,8 +251,13 @@ class MAX_MT_create(Menu):
         lay = self.layout
         lay.label(text="Standard Primitives")
         for k, (label, icon, _, _) in create.PRIMITIVES.items():
-            if k == "PLANEPLUS":
+            if k == "PLANEPLUS" or k in create.extended_primitives.PRIMITIVES:
                 continue
+            lay.operator("max.create", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+        lay.separator()
+        lay.label(text="Extended Primitives")
+        for k in create.extended_primitives.DISPLAY_ORDER:
+            label, icon, _, _ = create.PRIMITIVES[k]
             lay.operator("max.create", text=label, **max_icons.ui(k.lower(), icon)).kind = k
         lay.separator()
         lay.label(text="JokerMartini")

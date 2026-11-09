@@ -44,7 +44,8 @@ def run():
                 referenced.add(node.args[0].value)
     referenced.update(key.lower() for key, *_ in addon.ui_panel.TABS + addon.ui_panel.CREATE_CATS)
     referenced.update(addon.ui_panel.SUBLEVEL_NAMES.values())
-    referenced.update(key.lower() for key in addon.prims.PRIMITIVES)
+    # PlanePlus deliberately shares the Plane artwork and keeps its own creator.
+    referenced.update("plane" if key == "PLANEPLUS" else key.lower() for key in addon.prims.PRIMITIVES)
     referenced.update(key.lower() for key, *_ in addon.create.SHAPES + addon.create.LIGHTS)
     referenced.update({"move", "rotate", "scale", "bulb_on", "bulb_off", "snap_3d", "snap_off"})
     assert referenced <= names, f"Referenced icons without SVG: {referenced - names}"

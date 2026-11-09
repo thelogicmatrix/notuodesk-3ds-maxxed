@@ -355,7 +355,7 @@ def draw(layout, ob):
         row.prop_enum(p, "orientation", key, text=label,
                       icon="RADIOBUT_ON" if p.orientation == key else "RADIOBUT_OFF")
     layout.prop(ob, "max_show_frozen_gray")
-    layout.operator("max.object_cmd", text="Freeze").cmd = "FREEZE"
+    layout.operator("max.object_cmd", text="Freeze", icon="LOCKED").cmd = "FREEZE"
     layout.label(text="Hold 'Ctrl' for vertical plane.")
     layout.label(text="Hold 'Shift' for square plane.")
     layout.label(text="Hold 'Alt' to create at [0,0,0].")
