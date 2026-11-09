@@ -4,6 +4,6 @@
 <title>modifier_list</title>
 <desc>Modifier list is a labelled dropdown</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M2 3.5 H12 M2 7.5 H10 M2 11.5 H7" fill="none" stroke="#d2d4d5" stroke-width="1.5"/><polygon points="9,10 15,10 12,14" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+<path d="M2 3.5 H12 M2 7.5 H10 M2 11.5 H7" fill="none" stroke="#d2d4d5" stroke-width="2"/><polygon points="9,10 15,10 12,14" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

@@ -4,6 +4,6 @@
 <title>arc</title>
 <desc>Arc spline outline</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M2 12 A6 6 0 0 1 12 3" fill="none" stroke="#d2d4d5" stroke-width="1.4"/><rect x="1" y="11" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="11" y="2" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
+<path d="M2 12 A6 6 0 0 1 12 3" fill="none" stroke="#d2d4d5" stroke-width="1"/><rect x="1" y="11" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><rect x="11" y="2" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
 </g>
 </svg>

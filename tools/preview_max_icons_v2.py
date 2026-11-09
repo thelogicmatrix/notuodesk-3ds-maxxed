@@ -21,8 +21,6 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 ICONS = ROOT / 'notuodesk_3ds_maxxed/icons'
 SOURCES = ICONS / 'src'
-PACK = Path('C:/Users/thelo/.claudework/maxxed-review/max-ui-reference')
-FONT = 'C:/Windows/Fonts/consola.ttf'
 SECTIONS = {
     'toolbar': 'Main toolbar', 'command_panel': 'Command Panel and stack',
     'create_objects': 'Create object types', 'material': 'Material tools',
@@ -34,7 +32,7 @@ def render(path, size):
     return Image.open(io.BytesIO(resvg_py.svg_to_bytes(svg_path=str(path),width=size,height=size,
                                                    skip_system_fonts=True))).convert('RGBA')
 
-def main(out):
+def main(out, font=None):
     out.mkdir(parents=True, exist_ok=True)
     baseline = out / 'baseline'
     baseline.mkdir(exist_ok=True)
@@ -42,7 +40,8 @@ def main(out):
     # Baseline was frozen before integration. Never replace it on a rebuild.
     if not any(baseline.glob('*.svg')):
         raise RuntimeError('Supply the pre-change baseline SVGs in <out>/baseline first')
-    fonts = {s:ImageFont.truetype(FONT,s) for s in (12,13,14,15,20)}
+    fonts = {s:ImageFont.truetype(str(font),s) if font else ImageFont.load_default(size=s)
+             for s in (12,13,14,15,20)}
     refs = catalog['references']
     rows = catalog['icons']
     source_hashes = {}
@@ -129,4 +128,6 @@ def main(out):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out',type=Path,required=True)
-    main(parser.parse_args().out)
+    parser.add_argument('--font',type=Path,help='Optional TrueType font for sheet labels')
+    opts=parser.parse_args()
+    main(opts.out, opts.font)

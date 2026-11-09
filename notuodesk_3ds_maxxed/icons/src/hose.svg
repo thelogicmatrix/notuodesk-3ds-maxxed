@@ -4,6 +4,6 @@
 <title>hose</title>
 <desc>Corrugated flexible hose</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M3 14 C3 3 13 14 13 2" fill="none" stroke="#d2d4d5" stroke-width="4"/><path d="M2 11 6 10 M4 8 7 9 M7 8 9 12 M10 8 14 9 M11 5 15 6" fill="none" stroke="#8d9295" stroke-width="1"/>
+<path d="M3 14 C3 3 13 14 13 2" fill="none" stroke="#d2d4d5" stroke-width="2"/><path d="M2 11 6 10 M4 8 7 9 M7 8 9 12 M10 8 14 9 M11 5 15 6" fill="none" stroke="#8d9295" stroke-width="1"/>
 </g>
 </svg>

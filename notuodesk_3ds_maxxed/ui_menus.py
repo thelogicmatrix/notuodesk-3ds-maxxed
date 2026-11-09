@@ -253,32 +253,32 @@ class MAX_MT_create(Menu):
         for k, (label, icon, _, _) in create.PRIMITIVES.items():
             if k == "PLANEPLUS" or k in create.extended_primitives.PRIMITIVES:
                 continue
-            lay.operator("max.create", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+            lay.operator("max.create", text=label).kind = k
         lay.separator()
         lay.label(text="Extended Primitives")
         for k in create.extended_primitives.DISPLAY_ORDER:
             label, icon, _, _ = create.PRIMITIVES[k]
-            lay.operator("max.create", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+            lay.operator("max.create", text=label).kind = k
         lay.separator()
         lay.label(text="JokerMartini")
-        lay.operator("max.plane_plus", text="PlanePlus", **max_icons.ui("plane", "MESH_PLANE"))
+        lay.operator("max.plane_plus", text="PlanePlus")
         lay.separator()
         lay.label(text="Shapes")
         for k, label, icon in create.SHAPES:
-            lay.operator("max.create_shape", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+            lay.operator("max.create_shape", text=label).kind = k
         lay.separator()
         lay.label(text="Lights")
         for k, label, icon in create.LIGHTS:
-            lay.operator("max.create_light", text=label, **max_icons.ui(k.lower(), icon)).kind = k
+            lay.operator("max.create_light", text=label).kind = k
         lay.separator()
-        lay.operator("max.create_camera", text="Target Camera", **max_icons.ui("cameras", "CAMERA_DATA")).target = True
-        lay.operator("max.create_camera", text="Physical Camera", **max_icons.ui("cameras", "CAMERA_DATA")).target = False
-        lay.operator("max.camera_from_view", text="Create Camera From View", **max_icons.ui("cameras", "VIEW_CAMERA"))
+        lay.operator("max.create_camera", text="Target Camera").target = True
+        lay.operator("max.create_camera", text="Physical Camera").target = False
+        lay.operator("max.camera_from_view", text="Create Camera From View")
         lay.separator()
         lay.label(text="V-Ray")
         lay.operator_menu_enum("max.vray_light", "kind", text="VRayLight")
-        lay.operator("max.vray_camera", text="VRayPhysicalCamera", **max_icons.ui("cameras", "CAMERA_DATA"))
-        lay.operator("max.vray_plane", text="VRayPlane", **max_icons.ui("plane", "MESH_PLANE"))
+        lay.operator("max.vray_camera", text="VRayPhysicalCamera")
+        lay.operator("max.vray_plane", text="VRayPlane")
 
 
 class MAX_MT_views(Menu):

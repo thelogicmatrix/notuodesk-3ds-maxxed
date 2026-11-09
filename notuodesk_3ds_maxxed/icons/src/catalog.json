@@ -285,7 +285,7 @@
     {
       "name": "pivot",
       "section": "toolbar",
-      "idea": "Two objects with cyan pivot crosses",
+      "idea": "Two compact objects with cyan pivot crosses",
       "reference": "toolbar",
       "presentation": "icon-only",
       "spot": "toolbar",
@@ -335,7 +335,7 @@
     {
       "name": "angle_snap",
       "section": "toolbar",
-      "idea": "Right angle and small gold magnet",
+      "idea": "Open angle with an arc and tilted gold magnet",
       "reference": "toolbar",
       "presentation": "icon-only",
       "spot": "toolbar",
@@ -445,7 +445,7 @@
     {
       "name": "material_editor",
       "section": "toolbar",
-      "idea": "Checker material sphere and settings rows in window",
+      "idea": "Checker material grid and settings rows in window",
       "reference": "toolbar",
       "presentation": "icon-only",
       "spot": "toolbar",
@@ -615,7 +615,7 @@
     {
       "name": "vertex",
       "section": "command_panel",
-      "idea": "Mesh corners highlighted as cyan square vertices",
+      "idea": "Three separate cyan vertices",
       "reference": "subobjects",
       "presentation": "icon-only",
       "spot": "command panel",
@@ -625,7 +625,7 @@
     {
       "name": "edge",
       "section": "command_panel",
-      "idea": "Two connected edges highlighted on a small mesh",
+      "idea": "Open triangular edge outline",
       "reference": "subobjects",
       "presentation": "icon-only",
       "spot": "command panel",
@@ -635,7 +635,7 @@
     {
       "name": "border",
       "section": "command_panel",
-      "idea": "Closed open-boundary loop highlighted on mesh",
+      "idea": "Crescent-shaped closed boundary loop",
       "reference": "subobjects",
       "presentation": "icon-only",
       "spot": "command panel",
@@ -645,7 +645,7 @@
     {
       "name": "polygon",
       "section": "command_panel",
-      "idea": "One polygon highlighted on a small mesh",
+      "idea": "Solid cyan polygon square",
       "reference": "subobjects",
       "presentation": "icon-only",
       "spot": "command panel",
@@ -655,7 +655,7 @@
     {
       "name": "element",
       "section": "command_panel",
-      "idea": "Whole connected mesh element highlighted",
+      "idea": "Solid cyan element cube with face divisions",
       "reference": "subobjects",
       "presentation": "icon-only",
       "spot": "command panel",
@@ -667,9 +667,9 @@
       "section": "command_panel",
       "idea": "Editable mesh control cage",
       "reference": "stack",
-      "presentation": "icon plus text",
+      "presentation": "icon-only",
       "spot": "command panel",
-      "note": "Stack row retains Editable Poly text. Level buttons are icon-only.",
+      "note": "Custom Show on Cage toggle uses this cage. Max stack base row retains Editable Poly text without a leading icon. Level buttons are icon-only.",
       "baseline": "editable_poly"
     },
     {
@@ -695,7 +695,7 @@
     {
       "name": "make_unique",
       "section": "command_panel",
-      "idea": "Forked unique-instance symbol",
+      "idea": "Single stem forked into two copies, one cyan",
       "reference": "stack",
       "presentation": "icon-only",
       "spot": "command panel",
@@ -1345,7 +1345,7 @@
     {
       "name": "mtl_get",
       "section": "material",
-      "idea": "Material sphere entering editor",
+      "idea": "Checker grid above material folder",
       "reference": "material",
       "presentation": "icon-only",
       "spot": "Compact Material Editor toolbar",
@@ -1355,7 +1355,7 @@
     {
       "name": "mtl_assign",
       "section": "material",
-      "idea": "Checker material assigned to selected object",
+      "idea": "Checker grid assigned by arrow to selected object",
       "reference": "material",
       "presentation": "icon-only",
       "spot": "Compact Material Editor toolbar",
@@ -1375,7 +1375,7 @@
     {
       "name": "mtl_select",
       "section": "material",
-      "idea": "Checker material sphere and selection pointer",
+      "idea": "Checker grid and selection pointer",
       "reference": "material",
       "presentation": "icon-only",
       "spot": "Compact Material Editor toolbar",
@@ -1395,7 +1395,7 @@
     {
       "name": "mtl_viewport",
       "section": "material",
-      "idea": "Checker material tile for viewport display",
+      "idea": "Checker grid within viewport frame and cyan stand",
       "reference": "material",
       "presentation": "icon-only",
       "spot": "Compact Material Editor toolbar",
@@ -1415,11 +1415,11 @@
     {
       "name": "mtl_drag",
       "section": "material",
-      "idea": "Material sphere moved to sibling slot",
+      "idea": "Hand carrying a checker material tile",
       "reference": "material",
-      "presentation": "icon-only",
+      "presentation": "icon plus text",
       "spot": "Compact Material Editor toolbar",
-      "note": "Legacy custom drag action has no exact Max toolbar counterpart. Use tooltip, do not invent a stock Max claim.",
+      "note": "Custom Drag Material to Object action. No Max toolbar equivalent. Keep Drag text, never use the sibling-navigation symbol.",
       "baseline": "mtl_drag"
     },
     {
@@ -2035,7 +2035,7 @@
     {
       "name": "caddy_distance",
       "section": "caddies",
-      "idea": "Measured separation between two ends",
+      "idea": "Horizontal separation gauge between two ends",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Caddy field label",
@@ -2205,7 +2205,7 @@
     {
       "name": "caddy_amount",
       "section": "caddies",
-      "idea": "Measured separation between two ends (amount)",
+      "idea": "Horizontal separation gauge between two ends (amount)",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Caddy amount",
@@ -2355,7 +2355,7 @@
     {
       "name": "caddy_hold_boundary",
       "section": "caddies",
-      "idea": "Pinned boundary points on a subdivided mesh (hold boundary)",
+      "idea": "Pins along an open boundary edge (hold boundary)",
       "reference": "relax",
       "presentation": "icon-only",
       "spot": "Caddy hold boundary",
@@ -2365,7 +2365,7 @@
     {
       "name": "caddy_hold_outer",
       "section": "caddies",
-      "idea": "Pinned boundary points on a subdivided mesh (hold outer)",
+      "idea": "Pinned outer corners of a complete mesh (hold outer)",
       "reference": "relax",
       "presentation": "icon-only",
       "spot": "Caddy hold outer",
@@ -2405,7 +2405,7 @@
     {
       "name": "caddy_separate_smoothing",
       "section": "caddies",
-      "idea": "Rounded subdivided surface for smoothing (separate smoothing)",
+      "idea": "Two smooth patches separated by an open gap (separate smoothing)",
       "reference": "smooth",
       "presentation": "icon-only",
       "spot": "Caddy separate smoothing",
@@ -2435,7 +2435,7 @@
     {
       "name": "caddy_ok",
       "section": "caddies",
-      "idea": "Circular OK check",
+      "idea": "Cyan check on grey OK disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer OK (Enter)",
@@ -2445,7 +2445,7 @@
     {
       "name": "caddy_apply",
       "section": "caddies",
-      "idea": "Circular Apply and Continue plus",
+      "idea": "Cyan plus on grey Apply and Continue disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer Apply and Continue (Ctrl+Enter)",
@@ -2455,7 +2455,7 @@
     {
       "name": "caddy_cancel",
       "section": "caddies",
-      "idea": "Circular Cancel cross",
+      "idea": "Cyan cross on grey Cancel disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer Cancel (Esc)",

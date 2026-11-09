@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>mtl_viewport</title>
-<desc>Checker material tile for viewport display</desc>
+<desc>Checker grid within viewport frame and cyan stand</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<rect x="2.5" y="2.5" width="11" height="11" rx="0" fill="#656b6e" stroke="#50b9bf" stroke-width="1"/><circle cx="6" cy="6" r="4" fill="#d2d4d5" stroke="#d2d4d5" stroke-width="1"/><path d="M3 3 9 9 M3 9 9 3 M2 6 H10 M6 2 V10" fill="none" stroke="#656b6e" stroke-width="1.5"/>
+<rect x="1.5" y="1.5" width="13" height="11" rx="0" fill="#2b2e30" stroke="#d2d4d5" stroke-width="1"/><rect x="3" y="3" width="3" height="3" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="6" y="3" width="3" height="3" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="9" y="3" width="3" height="3" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="3" y="6" width="3" height="3" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="6" y="6" width="3" height="3" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="9" y="6" width="3" height="3" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="3" y="9" width="3" height="3" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="6" y="9" width="3" height="3" rx="0" fill="#2b2e30" stroke="none" stroke-width="1"/><rect x="9" y="9" width="3" height="3" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="5" y="14" width="6" height="1" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
 </g>
 </svg>

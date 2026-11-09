@@ -4,6 +4,6 @@
 <title>freehand</title>
 <desc>Freehand spline outline</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M2 11 C0 1 8 1 6 8 S15 15 14 3" fill="none" stroke="#d2d4d5" stroke-width="1.4"/>
+<path d="M2 11 C0 1 8 1 6 8 S15 15 14 3" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

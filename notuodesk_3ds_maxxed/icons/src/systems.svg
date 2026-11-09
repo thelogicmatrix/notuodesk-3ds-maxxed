@@ -4,6 +4,6 @@
 <title>systems</title>
 <desc>Two small meshing gear wheels</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<circle cx="4.5" cy="4.5" r="2.5" fill="none" stroke="#d2d4d5" stroke-width="1.5"/><circle cx="11" cy="11" r="2.5" fill="none" stroke="#d2d4d5" stroke-width="1.5"/><path d="M4.5 .5 V2 M4.5 7 V8.5 M.5 4.5 H2 M7 4.5 H8.5 M11 7 V8.5 M11 13.5 V15 M7 11 H8.5 M13.5 11 H15" fill="none" stroke="#d2d4d5" stroke-width="1"/>
+<circle cx="4.5" cy="4.5" r="2.5" fill="none" stroke="#d2d4d5" stroke-width="2"/><circle cx="11" cy="11" r="2.5" fill="none" stroke="#d2d4d5" stroke-width="2"/><path d="M4.5 .5 V2 M4.5 7 V8.5 M.5 4.5 H2 M7 4.5 H8.5 M11 7 V8.5 M11 13.5 V15 M7 11 H8.5 M13.5 11 H15" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

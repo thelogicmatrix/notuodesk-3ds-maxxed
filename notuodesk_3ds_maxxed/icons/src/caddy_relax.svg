@@ -4,6 +4,6 @@
 <title>caddy_relax</title>
 <desc>Smoothed profile between mesh points</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M2 12 5 3 9 11 14 4" fill="none" stroke="#8d9295" stroke-width="1"/><path d="M2 11 Q5 5 9 9 T14 5" fill="none" stroke="#50b9bf" stroke-width="1.5"/>
+<path d="M2 12 5 3 9 11 14 4" fill="none" stroke="#8d9295" stroke-width="1"/><path d="M2 11 Q5 5 9 9 T14 5" fill="none" stroke="#50b9bf" stroke-width="2"/>
 </g>
 </svg>

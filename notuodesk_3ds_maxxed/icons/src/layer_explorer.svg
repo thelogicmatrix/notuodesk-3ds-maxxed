@@ -4,6 +4,6 @@
 <title>layer_explorer</title>
 <desc>Three stacked layers inside a window</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<rect x="1.5" y="2.5" width="13" height="11" rx="0" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M1.5 5.5 H14.5 M3 4 H4 M5 4 H6 M7 4 H8" fill="none" stroke="#d2d4d5" stroke-width="1"/><polygon points="4,7 8,5 12,7 8,9" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="4,9 8,7 12,9 8,11" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="4,11 8,9 12,11 8,13" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+<rect x="1.5" y="2.5" width="13" height="11" rx="0" fill="#353a3d" stroke="#d2d4d5" stroke-width="1"/><path d="M1.5 5.5 H14.5" fill="none" stroke="#d2d4d5" stroke-width="1"/><polygon points="3,6 8,8 13,6 13,8 8,10 3,8" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="3,9 8,11 13,9 13,11 8,13 3,11" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

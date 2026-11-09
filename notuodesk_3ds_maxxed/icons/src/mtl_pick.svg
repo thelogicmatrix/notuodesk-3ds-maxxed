@@ -4,6 +4,6 @@
 <title>mtl_pick</title>
 <desc>Material eyedropper with diagonal stem</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M3 12 11 4" fill="none" stroke="#d2d4d5" stroke-width="2"/><path d="M9 3 12 6 M2 13 4 14" fill="none" stroke="#d2d4d5" stroke-width="1.3"/><polygon points="10,2 12,1 15,4 14,6" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+<path d="M3 12 11 4" fill="none" stroke="#d2d4d5" stroke-width="2"/><path d="M9 3 12 6 M2 13 4 14" fill="none" stroke="#d2d4d5" stroke-width="1"/><polygon points="10,2 12,1 15,4 14,6" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

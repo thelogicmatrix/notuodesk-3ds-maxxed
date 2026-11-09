@@ -4,6 +4,6 @@
 <title>target_weld</title>
 <desc>Target weld mesh metaphor</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M2 2 12 12 M2 12 12 2" fill="none" stroke="#8d9295" stroke-width="1"/><rect x="1" y="1" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="11" y="11" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><path d="M5 5 9 9" fill="none" stroke="#50b9bf" stroke-width="1.8"/><polygon points="7,10 11,11 10,7" fill="#50b9bf" stroke="none" stroke-width="1"/>
+<path d="M2 2 12 12 M2 12 12 2" fill="none" stroke="#8d9295" stroke-width="1"/><rect x="1" y="1" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="11" y="11" width="2" height="2" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/><path d="M5 5 9 9" fill="none" stroke="#50b9bf" stroke-width="2"/><polygon points="7,10 11,11 10,7" fill="#50b9bf" stroke="none" stroke-width="1"/>
 </g>
 </svg>

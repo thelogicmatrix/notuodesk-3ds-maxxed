@@ -4,6 +4,6 @@
 <title>symmetry_align</title>
 <desc>Opposed circular arrows for Align to Face</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M2 5 C2 0 8 1 8 4 M14 11 C14 16 8 15 8 12" fill="none" stroke="#d2d4d5" stroke-width="1.8"/><polygon points="5,3 9,3 8,7" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="11,13 7,13 8,9" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+<path d="M2 5 C2 0 8 1 8 4 M14 11 C14 16 8 15 8 12" fill="none" stroke="#d2d4d5" stroke-width="2"/><polygon points="5,3 9,3 8,7" fill="#d2d4d5" stroke="none" stroke-width="1"/><polygon points="11,13 7,13 8,9" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

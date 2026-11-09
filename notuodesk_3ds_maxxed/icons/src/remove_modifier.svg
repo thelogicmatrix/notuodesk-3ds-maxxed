@@ -4,6 +4,6 @@
 <title>remove_modifier</title>
 <desc>Trash can with vertical slats</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M3 4 H13 M5 4 V2 H11 V4 M4 4 V14 H12 V4 M6.5 6 V12 M9.5 6 V12" fill="none" stroke="#d2d4d5" stroke-width="1.2"/>
+<path d="M3 4 H13 M5 4 V2 H11 V4 M4 4 V14 H12 V4 M6.5 6 V12 M9.5 6 V12" fill="none" stroke="#d2d4d5" stroke-width="1"/>
 </g>
 </svg>

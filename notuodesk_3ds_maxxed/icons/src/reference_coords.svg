@@ -4,6 +4,6 @@
 <title>reference_coords</title>
 <desc>Coordinate axes, dropdown itself shows View text</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M3.5 1.5 V12.5 H14 M3.5 12.5 10.5 5.5" fill="none" stroke="#8d9295" stroke-width="1"/><path d="M3.5 9.5 V2" fill="none" stroke="#699edf" stroke-width="1.5"/><polygon points="1,4 3.5,1 6,4" fill="#699edf" stroke="none" stroke-width="1"/><path d="M6 12.5 H13" fill="none" stroke="#df6663" stroke-width="1.5"/><polygon points="11,10 15,12.5 11,15" fill="#df6663" stroke="none" stroke-width="1"/><path d="M5.5 10.5 10 6" fill="none" stroke="#79b981" stroke-width="1.5"/>
+<path d="M3.5 1.5 V12.5 H14 M3.5 12.5 10.5 5.5" fill="none" stroke="#8d9295" stroke-width="1"/><path d="M3.5 9.5 V2" fill="none" stroke="#699edf" stroke-width="2"/><polygon points="1,4 3.5,1 6,4" fill="#699edf" stroke="none" stroke-width="1"/><path d="M6 12.5 H13" fill="none" stroke="#df6663" stroke-width="2"/><polygon points="11,10 15,12.5 11,15" fill="#df6663" stroke="none" stroke-width="1"/><path d="M5.5 10.5 10 6" fill="none" stroke="#79b981" stroke-width="2"/>
 </g>
 </svg>

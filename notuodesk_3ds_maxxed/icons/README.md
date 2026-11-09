@@ -33,11 +33,11 @@ resources. PNGs are transparent RGBA renders at 32px and 64px (`@2x`).
 
 ## Rebuild
 
-From the repository root on Reborn:
+From the repository root, using a Python virtual environment:
 
 ```powershell
-uv pip install --python C:/Users/thelo/.local/venvs/data/Scripts/python.exe resvg-py==0.5.0 Pillow
-& C:/Users/thelo/.local/venvs/data/Scripts/python.exe tools/build_icons.py --contact-sheet icons-contact.png
+python -m pip install resvg-py==0.5.0 Pillow
+python tools/build_icons.py --contact-sheet icons-contact.png
 ```
 
 `tools/draw_max_icons_v2.py` authors the SVG family and `src/catalog.json`.
@@ -78,7 +78,7 @@ does not allocate GUI icon IDs. Positive IDs and visible drawing need a GUI run.
 
 ## Scope
 
-The set has 272 drawings, including all 125 previous names. It includes assets
+The set has 273 drawings, including all 125 previous names. It includes assets
 for Max controls that this add-on does not yet display.
 No new controls or tool behavior are introduced. The existing quad menus have
 no built-in icon arguments to replace. Material previews remain live Blender

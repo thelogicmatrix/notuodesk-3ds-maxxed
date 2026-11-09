@@ -167,8 +167,7 @@ class MAX_PT_command_panel(Panel):
                               rows=3, maxrows=8, sort_lock=True)
             base = col.row(align=True)
             no_active = _stack_get(ob) < 0
-            base.operator("max.modifier_set_active", text=base_name(ob), depress=no_active,
-                          **max_icons.ui("editable_poly" if ob.type == "MESH" else "shapes", "MESH_DATA" if ob.type == "MESH" else "OBJECT_DATA")).name = ""
+            base.operator("max.modifier_set_active", text=base_name(ob), depress=no_active).name = ""
 
             # stack tool icons
             active = ob.modifiers.active if _stack_get(ob) >= 0 else None

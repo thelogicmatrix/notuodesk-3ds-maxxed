@@ -4,7 +4,9 @@ Every path below is an original drawing on a 16-unit grid. Autodesk references
 inform the metaphor, never the path coordinates. No reference pixels are read.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
+import argparse
 import json
+import re
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -78,6 +80,10 @@ def group(body, transform):
 def add(name, body, idea, section='toolbar', ref='toolbar', mode='icon-only', spot=None, note=''):
     if name in ART:
         raise ValueError('Duplicate drawing ' + name)
+    # Whole-unit stroke widths retain a stable weight at the native 16px size.
+    body = re.sub(r'stroke-width="([\d.]+)"',
+                  lambda m: 'stroke-width="'+str(0 if float(m[1]) == 0 else
+                                                1 if float(m[1]) < 1.5 else 2)+'"', body)
     ART[name] = body
     CAT.append(dict(name=name, section=section, idea=idea, reference=ref, presentation=mode,
                     spot=spot or section.replace('_', ' '), note=note,
@@ -91,7 +97,8 @@ def cursor(x=7, y=6, color=Y):
     return group(poly('0,0 0,9 2.5,6.5 4,10 6,9 4.5,5.5 8,5.5', color), f'translate({x} {y}) scale(.65)')
 
 def magnet():
-    return path('M11 2.5 V5 A2 2 0 0 0 15 5 V2.5', Y, 1.5) + path('M11 2.5 V4 M15 2.5 V4', G, 1.5)
+    return (path('M9 5 11 3 Q13 1 15 3 Q17 5 15 7 L13 9', Y, 2) +
+            path('M9 5 10 4 M13 9 14 8', G, 2))
 
 def mesh():
     return path('M2.5 5.5 7.5 2.5 13.5 5.5 V11.5 L8.5 14.5 2.5 11.5 Z M2.5 5.5 8.5 8.5 13.5 5.5 M8.5 8.5 V14.5', D)
@@ -108,7 +115,20 @@ def dot(x, y, color=C):
     return rect(x-1, y-1, 2, 2, color, 'none')
 
 def window(body):
-    return rect(1.5, 2.5, 13, 11, F) + path('M1.5 5.5 H14.5 M3 4 H4 M5 4 H6 M7 4 H8', G) + body
+    return rect(1.5, 2.5, 13, 11, '#353a3d', G) + path('M1.5 5.5 H14.5', G) + body
+
+def checker(x=2, y=2, cell=3):
+    return ''.join(rect(x+c*cell,y+r*cell,cell,cell,
+                        G if (r+c)%2 == 0 else '#2b2e30','none')
+                   for r in range(3) for c in range(3))
+
+def number_badge(number):
+    body = rect(9,9,7,7,C,'none')
+    if number == 1:
+        body += path('M11.5 11.5 12.5 10.5 V14.5 M11.5 14.5 H13.5','#253033')
+    else:
+        body += path('M10.5 11.5 V10.5 H13.5 V12.5 L10.5 14.5 H13.5','#253033')
+    return body
 
 def teapot():
     return (path('M4 6.5 H11 V9 C11 13.5 4 13.5 4 9 Z', G, 1, '#b6babc') +
@@ -122,7 +142,8 @@ def toolbar():
     undo = path('M6 3 1 7 6 11 V8 H9 C13 8 13 12 9 12 H7 V14 H9 C16 14 16 6 9 6 H6 Z', 'none', 0, G)
     add('undo', undo, 'Broad bent arrow pointing left')
     add('redo', group(undo, 'translate(16 0) scale(-1 1)'), 'Broad bent arrow pointing right')
-    link = path('M6 6 8 4 C11 1 15 5 12 8 L10 10 M6 6 4 8 C1 11 5 15 8 12 L10 10 M5.5 10.5 10.5 5.5', G, 1.7)
+    link = (path('M8 5 10 3 C13 0 16 3 13 6 L10 9 C8 11 6 10 6 8',G,2) +
+            path('M8 11 6 13 C3 16 0 13 3 10 L6 7 C8 5 10 6 10 8',G,2))
     add('link', link, 'Two interlocking objects linked diagonally')
     add('unlink', path('M7 4 8 3 C12 0 16 5 13 8 L12 9 M4 7 3 8 C0 12 5 16 8 13 L9 12', G, 1.7)+path('M3 2 6 5 M10 9 14 13', C, 1.7), 'Separated diagonal links with cyan break marks')
     waves = ''.join(path(f'M1 {y} Q3 {y+2} 5 {y} T9 {y} T13 {y}', G, 1.3) for y in (5,9,13))
@@ -140,28 +161,27 @@ def toolbar():
     add('scale', rect(2,9,5,5,G,'none')+'<g stroke-dasharray="2 1">'+rect(2.5,2.5,11,11,'none',C)+'</g>'+path('M6 10 12 4',G,1.5)+poly('9,3 14,2 13,7',G), 'Small solid square expanding into dashed square')
     add('select_place', circle(6.5,9,5,G,'none')+ellipse(11,4.5,3,2.5,C,'none')+path('M8 8 11 5',Y,2), 'Object placed onto a target surface')
     add('reference_coords', path('M3.5 1.5 V12.5 H14 M3.5 12.5 10.5 5.5',D)+path('M3.5 9.5 V2',B,1.5)+poly('1,4 3.5,1 6,4',B)+path('M6 12.5 H13',R,1.5)+poly('11,10 15,12.5 11,15',R)+path('M5.5 10.5 10 6',GREEN,1.5), 'Coordinate axes, dropdown itself shows View text', mode='text-only',note='Keep the reference coordinate dropdown as text, no leading axis pictogram.')
-    add('pivot', rect(2.5,2.5,3,7,G,'none')+rect(9.5,2.5,3,7,G,'none')+path('M4 9 V14 M2 12 H6 M11 9 V14 M9 12 H13',C), 'Two objects with cyan pivot crosses')
+    add('pivot', rect(1,3,5,5,G,'none')+rect(10,6,5,5,G,'none')+path('M3.5 5.5 V11.5 M.5 8.5 H6.5 M12.5 8.5 V14.5 M9.5 11.5 H15.5',C), 'Two compact objects with cyan pivot crosses')
     glyphs = {
-        '2': path('M2 4 C2 1 8 1 8 4 C8 6 2 7 2 10 H8', G,1.8),
-        '3': path('M2 2 H8 L4.5 5.5 C10 5 10 10 5 10 H2', G,1.8),
+        '2': path('M2 7 Q2 4 5 4 Q8 4 8 7 C8 9 2 11 2 14 H8', G,2),
+        '3': path('M2 4 H8 L5 8 Q9 8 9 11 Q9 14 5 14 H2', G,2),
     }
-    for n,g in [('snap_2d',glyphs['2']),('snap_25d',group(glyphs['2'],'scale(.8) translate(0 2)')+circle(7.7,9,.75,G,'none')+path('M9.5 3 H12.5 V5 H10 V7 C14 6 14 10 10 10',G,1.2)),('snap_3d',glyphs['3'])]:
+    for n,g in [('snap_2d',glyphs['2']),('snap_25d',path('M1.5 6.5 Q1.5 4.5 3.5 4.5 Q5.5 4.5 5.5 6.5 C5.5 8.5 1.5 10.5 1.5 13.5 H5.5',G)+rect(7,12,2,2,G,'none')+path('M14.5 10.5 H10.5 V12.5 H13.5 V14.5 H10.5',G)),('snap_3d',glyphs['3'])]:
         add(n,g+magnet(), 'Large '+{'snap_2d':'2','snap_25d':'2.5','snap_3d':'3'}[n]+' with small gold magnet at upper right')
     add('snap_off', group(glyphs['3']+magnet(),'translate(0 0)')+path('M1.5 14.5 14.5 1.5',D,1.4), 'Same 3D snap symbol in disabled state',note='Prefer disabled UI tint of snap_3d in phase 2. This asset is the legacy name.')
-    add('angle_snap', path('M2.5 3.5 V13.5 H12.5 M2.5 8 C6 8 8 10 8 13.5',G,1.5)+magnet(), 'Right angle and small gold magnet')
+    add('angle_snap', path('M2 13 H14 M2 13 10 5 M6 9 Q8 10 8 13',G,2)+magnet(), 'Open angle with an arc and tilted gold magnet')
     add('percent_snap',circle(3.5,4,1.7)+circle(9,11.5,1.7)+path('M2 14 10 2',G,1.5)+magnet(), 'Percent sign and small gold magnet')
     add('spinner_snap',poly('1,7 4,2 7,7',G)+poly('1,9 7,9 4,14',G)+magnet(), 'Opposed spinner triangles with gold magnet')
     add('named_selection_sets',path('M5 2 C3 2 4 6 2 7.5 C4 9 3 13 5 13 M10 2 C12 2 11 6 13 7.5 C11 9 12 13 10 13',G,1.5)+path('M8 6 14 0',Y,2), 'Selection braces and editing pencil',note='Edit button icon-only. Adjacent Create Selection Set combo retains text.')
     add('mirror',poly('1.5,3 6,6 6,13 1.5,10',G)+poly('10,6 14.5,3 14.5,10 10,13',C)+path('M8 1 V15',G,1,stroke_dasharray='2 1'), 'Two opposed planes around dotted mirror axis')
     add('align',rect(2,2,4,3,G,'none')+rect(9,9,5,4,C,'none')+path('M1 7.5 H15 M7.5 1 V15',D)+path('M4 6 V10 M11 5 V8',G), 'Offset objects lined up to common axes')
-    add('scene_explorer',window(''.join(rect(3,y,2,1.5,G,'none')+rect(7,y,5,1.5,G,'none') for y in (7,10))), 'Scene list in a compact window')
-    layers=''.join(poly(f'4,{y} 8,{y-2} 12,{y} 8,{y+2}',G) for y in (7,9,11))
+    add('scene_explorer',window(''.join(rect(3,y,2,2,G,'none')+rect(7,y,5,2,G,'none') for y in (7,10))), 'Scene list in a compact window')
+    layers=''.join(poly(f'3,{y} 8,{y+2} 13,{y} 13,{y+2} 8,{y+4} 3,{y+2}',G) for y in (6,9))
     add('layer_explorer',window(layers), 'Three stacked layers inside a window')
     add('ribbon',window(rect(3,7,4,2,G,'none')+rect(9,7,3,2,G,'none')+rect(3,11,4,1,G,'none')+rect(9,11,3,1,G,'none')), 'Panel blocks inside a ribbon window')
     add('curve_editor',window(path('M3 11 C4 4 7 6 8 10 S12 12 13 7',C,1.6)), 'Cyan animation curve in editor window')
     add('schematic_view',rect(2,2,12,3,G,'none')+arrow('down',C), 'Hierarchy bar and large downward cyan arrow')
-    checker=circle(5.5,9.5,3,'none',G)+path('M3.5 7.5 7.5 11.5 M3.5 11.5 7.5 7.5 M2.5 9.5 H8.5 M5.5 6.5 V12.5',G)
-    add('material_editor',window(checker+path('M10 7 H13 M10 9 H13 M10 11 H13',G)), 'Checker material sphere and settings rows in window')
+    add('material_editor',window(checker(3,7,2)+path('M10 7.5 H12 M10 9.5 H12 M10 11.5 H12',G)), 'Checker material grid and settings rows in window')
     add('render_setup',teapot()+group(path('M8 1 V3 M8 13 V15 M1 8 H3 M13 8 H15 M3 3 4 4 M12 12 13 13 M3 13 4 12 M12 4 13 3',Y,2)+circle(8,8,4,'none',Y,1.5), 'translate(8 7) scale(.5)'), 'Teapot with small gold settings wheel')
     add('rendered_frame',window(group(teapot(),'translate(1 3) scale(.8)')), 'Teapot inside rendered frame window')
     add('render_production',teapot()+path('M12.5 1 V5 M10.5 3 H14.5',C,1.5), 'Teapot with small cyan production sparkle')
@@ -187,16 +207,16 @@ def command_panel():
     a('space_warps',''.join(path(f'M1 {y} Q4 {y-3} 8 {y} T15 {y}',G,1.4) for y in (4,8,12)),'Three wavy horizontal bands','categories')
     gear=circle(4.5,4.5,2.5,'none',G,1.5)+circle(11,11,2.5,'none',G,1.5)+path('M4.5 .5 V2 M4.5 7 V8.5 M.5 4.5 H2 M7 4.5 H8.5 M11 7 V8.5 M11 13.5 V15 M7 11 H8.5 M13.5 11 H15',G)
     a('systems',gear,'Two small meshing gear wheels','categories')
-    # Same mesh under every level makes the selected component legible.
-    a('vertex',mesh()+dot(2.5,5.5)+dot(7.5,2.5)+dot(13.5,5.5)+dot(8.5,14.5),'Mesh corners highlighted as cyan square vertices','subobjects')
-    a('edge',mesh()+path('M2.5 5.5 7.5 2.5 13.5 5.5',C,1.7),'Two connected edges highlighted on a small mesh','subobjects')
-    a('border',mesh()+path('M2.5 5.5 8.5 8.5 13.5 5.5 7.5 2.5 Z',C,1.5),'Closed open-boundary loop highlighted on mesh','subobjects')
-    a('polygon',mesh()+poly('2.5,5.5 8.5,8.5 8.5,14.5 2.5,11.5',C,C),'One polygon highlighted on a small mesh','subobjects')
-    a('element',cube(C),'Whole connected mesh element highlighted','subobjects')
-    a('editable_poly',mesh()+''.join(rect(x-1,y-1,2,2,F,C) for x,y in [(2.5,5.5),(7.5,2.5),(13.5,5.5),(8.5,14.5)]),'Editable mesh control cage','stack',mode='icon plus text',note='Stack row retains Editable Poly text. Level buttons are icon-only.')
+    # Max distinguishes levels by silhouette, rather than a repeated mesh tile.
+    a('vertex',rect(2,7,3,3,C,'none')+rect(10,2,3,3,C,'none')+rect(9,12,3,3,C,'none'),'Three separate cyan vertices','subobjects')
+    a('edge',path('M2 10 13 2 11 14 Z',C,2),'Open triangular edge outline','subobjects')
+    a('border',path('M4 2 C16 2 16 14 4 14 L7 10 Q10 8 7 6 Z',C,2),'Crescent-shaped closed boundary loop','subobjects')
+    a('polygon',rect(3,3,10,10,C,'none'),'Solid cyan polygon square','subobjects')
+    a('element',poly('2,5 8,1 14,5 14,11 8,15 2,11',C)+path('M2.5 5.5 8 9 13.5 5.5 M8 9 V14','#28676d'),'Solid cyan element cube with face divisions','subobjects')
+    a('editable_poly',mesh()+''.join(rect(x-1,y-1,2,2,F,C) for x,y in [(2.5,5.5),(7.5,2.5),(13.5,5.5),(8.5,14.5)]),'Editable mesh control cage','stack',mode='icon-only',note='Custom Show on Cage toggle uses this cage. Max stack base row retains Editable Poly text without a leading icon. Level buttons are icon-only.')
     a('pin_stack',path('M5 4 H11 M6 4 V9 L4 11 H12 L10 9 V4 M8 11 V15',G,1.3),'Pushpin locking the modifier stack','stack')
     a('show_end_result',poly('5,1 11,1 10,6 9,8 10,10 11,15 5,15 6,10 7,8 6,6',G)+path('M6 3 H10 M6 13 H10',F),'Narrow hourglass for result through stack','stack')
-    a('make_unique',path('M3 3 6 13 8 9 10 13 13 3',G,1.4)+path('M5 2 V5 M11 2 V5',D),'Forked unique-instance symbol','stack')
+    a('make_unique',path('M8 14 V9 L3 4 M8 9 13 4',G,2)+rect(1,1,4,4,G,'none')+rect(11,1,4,4,C,'none'),'Single stem forked into two copies, one cyan','stack')
     a('remove_modifier',path('M3 4 H13 M5 4 V2 H11 V4 M4 4 V14 H12 V4 M6.5 6 V12 M9.5 6 V12',G,1.2),'Trash can with vertical slats','stack')
     a('configure_modifier_sets',rect(2.5,2.5,10,11,F,G)+path('M4 5 H9 M4 8 H8 M4 11 H7',G)+path('M8 8 14 2',Y,2),'Modifier list with editing pencil','stack')
     a('modifier_list',path('M2 3.5 H12 M2 7.5 H10 M2 11.5 H7',G,1.5)+poly('9,10 15,10 12,14',G),'Modifier list is a labelled dropdown','stack','text-only',note='Keep Modifier List text. Do not append a separate list pictogram to the dropdown.')
@@ -276,17 +296,18 @@ def create_objects():
     a('loft',path('M3 12 C3 1 13 15 13 3',D,3)+ellipse(3,12,2,1,'none',C)+ellipse(8,8,3,1.5,'none',G)+ellipse(13,3,2,1,'none',C),'Profile sections following a loft path',note='Loft is a text button under Compound Objects. This asset replaces the unrelated geometry sphere only where an icon is appropriate.')
 
 def material():
-    checker=circle(6,6,4,G,G)+path('M3 3 9 9 M3 9 9 3 M2 6 H10 M6 2 V10',F,1.5)
+    tile=checker(1,1,3)
     def a(n,b,i,mode='icon-only',note=''):
         add(n,b,i,'material','material',mode,'Compact Material Editor toolbar',note=note)
-    a('mtl_get',path('M2 8 V2 H10',C,2)+checker,'Material sphere entering editor')
-    a('mtl_assign',checker+path('M10 5 V11 H13',C,2)+poly('10,10 14,10 12,14',C)+rect(11,13,3,2,G,'none'),'Checker material assigned to selected object')
+    a('mtl_get',tile+path('M2 12 H6 L8 10 H14 V15 H2 Z',C,1,C),'Checker grid above material folder')
+    a('mtl_assign',tile+path('M12 5 V10',C,2)+poly('9,9 15,9 12,12',C)+rect(10,13,5,2,G,'none'),'Checker grid assigned by arrow to selected object')
     a('mtl_reset',path('M3 4 H13 M5 4 V14 H11 V4 M6 2 H10',G,1.5),'Trash can resets material slot')
-    a('mtl_select',checker+cursor(8,7),'Checker material sphere and selection pointer')
+    a('mtl_select',tile+cursor(8,7,C),'Checker grid and selection pointer')
     a('mtl_pick',path('M3 12 11 4',G,2)+path('M9 3 12 6 M2 13 4 14',G,1.3)+poly('10,2 12,1 15,4 14,6',G),'Material eyedropper with diagonal stem')
-    a('mtl_viewport',rect(2.5,2.5,11,11,F,C)+checker,'Checker material tile for viewport display')
+    a('mtl_viewport',rect(1.5,1.5,13,11,'#2b2e30',G)+checker(3,3,3)+rect(5,14,6,1,C,'none'),'Checker grid within viewport frame and cyan stand')
     a('mtl_library',rect(2.5,1.5,11,13,F,G)+rect(5,2,6,4,G,'none')+path('M5 10 H11 M5 12 H11',G),'Save material into library')
-    a('mtl_drag',checker+path('M10 7 H15 M12 5 15 7 12 9',C,1.4),'Material sphere moved to sibling slot',note='Legacy custom drag action has no exact Max toolbar counterpart. Use tooltip, do not invent a stock Max claim.')
+    hand=path('M6.5 11.5 V8.5 Q6.5 7.5 7.5 8.5 L9.5 10.5 V5.5 Q9.5 4.5 10.5 5.5 V9.5 L13.5 10.5 V13.5 L11.5 15.5 H9.5 Z',C,1,C)
+    a('mtl_drag',checker(1,1,2)+hand,'Hand carrying a checker material tile',mode='icon plus text',note='Custom Drag Material to Object action. No Max toolbar equivalent. Keep Drag text, never use the sibling-navigation symbol.')
     a('bitmap',rect(1.5,2.5,13,11,F,G)+poly('2,12 6,6 9,10 11,7 14,12',G)+circle(11,5,1,C,'none'),'Image tile with mountains and small light')
     a('search',circle(6.5,6.5,4)+path('M9.5 9.5 14 14',G,1.7),'Magnifying glass for search',mode='icon plus text',note='Keep Search Modifiers text in the command menu.')
     a('measure',poly('2,2 14,14 2,14','none',G)+path('M2 6 H4 M2 9 H5 M2 12 H4',G),'Triangular ruler',mode='text-only',note='Utilities Measure is a named button in Max.')
@@ -360,7 +381,7 @@ def caddies():
     vbar=path('M4.5 2.5 V13.5 M11.5 2.5 V13.5 M3 2.5 H6 M10 2.5 H13 M3 13.5 H6 M10 13.5 H13',G)+path('M8 4 V12',C,1.5)
     width=path('M2.5 4 V12 M13.5 4 V12 M2.5 8 H13.5',G)+path('M5 6 2.5 8 5 10 M11 6 13.5 8 11 10',C)
     field={
-        'distance':(vbar,'Measured separation between two ends','extrude'),
+        'distance':(path('M2.5 3.5 V12.5 M13.5 3.5 V12.5 M3 8 H13',G)+poly('3,8 6,6 6,10',C)+poly('13,8 10,6 10,10',C),'Horizontal separation gauge between two ends','extrude'),
         'height':(vbar,'Vertical extrusion-height gauge','extrude'),
         'type':(rect(2.5,2.5,11,11,'none',G)+path('M6 2.5 V13.5 M10 2.5 V13.5 M2.5 6 H13.5 M2.5 10 H13.5',C),'Grouped mesh patches for extrusion mode','extrude'),
         'bias':(poly('6,3 10,3 12,13 4,13',F,G)+path('M8 12 V2',C)+poly('6,4 8,1 10,4',C),'Local normal or shifted centre bias','extrude'),
@@ -389,15 +410,22 @@ def caddies():
     }
     for n,kind in aliases.items():
         body,idea,ref=field[kind]
+        if n == 'hold_boundary':
+            body=path('M2.5 12.5 V3.5 H13.5 M7.5 3.5 V12.5 M2.5 8.5 H13.5',D)+rect(1,2,3,3,C,'none')+rect(6,2,3,3,C,'none')+rect(12,2,3,3,C,'none')
+            idea='Pins along an open boundary edge'
+        elif n == 'hold_outer':
+            body=rect(3.5,3.5,9,9,'none',D)+rect(1,1,3,3,C,'none')+rect(12,1,3,3,C,'none')+rect(1,12,3,3,C,'none')+rect(12,12,3,3,C,'none')
+            idea='Pinned outer corners of a complete mesh'
+        elif n == 'separate_smoothing':
+            body=path('M1 7 Q1 2 6 2 V13 Q1 13 1 7 Z','none',0,G)+path('M10 2 Q15 2 15 7 Q15 13 10 13 Z','none',0,C)
+            idea='Two smooth patches separated by an open gap'
         if n in {'pick1','pick2','twist1','twist2'}:
-            body+=rect(12,11,1,3,C,'none')
-            if n.endswith('2'):
-                body+=rect(14,11,1,3,C,'none')
+            body+=number_badge(2 if n.endswith('2') else 1)
         add('caddy_'+n,body,idea+' ('+n.replace('_',' ')+')','caddies',ref,'icon-only','Caddy '+n.replace('_',' '),note=f"Exact pending branch field key '{n}'. Maps to kind '{kind}'.")
     add('caddy_weld_counts',path('M1 4 H6 M1 8 H6 M10 4 H15 M10 8 H15',G)+path('M7 6 H10 M8 4 10 6 8 8',C),'Before and after count comparison','caddies','poly_vertex','text-only','Weld caddy Before / After counts',note='Max shows Before and After text. This reserved asset must not replace those counts.')
-    add('caddy_ok',circle(8,8,6,F,G)+path('M4 8 7 11 12 5',GREEN,1.7),'Circular OK check','caddies','caddy',spot='Caddy footer OK (Enter)')
-    add('caddy_apply',circle(8,8,6,F,G)+path('M4 8 H12 M8 4 V12',GREEN,1.7),'Circular Apply and Continue plus','caddies','caddy',spot='Caddy footer Apply and Continue (Ctrl+Enter)')
-    add('caddy_cancel',circle(8,8,6,F,G)+path('M5 5 11 11 M5 11 11 5',R,1.7),'Circular Cancel cross','caddies','caddy',spot='Caddy footer Cancel (Esc)')
+    add('caddy_ok',circle(8,8,6,F,G)+path('M4 8 7 11 12 5',C,2),'Cyan check on grey OK disc','caddies','caddy',spot='Caddy footer OK (Enter)')
+    add('caddy_apply',circle(8,8,6,F,G)+path('M4 8 H12 M8 4 V12',C,2),'Cyan plus on grey Apply and Continue disc','caddies','caddy',spot='Caddy footer Apply and Continue (Ctrl+Enter)')
+    add('caddy_cancel',circle(8,8,6,F,G)+path('M5 5 11 11 M5 11 11 5',C,2),'Cyan cross on grey Cancel disc','caddies','caddy',spot='Caddy footer Cancel (Esc)')
     # Choice flyouts must change their pictogram instead of printing Group/Local.
     for name,body,idea in [
         ('group',rect(2.5,2.5,11,11,'none',C)+path('M6 2.5 V13.5 M10 2.5 V13.5 M2.5 6 H13.5 M2.5 10 H13.5',G),'Single connected group of polygons'),
@@ -476,4 +504,5 @@ def main():
     print('SVGs and placement catalog written. Run build_icons.py to render runtime PNGs.')
 
 if __name__ == '__main__':
+    argparse.ArgumentParser(description=__doc__).parse_args()
     main()

@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>border</title>
-<desc>Closed open-boundary loop highlighted on mesh</desc>
+<desc>Crescent-shaped closed boundary loop</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M2.5 5.5 7.5 2.5 13.5 5.5 V11.5 L8.5 14.5 2.5 11.5 Z M2.5 5.5 8.5 8.5 13.5 5.5 M8.5 8.5 V14.5" fill="none" stroke="#8d9295" stroke-width="1"/><path d="M2.5 5.5 8.5 8.5 13.5 5.5 7.5 2.5 Z" fill="none" stroke="#50b9bf" stroke-width="1.5"/>
+<path d="M4 2 C16 2 16 14 4 14 L7 10 Q10 8 7 6 Z" fill="none" stroke="#50b9bf" stroke-width="2"/>
 </g>
 </svg>

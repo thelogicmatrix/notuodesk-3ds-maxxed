@@ -963,8 +963,8 @@ class MAX_PT_mtl_editor(_MtlPanel, Panel):
             row.prop(mat, "pass_index", text="ID")
         row.operator("max.mtl_show_in_viewport", text="", **max_icons.ui("mtl_viewport", "TEXTURE"))
         row = lay.row(align=True)
-        row.operator("max.mtl_add_slot", text="", **max_icons.ui("create", "ADD"))
-        row.operator("max.mtl_drag", text="", **max_icons.ui("mtl_drag", "VIEW_PAN")).index = st.active
+        row.operator("max.mtl_add_slot", text="New Slot", **max_icons.ui("create", "ADD"))
+        row.operator("max.mtl_drag", text="Drag", **max_icons.ui("mtl_drag", "VIEW_PAN")).index = st.active
 
         # name / type row
         if mat is None:

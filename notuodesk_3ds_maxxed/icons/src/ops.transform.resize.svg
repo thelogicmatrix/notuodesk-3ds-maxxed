@@ -4,6 +4,6 @@
 <title>ops.transform.resize</title>
 <desc>Expanding Scale tool square</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<rect x="2" y="9" width="5" height="5" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><g stroke-dasharray="2 1"><rect x="2.5" y="2.5" width="11" height="11" rx="0" fill="none" stroke="#50b9bf" stroke-width="1"/></g><path d="M6 10 12 4" fill="none" stroke="#d2d4d5" stroke-width="1.5"/><polygon points="9,3 14,2 13,7" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+<rect x="2" y="9" width="5" height="5" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><g stroke-dasharray="2 1"><rect x="2.5" y="2.5" width="11" height="11" rx="0" fill="none" stroke="#50b9bf" stroke-width="1"/></g><path d="M6 10 12 4" fill="none" stroke="#d2d4d5" stroke-width="2"/><polygon points="9,3 14,2 13,7" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>

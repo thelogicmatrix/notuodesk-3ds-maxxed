@@ -4,6 +4,6 @@
 <title>cut</title>
 <desc>Cut mesh metaphor</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M2.5 5.5 7.5 2.5 13.5 5.5 V11.5 L8.5 14.5 2.5 11.5 Z M2.5 5.5 8.5 8.5 13.5 5.5 M8.5 8.5 V14.5" fill="none" stroke="#8d9295" stroke-width="1"/><path d="M1 12 14 3" fill="none" stroke="#50b9bf" stroke-width="1.7"/><rect x="0" y="11" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="13" y="2" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/>
+<path d="M2.5 5.5 7.5 2.5 13.5 5.5 V11.5 L8.5 14.5 2.5 11.5 Z M2.5 5.5 8.5 8.5 13.5 5.5 M8.5 8.5 V14.5" fill="none" stroke="#8d9295" stroke-width="1"/><path d="M1 12 14 3" fill="none" stroke="#50b9bf" stroke-width="2"/><rect x="0" y="11" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/><rect x="13" y="2" width="2" height="2" rx="0" fill="#d2d4d5" stroke="none" stroke-width="1"/>
 </g>
 </svg>
