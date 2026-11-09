@@ -26,15 +26,79 @@ def curve(name, coords, cyclic=False):
     return ob
 
 
-def evaluated(ob):
-    bpy.context.view_layer.update()
-    depsgraph = bpy.context.evaluated_depsgraph_get()
+def mesh_snapshot(ob, depsgraph):
     result = ob.evaluated_get(depsgraph)
     mesh = result.to_mesh()
     verts = [tuple(v.co) for v in mesh.vertices]
     faces = [(tuple(p.vertices), p.use_smooth, tuple(p.normal)) for p in mesh.polygons]
     result.to_mesh_clear()
     return verts, faces
+
+
+def evaluated(ob):
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    return mesh_snapshot(ob, depsgraph)
+
+
+class LoftTestRenderEngine(bpy.types.RenderEngine):
+    """Inspect Blender's real render depsgraph without a GPU or image sampling."""
+    bl_idname = 'LOFT_TEST'
+    bl_label = 'Loft test'
+    snapshots = {}
+    mode = None
+
+    def render(self, depsgraph):
+        type(self).mode = depsgraph.mode
+        type(self).snapshots = {ob.name: mesh_snapshot(ob, depsgraph)
+                                for ob in depsgraph.scene.objects if ob.type in {'CURVE', 'MESH'}}
+        self.end_result(self.begin_result(0, 0, 1, 1))
+
+
+def rendered():
+    scene = bpy.context.scene
+    previous = scene.render.engine
+    bpy.utils.register_class(LoftTestRenderEngine)
+    try:
+        scene.render.engine = 'LOFT_TEST'
+        LoftTestRenderEngine.snapshots = {}
+        bpy.ops.render.render()
+        assert LoftTestRenderEngine.mode == 'RENDER'
+        return LoftTestRenderEngine.snapshots
+    finally:
+        scene.render.engine = previous
+        bpy.utils.unregister_class(LoftTestRenderEngine)
+
+
+def rendering_modifier(ob, viewport, renderer):
+    """Line's Is Viewport switch and Curve to Mesh, independent of its branch."""
+    group = bpy.data.node_groups.new('Spline Rendering fixture', 'GeometryNodeTree')
+    group['max_spline_render'] = True
+    group.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+    group.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+    nodes, links = group.nodes, group.links
+    source = nodes.new('NodeGroupInput')
+    out = nodes.new('NodeGroupOutput')
+    circle = nodes.new('GeometryNodeCurvePrimitiveCircle')
+    circle.inputs['Radius'].default_value = .25
+    skin = nodes.new('GeometryNodeCurveToMesh')
+    links.new(source.outputs['Geometry'], skin.inputs['Curve'])
+    links.new(circle.outputs['Curve'], skin.inputs['Profile Curve'])
+    skin.inputs['Fill Caps'].default_value = True
+    enabled = nodes.new('GeometryNodeSwitch')
+    enabled.input_type = 'BOOLEAN'
+    enabled.inputs['False'].default_value = renderer
+    enabled.inputs['True'].default_value = viewport
+    links.new(nodes.new('GeometryNodeIsViewport').outputs[0], enabled.inputs['Switch'])
+    geometry = nodes.new('GeometryNodeSwitch')
+    geometry.input_type = 'GEOMETRY'
+    links.new(enabled.outputs[0], geometry.inputs['Switch'])
+    links.new(source.outputs['Geometry'], geometry.inputs['False'])
+    links.new(skin.outputs['Mesh'], geometry.inputs['True'])
+    links.new(geometry.outputs[0], out.inputs['Geometry'])
+    mod = ob.modifiers.new('Rendering', 'NODES')
+    mod.node_group = group
+    return mod
 
 
 class LoftTests(unittest.TestCase):
@@ -88,6 +152,89 @@ class LoftTests(unittest.TestCase):
         self.shape.data.update_tag()
         self.assertAlmostEqual(max(v[0] for v in evaluated(ob)[0]), 3)
         print('LOFT live Instance: path endpoint z=9 and profile x=3 reach evaluated mesh', flush=True)
+
+    def test_rendered_sources_keep_raw_spline_in_viewport_and_render(self):
+        bpy.ops.object.camera_add(location=(10, -10, 10))
+        bpy.context.scene.camera = bpy.context.object
+        ob = self.make()
+        baseline = evaluated(ob)
+        self.assertEqual((len(baseline[0]), len(baseline[1])), (8, 6))
+        for role in ('path', 'shape'):
+            source = getattr(self, role)
+            for kind in ('bevel', 'extrude', 'viewport', 'renderer', 'both'):
+                with self.subTest(role=role, rendering=kind):
+                    print(f'LOFT rendering check: {role} {kind}', flush=True)
+                    mod = None
+                    if kind == 'bevel':
+                        source.data.bevel_depth = .25
+                    elif kind == 'extrude':
+                        source.data.extrude = .25
+                    else:
+                        mod = rendering_modifier(source, kind != 'renderer', kind != 'viewport')
+                    try:
+                        viewport_mesh = evaluated(ob)
+                        viewport_source = evaluated(source)
+                        render_meshes = rendered()
+                        # Prove the fixture really converts the source in the intended evaluation.
+                        self.assertEqual(bool(viewport_source[1]), kind != 'renderer')
+                        self.assertEqual(bool(render_meshes[source.name][1]), kind != 'viewport')
+                        self.assertEqual(viewport_mesh, baseline)
+                        self.assertEqual(render_meshes[ob.name], baseline)
+                    finally:
+                        source.data.bevel_depth = source.data.extrude = 0
+                        if mod:
+                            source.modifiers.remove(mod)
+        print('LOFT rendering: path and shape bevel, extrude and Line-style viewport/render switches preserve 8 vertices, 6 faces', flush=True)
+
+    def test_rendered_sources_stay_live_in_edit_mode(self):
+        self.shape.data.bevel_depth = .2
+        rendering_modifier(self.path, True, True)
+        ob = self.make()
+        self.assertEqual((len(evaluated(ob)[0]), len(evaluated(ob)[1])), (8, 6))
+        bpy.ops.object.select_all(action='DESELECT')
+        self.path.select_set(True)
+        bpy.context.view_layer.objects.active = self.path
+        bpy.ops.object.mode_set(mode='EDIT')
+        try:
+            bpy.ops.curve.select_all(action='SELECT')
+            bpy.ops.transform.translate(value=(0, 0, 2))
+            verts = evaluated(ob)[0]
+            self.assertAlmostEqual(min(v[2] for v in verts), 2)
+            self.assertAlmostEqual(max(v[2] for v in verts), 7)
+        finally:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.curve.primitive_bezier_circle_add(radius=1)
+        circle = bpy.context.object
+        circle.data.bevel_depth = .3
+        ob.max_loft.shape = circle
+        ob.max_loft.shape_steps = 1
+        bpy.ops.object.mode_set(mode='EDIT')
+        try:
+            bpy.ops.curve.select_all(action='SELECT')
+            bpy.ops.transform.resize(value=(2, 2, 2))
+            bpy.ops.curve.subdivide(number_cuts=1)
+            verts, faces = evaluated(ob)
+            self.assertEqual((len(verts), len(faces)), (32, 18))
+            self.assertAlmostEqual(max(v[0] for v in verts), 2, places=5)
+        finally:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        self.assertAlmostEqual(self.shape.data.bevel_depth, .2)
+        self.assertAlmostEqual(circle.data.bevel_depth, .3)
+        self.assertEqual(len(self.path.modifiers), 1)
+        print('LOFT rendered live edits: Edit Mode path movement, Bezier scaling/subdivision and Get Shape replacement update without changing source rendering', flush=True)
+
+    def test_internal_curves_follow_loft_lifecycle(self):
+        ob = self.make()
+        original_curves = (ob.max_loft.path_curve.name, ob.max_loft.shape_curve.name)
+        duplicate = ob.copy()
+        bpy.context.collection.objects.link(duplicate)
+        self.assertEqual(evaluated(duplicate), evaluated(ob))
+        self.assertNotEqual(duplicate.max_loft.path_curve, ob.max_loft.path_curve)
+        self.assertNotEqual(duplicate.max_loft.shape_curve, ob.max_loft.shape_curve)
+        bpy.data.objects.remove(ob, do_unlink=True)
+        self.assertEqual((len(evaluated(duplicate)[0]), len(evaluated(duplicate)[1])), (8, 6))
+        self.assertTrue(all(name not in bpy.data.objects for name in original_curves))
+        print('LOFT internal curves: duplicate owns independent helpers, deleting a Loft removes its helpers', flush=True)
 
     def test_copy_and_move(self):
         copied = self.make(mode='COPY')
@@ -223,6 +370,8 @@ class LoftTests(unittest.TestCase):
         print('LOFT Create sources: Line, Rectangle, Circle, Ellipse, Arc, NGon, Star, Helix verified', flush=True)
 
     def test_save_reload_keeps_live_sources(self):
+        self.path.data.extrude = .25
+        rendering_modifier(self.shape, True, True)
         ob = self.make()
         ob.max_loft.scale_end = 150
         with tempfile.TemporaryDirectory(prefix='maxxed-loft-') as folder:

@@ -1,6 +1,7 @@
 """Live Loft compound objects, with spline picking and Geometry Nodes skinning."""
 
 import bpy
+from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
 from bpy.types import Operator, PropertyGroup
 from bpy_extras import view3d_utils
@@ -214,6 +215,86 @@ def build_group():
     return g.out(smooth.outputs[0])
 
 
+def _spline_state(data):
+    """Only editable geometry, without bevel, extrusion or object modifiers."""
+    result = []
+    for sp in data.splines:
+        points = sp.bezier_points if sp.type == 'BEZIER' else sp.points
+        values = []
+        for p in points:
+            value = (tuple(p.co), p.radius, p.tilt)
+            if sp.type == 'BEZIER':
+                value += (p.handle_left_type, p.handle_right_type,
+                          tuple(p.handle_left), tuple(p.handle_right))
+            values.append(value)
+        result.append((sp.type, sp.use_cyclic_u, sp.resolution_u, tuple(values)))
+    return tuple(result)
+
+
+def _curve_source(ob, role):
+    """Object Info needs a curve object whose evaluation cannot turn into a mesh."""
+    p = ob.max_loft
+    source = getattr(p, role)
+    if source is not None and source.mode == 'EDIT':
+        source.update_from_editmode()
+    if not valid_spline(source):
+        return None
+    proxy = getattr(p, role + '_curve')
+    if proxy is None or proxy.get('max_loft_owner') != ob:
+        proxy = bpy.data.objects.new(ob.name + ' ' + role, bpy.data.curves.new('Loft spline', 'CURVE'))
+        proxy['max_loft_owner'] = ob
+        ob.users_collection[0].objects.link(proxy)
+        proxy.hide_set(True)
+        proxy.hide_render = True
+        proxy.hide_select = True
+        setattr(p, role + '_curve', proxy)
+    if proxy.parent != source:
+        proxy.parent = source
+    if _spline_state(proxy.data) != _spline_state(source.data):
+        old = proxy.data
+        data = source.data.copy()
+        # 3D also prevents a closed 2D spline's fill from becoming a mesh.
+        data.dimensions = '3D'
+        data.bevel_depth = data.extrude = data.offset = 0
+        data.bevel_mode = 'ROUND'
+        data.bevel_object = data.taper_object = None
+        proxy.data = data
+        if old.users == 0:
+            bpy.data.curves.remove(old)
+    return proxy
+
+
+def _sync_sources(ob):
+    mod = modifier(ob)
+    if mod is None:
+        return
+    for role in ('path', 'shape'):
+        source = _curve_source(ob, role)
+        name = role.title()
+        for ident, label in gn_mods.inputs(mod):
+            if label == name:
+                data, prop = gn_mods.input_ref(mod, ident)
+                current = data.value if prop == 'value' else mod.get(ident)
+                if current != source:
+                    gn_mods.set_input(mod, name, source)
+                    ob.update_tag()
+                break
+
+
+@persistent
+def _sync_splines(scene, depsgraph=None):
+    # Run before evaluation so viewport and render both see the latest knots.
+    for ob in list(scene.objects):
+        if ob.max_loft.enabled:
+            _sync_sources(ob)
+    for proxy in list(scene.objects):
+        if 'max_loft_owner' in proxy and proxy.get('max_loft_owner') is None:
+            data = proxy.data
+            bpy.data.objects.remove(proxy, do_unlink=True)
+            if data.users == 0:
+                bpy.data.curves.remove(data)
+
+
 def _update(self, context):
     ob = self.id_data
     mod = modifier(ob)
@@ -221,8 +302,7 @@ def _update(self, context):
         return
     for attr, name in FIELDS:
         gn_mods.set_input(mod, name, getattr(self, attr))
-    gn_mods.set_input(mod, 'Path', self.path)
-    gn_mods.set_input(mod, 'Shape', self.shape)
+    _sync_sources(ob)
     ob.update_tag()
 
 
@@ -234,6 +314,8 @@ class MaxLoftParams(PropertyGroup):
     enabled: BoolProperty(default=False)
     path: PointerProperty(name='Path', type=bpy.types.Object, poll=_spline_poll, update=_update)
     shape: PointerProperty(name='Shape', type=bpy.types.Object, poll=_spline_poll, update=_update)
+    path_curve: PointerProperty(type=bpy.types.Object, options={'HIDDEN'})
+    shape_curve: PointerProperty(type=bpy.types.Object, options={'HIDDEN'})
     cap_start: BoolProperty(name='Cap Start', default=True, update=_update)
     cap_end: BoolProperty(name='Cap End', default=True, update=_update)
     shape_steps: IntProperty(name='Shape Steps', default=6, min=0, max=100, update=_update)
@@ -440,7 +522,13 @@ def params_visible(context):
 
 
 def draw_creation(layout, context):
-    layout.prop(context.window_manager, 'max_loft_mode', expand=True)
+    wm = context.window_manager
+    row = layout.row(align=True)
+    row.alignment = 'CENTER'
+    row.emboss = 'NONE'
+    for key, label, _ in MODES:
+        icon = 'RADIOBUT_ON' if wm.max_loft_mode == key else 'RADIOBUT_OFF'
+        row.prop_enum(wm, 'max_loft_mode', key, text=label, icon=icon)
     row = layout.row(align=True)
     row.operator_context = 'INVOKE_DEFAULT'
     row.operator('max.loft_pick', text='Get Path').source = 'PATH'
@@ -485,9 +573,13 @@ def register_props():
     bpy.types.Object.max_loft = PointerProperty(type=MaxLoftParams)
     bpy.types.WindowManager.max_loft_active = BoolProperty(default=False, options={'SKIP_SAVE'})
     bpy.types.WindowManager.max_loft_mode = EnumProperty(items=MODES, default='INSTANCE')
+    bpy.app.handlers.depsgraph_update_pre.append(_sync_splines)
+    bpy.app.handlers.render_pre.append(_sync_splines)
 
 
 def unregister_props():
+    bpy.app.handlers.depsgraph_update_pre.remove(_sync_splines)
+    bpy.app.handlers.render_pre.remove(_sync_splines)
     del bpy.types.WindowManager.max_loft_mode
     del bpy.types.WindowManager.max_loft_active
     del bpy.types.Object.max_loft

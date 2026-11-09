@@ -169,7 +169,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
-- Loft supports one profile on one Poly or Bezier spline path. NURBS, Text, multiple-spline shapes, and several profiles along a path are not supported. Use sources without bevel or extrusion.
+- Loft supports one profile on one Poly or Bezier spline path. NURBS, Text, multiple-spline shapes, and several profiles along a path are not supported. Loft reads the editable splines before bevel, extrusion or modifiers, so source rendering does not change the skin.
 - Loft uses Blender's minimum-twist and Z-up frames for Banking, which can differ from Max. Smooth Length and Smooth Width share Blender's face smoothing. Caps use n-gons rather than Morph or Grid capping.
 - Loft Scale and Twist are linear parameters, without Max's deformation graph. Teeter, Bevel and Fit deformations are not implemented. Adaptive Path Steps adds the shape level, without Max's deformation-graph divisions. Loft placement uses the selected spline's initial location and rotation, while source point edits and scale stay live.
 
