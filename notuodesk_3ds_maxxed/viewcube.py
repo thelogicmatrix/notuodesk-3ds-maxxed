@@ -1,14 +1,14 @@
 """Max-style ViewCube, drawn and picked independently in every viewport region."""
 
 import math
+import os
 import time
 
-import blf
 import bpy
 import gpu
 from bpy.props import EnumProperty
 from gpu_extras.batch import batch_for_shader
-from mathutils import Euler, Quaternion, Vector
+from mathutils import Euler, Matrix, Quaternion, Vector
 
 _handle = None
 _keys = []
@@ -17,12 +17,18 @@ _hover = None
 _menu_target = None
 _animations = {}
 _shader = None
+_smooth_shader = None
+_image_shader = None
+_atlas_image = None
+_atlas_texture = None
+_offscreen = None
 _enabled = False
 
 FACES = (((0, 0, 1), 'TOP'), ((0, 0, -1), 'BOTTOM'),
          ((0, -1, 0), 'FRONT'), ((0, 1, 0), 'BACK'),
          ((-1, 0, 0), 'LEFT'), ((1, 0, 0), 'RIGHT'))
-SIZES = {'TINY': 22, 'SMALL': 30, 'NORMAL': 40, 'LARGE': 50}
+SIZES = {'TINY': 16, 'SMALL': 22, 'NORMAL': 30, 'LARGE': 40}
+LABELS = tuple(label for _, label in FACES) + ('N', 'E', 'S', 'W')
 
 
 def rotation_for(direction, basis=None):
@@ -53,35 +59,89 @@ def _basis(scene):
     return Quaternion(scene.get('max_viewcube_front', (1, 0, 0, 0)))
 
 
-def cube_geometry(rotation, cx, cy, radius):
-    """Projected faces, each split into nine face/edge/corner picking patches."""
-    inv = rotation.inverted()
-    faces = []
+def _face_axes(n):
+    if n.z:
+        u = Vector((1, 0, 0))
+    else:
+        u = Vector((-n.y, n.x, 0))
+    return u, n.cross(u)
+
+
+def cube_facets():
+    """Six inset faces, twelve chamfer strips and eight triangular corners."""
+    facets = []
+    inset = .9
     for normal, label in FACES:
         n = Vector(normal)
+        u, v = _face_axes(n)
+        vertices = [n + u * x + v * y for x, y in
+                    ((-inset, -inset), (inset, -inset), (inset, inset), (-inset, inset))]
+        facets.append(dict(normal=normal, label=label, vertices=vertices))
+    for axis in range(3):
+        a, b = [i for i in range(3) if i != axis]
+        for sa in (-1, 1):
+            for sb in (-1, 1):
+                n = Vector((0, 0, 0))
+                n[a], n[b] = sa, sb
+                vertices = []
+                for along, va, vb in ((-inset, 1, inset), (inset, 1, inset),
+                                      (inset, inset, 1), (-inset, inset, 1)):
+                    p = Vector((0, 0, 0))
+                    p[axis], p[a], p[b] = along, sa * va, sb * vb
+                    vertices.append(p)
+                facets.append(dict(normal=tuple(n), label=None, vertices=vertices))
+    for x in (-1, 1):
+        for y in (-1, 1):
+            for z in (-1, 1):
+                n = Vector((x, y, z))
+                vertices = []
+                for axis in range(3):
+                    p = n * inset
+                    p[axis] = n[axis]
+                    vertices.append(p)
+                facets.append(dict(normal=tuple(n), label=None, vertices=vertices))
+    return facets
+
+
+def cube_geometry(rotation, cx, cy, radius):
+    """Project the same solid used for drawing and face/edge/corner picking."""
+    inv = rotation.inverted()
+    def project(p):
+        p = inv @ p
+        return (cx + radius * p.x, cy + radius * p.y)
+    faces = []
+    light = Vector((-.45, -.6, 1)).normalized()
+    face_on = max(abs(v) for v in rotation @ Vector((0, 0, 1))) > .99999
+    for facet in cube_facets():
+        n = Vector(facet['normal'])
         if (inv @ n).z <= .00001:
             continue
-        u = Vector((1, 0, 0)) if n.x == 0 else Vector((0, 1, 0))
-        v = n.cross(u)
-        def project(p):
-            p = inv @ p
-            return (cx + radius * p.x, cy + radius * p.y)
+        if face_on and not facet['label']:
+            continue
+        poly = [project(p) for p in facet['vertices']]
         patches = []
-        cuts = (-1, -.64, .64, 1)
-        for i in range(3):
-            for j in range(3):
-                a, b, c, d = cuts[i], cuts[i + 1], cuts[j], cuts[j + 1]
-                poly = [project(n + u * x + v * y) for x, y in ((a, c), (b, c), (b, d), (a, d))]
-                target = n + u * (i - 1) + v * (j - 1)
-                patches.append((tuple(int(x) for x in target), poly))
-        poly = [project(n + u * x + v * y) for x, y in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-        faces.append(dict(normal=normal, label=label, poly=poly, patches=patches,
-                          centre=project(n), right=project(n + u), up=project(n + v),
-                          light=.64 + .28 * (inv @ n).z))
+        if facet['label']:
+            u, v = _face_axes(n)
+            extent = 1 if face_on else .9
+            if face_on:
+                poly = [project(n + u * x + v * y) for x, y in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            cuts = (-extent, -.64, .64, extent)
+            for i in range(3):
+                for j in range(3):
+                    a, b, c, d = cuts[i], cuts[i + 1], cuts[j], cuts[j + 1]
+                    patch = [project(n + u * x + v * y) for x, y in ((a, c), (b, c), (b, d), (a, d))]
+                    target = n + u * (i - 1) + v * (j - 1)
+                    patches.append((tuple(int(x) for x in target), patch))
+        else:
+            patches.append((tuple(int(x) for x in n), poly))
+        faces.append(dict(normal=facet['normal'], label=facet['label'], poly=poly, patches=patches,
+                          vertices=facet['vertices'], light=.62 + .23 * max(0, n.normalized().dot(light))))
     return faces
 
 
 def _inside(poly, x, y):
+    if abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(poly, poly[1:] + poly[:1]))) < .001:
+        return False
     signs = []
     for a, b in zip(poly, poly[1:] + poly[:1]):
         signs.append((b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]))
@@ -122,7 +182,7 @@ def layout(context):
         if reg.type in {'HEADER', 'TOOL_HEADER'} and reg.height > 1:
             if region.y + region.height >= reg.y + reg.height - 2 and reg.y > region.y + region.height / 2:
                 top -= reg.height
-    return right - 2 * r - 12 * scale, top - 2 * r - 15 * scale, r
+    return right - 2.8 * r - 8 * scale, top - 2.8 * r - 8 * scale, r
 
 
 def geometry(context):
@@ -137,12 +197,12 @@ def _face_on(context):
 
 def _controls(context):
     cx, cy, r = layout(context)
-    controls = [('HOME', cx - 1.6 * r, cy + 1.65 * r)]
+    controls = [('HOME', cx - 2.5 * r, cy + 2.15 * r)]
     if _face_on(context):
         controls += [('UP', cx, cy + 1.32 * r), ('DOWN', cx, cy - 1.32 * r),
                      ('LEFT', cx - 1.32 * r, cy), ('RIGHT', cx + 1.32 * r, cy),
-                     ('ROLL_LEFT', cx - .55 * r, cy + 1.75 * r),
-                     ('ROLL_RIGHT', cx + .55 * r, cy + 1.75 * r)]
+                     ('ROLL_LEFT', cx + 1.05 * r, cy + 2.32 * r),
+                     ('ROLL_RIGHT', cx + 2.32 * r, cy + 1.05 * r)]
     return controls
 
 
@@ -150,30 +210,53 @@ def hit(context, x, y):
     if not visible(context):
         return None
     cx, cy, r = layout(context)
+    if _face_on(context) and 2.25 * r < math.hypot(x - cx, y - cy) < 2.85 * r:
+        angle = math.degrees(math.atan2(y - cy, x - cx))
+        if 50 < angle < 85:
+            return 'ROLL_LEFT'
+        if 5 < angle < 40:
+            return 'ROLL_RIGHT'
     for name, px, py in _controls(context):
         if abs(x - px) < .25 * r and abs(y - py) < .25 * r:
             return name
     target = pick(geometry(context), x, y)
     if target is not None:
         return target
-    if any((x - px) ** 2 + (y - py) ** 2 < (.22 * r) ** 2 for px, py in _compass(context)):
+    q = _basis(context.scene).inverted() @ context.region_data.view_rotation
+    if any(_inside(poly, x, y) for poly in compass_geometry(q, cx, cy, r)):
+        return 'COMPASS'
+    # At a side elevation the ground plane is edge-on. Keep the visible line
+    # usable after mouse coordinates are rounded to physical pixels.
+    if any((x - px) ** 2 + (y - py) ** 2 < max(2, .1 * r) ** 2 for px, py in _compass(context)):
         return 'COMPASS'
     return None
 
 
+def compass_geometry(rotation, cx, cy, radius):
+    inv = rotation.inverted()
+    def point(a, r):
+        p = inv @ Vector((r * math.sin(a), r * math.cos(a), -1.18))
+        return cx + radius * p.x, cy + radius * p.y
+    return [[point(a, r) for a, r in ((i * math.tau / 96, 1.78),
+                                     (i * math.tau / 96, 2.15),
+                                     ((i + 1) * math.tau / 96, 2.15),
+                                     ((i + 1) * math.tau / 96, 1.78))] for i in range(96)]
+
+
 def _compass(context):
     cx, cy, r = layout(context)
-    q = context.region_data.view_rotation.inverted() @ _basis(context.scene)
-    points = []
-    for i in range(65):
-        a = i * 2 * math.pi / 64
-        p = q @ Vector((1.65 * math.sin(a), 1.65 * math.cos(a), -1.65))
-        points.append((cx + r * p.x, cy + r * p.y))
-    return points
+    q = _basis(context.scene).inverted() @ context.region_data.view_rotation
+    return [(sum(x for x, y in poly) / 4, sum(y for x, y in poly) / 4)
+            for poly in compass_geometry(q, cx, cy, r)]
 
 
-def _poly(points, color, line=False):
-    global _shader
+def widget_opacity(active, inactive):
+    # Nathan wants some transparency even while using the cube.
+    return .8 if active else min(.7, int(inactive) / 100)
+
+
+def _poly(points, color, line=False, colors=None):
+    global _shader, _smooth_shader
     if _shader is None:
         _shader = gpu.shader.from_builtin('UNIFORM_COLOR')
     if line:
@@ -181,76 +264,199 @@ def _poly(points, color, line=False):
     else:
         coords = [p for i in range(1, len(points) - 1) for p in (points[0], points[i], points[i + 1])]
         kind = 'TRIS'
-    batch = batch_for_shader(_shader, kind, {'pos': coords})
-    _shader.bind()
-    _shader.uniform_float('color', color)
-    batch.draw(_shader)
+    if colors is not None:
+        if _smooth_shader is None:
+            _smooth_shader = gpu.shader.from_builtin('SMOOTH_COLOR')
+        shades = [c for i in range(1, len(points) - 1) for c in (colors[0], colors[i], colors[i + 1])]
+        batch = batch_for_shader(_smooth_shader, kind, {'pos': coords, 'color': shades})
+        _smooth_shader.bind()
+        batch.draw(_smooth_shader)
+    else:
+        batch = batch_for_shader(_shader, kind, {'pos': coords})
+        _shader.bind()
+        _shader.uniform_float('color', color)
+        batch.draw(_shader)
 
 
-def _text(text, x, y, size, color, angle=0):
-    blf.size(0, size)
-    blf.color(0, *color)
-    w, h = blf.dimensions(0, text)
-    blf.enable(0, blf.ROTATION)
-    blf.rotation(0, angle)
-    blf.position(0, x - .5 * w * math.cos(angle) + .5 * h * math.sin(angle),
-                 y - .5 * w * math.sin(angle) - .5 * h * math.cos(angle), 0)
-    blf.draw(0, text)
-    blf.disable(0, blf.ROTATION)
+def _texture_quad(texture, points, uv, color, sample_step=(0, 0)):
+    global _image_shader
+    if _image_shader is None:
+        interface = gpu.types.GPUStageInterfaceInfo('viewcube_uv')
+        interface.smooth('VEC2', 'uv')
+        info = gpu.types.GPUShaderCreateInfo()
+        info.push_constant('MAT4', 'ModelViewProjectionMatrix')
+        info.push_constant('VEC4', 'color')
+        info.push_constant('VEC2', 'sampleStep')
+        info.sampler(0, 'FLOAT_2D', 'image')
+        info.vertex_in(0, 'VEC2', 'pos')
+        info.vertex_in(1, 'VEC2', 'texCoord')
+        info.vertex_out(interface)
+        info.fragment_out(0, 'VEC4', 'fragColor')
+        info.vertex_source('void main() { uv = texCoord; gl_Position = ModelViewProjectionMatrix * vec4(pos, 0.0, 1.0); }')
+        info.fragment_source('''void main() {
+            vec4 pixel = vec4(0.0);
+            if (sampleStep.x == 0.0) { pixel = texture(image, uv); }
+            else {
+                for (int y = 0; y < 4; y++) {
+                    for (int x = 0; x < 4; x++) {
+                        pixel += texture(image, uv + (vec2(x, y) - 1.5) * sampleStep) / 16.0;
+                    }
+                }
+            }
+            if (sampleStep.x != 0.0 && pixel.a > 0.0) {
+                // The offscreen stores the widget's sRGB artwork. Composite in
+                // linear light, without changing the requested group opacity.
+                vec3 rgb = pixel.rgb / pixel.a;
+                rgb = mix(rgb / 12.92, pow((rgb + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), rgb));
+                fragColor = vec4(rgb * pixel.a * color.a, pixel.a * color.a);
+            }
+            else { fragColor = pixel * color; }
+        }''')
+        _image_shader = gpu.shader.create_from_info(info)
+    batch = batch_for_shader(_image_shader, 'TRIS',
+                             {'pos': points, 'texCoord': uv}, indices=((0, 1, 2), (0, 2, 3)))
+    _image_shader.bind()
+    _image_shader.uniform_sampler('image', texture)
+    _image_shader.uniform_float('color', color)
+    _image_shader.uniform_float('sampleStep', sample_step)
+    batch.draw(_image_shader)
+
+
+def _label(label, poly):
+    """Sample a bold, antialiased label atlas through the face's projected quad."""
+    global _atlas_image, _atlas_texture
+    if _atlas_texture is None:
+        _atlas_image = bpy.data.images.load(os.path.join(os.path.dirname(__file__), 'viewcube_labels.png'),
+                                            check_existing=False)
+        _atlas_image.colorspace_settings.name = 'Non-Color'
+        _atlas_texture = gpu.texture.from_image(_atlas_image)
+    i = LABELS.index(label)
+    x, y = i % 4 / 4, 1 - (i // 4 + 1) / 4
+    uv = ((x, y), (x + .25, y), (x + .25, y + .25), (x, y + .25))
+    _texture_quad(_atlas_texture, poly, uv, (.22, .24, .27, 1))
+
+
+def _roll_arrow(cx, cy, r, start, end, color):
+    # Both arrows follow the top-right of the compass, as in Max's face views.
+    steps = 24
+    angles = [start + (end - start) * i / steps for i in range(steps + 1)]
+    def point(a, radius):
+        return cx + radius * r * math.cos(a), cy + radius * r * math.sin(a)
+    for a, b in zip(angles, angles[1:]):
+        _poly([point(a, 2.48), point(a, 2.61), point(b, 2.61), point(b, 2.48)], color)
+    outline = (.48, .54, .63, 1)
+    for radius in (2.48, 2.61):
+        _poly([point(a, radius) for a in angles], outline, line=True)
+    a = end
+    sign = 1 if end > start else -1
+    head = [point(a + sign * .09, 2.545), point(a - sign * .08, 2.35), point(a - sign * .08, 2.74)]
+    _poly(head, color)
+    _poly(head + head[:1], outline, line=True)
+
+
+def _draw_art(context, current):
+    cx, cy, r = layout(context)
+    q = context.region_data.view_rotation.inverted() @ _basis(context.scene)
+    rotation = q.inverted()
+    for poly in compass_geometry(rotation, cx, cy, r):
+        _poly(poly, (.73, .77, .82, 1))
+    # Inner rim gives the broad, flat band the same recessed centre as Max.
+    inner = []
+    for i in range(97):
+        a = i * math.tau / 96
+        p = q @ Vector((1.78 * math.sin(a), 1.78 * math.cos(a), -1.18))
+        inner.append((cx + r * p.x, cy + r * p.y))
+    _poly(inner, (.43, .48, .55, 1), line=True)
+    for name, direction in (('N', (0, 1)), ('E', (1, 0)), ('S', (0, -1)), ('W', (-1, 0))):
+        centre = Vector((direction[0] * 1.965, direction[1] * 1.965, -1.18))
+        poly = []
+        for x, y in ((-.55, -.55), (.55, -.55), (.55, .55), (-.55, .55)):
+            p = q @ (centre + Vector((x, y, 0)))
+            poly.append((cx + r * p.x, cy + r * p.y))
+        _label(name, poly)
+    if not _face_on(context):
+        p = [q @ Vector(v) for v in ((-.1, 1.72, -1.18), (.1, 1.72, -1.18), (0, 1.52, -1.18))]
+        _poly([(cx + r * v.x, cy + r * v.y) for v in p], (.37, .43, .51, 1))
+    for face in geometry(context):
+        light = face['light']
+        shades = []
+        for v in face['vertices']:
+            shade = light + .025 * v.z
+            shades.append((shade * .98, shade, min(1, shade * 1.055), 1))
+        _poly(face['poly'], None, colors=shades)
+        if isinstance(current, tuple):
+            for target, patch in face['patches']:
+                if target == current:
+                    _poly(patch, (.12, .27, .45, 1))
+                    _poly(patch + patch[:1], (.97, .78, .16, 1), line=True)
+        _poly(face['poly'] + face['poly'][:1], (.35, .38, .42, 1), line=True)
+        if face['label'] and _prefs().viewcube_size != 'TINY':
+            _label(face['label'], face['poly'])
+    for name, x, y in _controls(context):
+        color = (.24, .59, .91, 1) if current == name else (.78, .81, .86, 1)
+        if name == 'HOME':
+            house = [(x - r * .16, y), (x - r * .16, y - r * .21),
+                     (x + r * .16, y - r * .21), (x + r * .16, y)]
+            roof = [(x - r * .26, y), (x, y + r * .26), (x + r * .26, y)]
+            for poly in (house, roof):
+                _poly(poly, color)
+                _poly(poly + poly[:1], (.45, .51, .60, 1), line=True)
+            _poly([(x - r * .04, y - r * .21), (x - r * .04, y + r * .02),
+                   (x + r * .04, y + r * .02), (x + r * .04, y - r * .21)], (.58, .64, .73, 1))
+        elif name.startswith('ROLL'):
+            start, end = ((math.radians(57), math.radians(78)) if name == 'ROLL_LEFT'
+                          else (math.radians(33), math.radians(12)))
+            _roll_arrow(cx, cy, r, start, end, color)
+        else:
+            dx, dy = {'UP': (0, -1), 'DOWN': (0, 1), 'LEFT': (1, 0), 'RIGHT': (-1, 0)}[name]
+            _poly([(x + dx * .13 * r, y + dy * .13 * r),
+                   (x - dx * .09 * r + dy * .14 * r, y - dy * .09 * r - dx * .14 * r),
+                   (x - dx * .09 * r - dy * .14 * r, y - dy * .09 * r + dx * .14 * r)], color)
 
 
 def _draw():
+    global _offscreen
     context = bpy.context
     if not visible(context):
         return
     cx, cy, r = layout(context)
     current = _hover[1] if _hover and _hover[0] == context.region.as_pointer() else None
-    alpha = 1.0 if current is not None else int(_prefs().viewcube_opacity) / 100
-    gpu.state.blend_set('ALPHA')
+    alpha = widget_opacity(current is not None, _prefs().viewcube_opacity)
+    # Supersample the complete widget. Apply opacity only once to the composited
+    # solid, so rear compass segments cannot bleed through the cube's faces.
+    size = int(math.ceil(7 * r * 4))
+    if _offscreen is None or _offscreen.width != size:
+        if _offscreen is not None:
+            _offscreen.free()
+        _offscreen = gpu.types.GPUOffScreen(size, size)
+    x0, x1, y0, y1 = cx - 3.5 * r, cx + 3.5 * r, cy - 3.5 * r, cy + 3.5 * r
+    viewport = gpu.state.viewport_get()
+    depth_test, depth_mask = gpu.state.depth_test_get(), gpu.state.depth_mask_get()
+    blend, line_width = gpu.state.blend_get(), gpu.state.line_width_get()
     try:
-        _poly(_compass(context), (.66, .67, .68, alpha), line=True)
-        q = context.region_data.view_rotation.inverted() @ _basis(context.scene)
-        for name, direction in (('N', (0, 1, -1.65)), ('E', (1, 0, -1.65)),
-                                ('S', (0, -1, -1.65)), ('W', (-1, 0, -1.65))):
-            p = q @ Vector((direction[0] * 1.85, direction[1] * 1.85, direction[2]))
-            _text(name, cx + r * p.x, cy + r * p.y, r * .27, (.8, .8, .8, alpha))
-        for face in geometry(context):
-            light = face['light']
-            _poly(face['poly'], (light, light, light, alpha))
-            if isinstance(current, tuple):
-                for target, patch in face['patches']:
-                    if target == current:
-                        _poly(patch, (.23, .57, .88, alpha))
-            _poly(face['poly'] + face['poly'][:1], (.28, .29, .30, alpha), line=True)
-            if _prefs().viewcube_size != 'TINY':
-                # Keep words legible on a foreshortened face, as on Max's cube.
-                x, y = face['centre']
-                dx = face['right'][0] - x
-                dy = face['right'][1] - y
-                angle = math.atan2(dy, dx)
-                if abs(angle) > math.pi / 2:
-                    angle += math.pi
-                size = min(r * .32, math.hypot(dx, dy) * .48)
-                _text(face['label'], x, y, max(5, size), (.18, .19, .20, alpha), angle)
-        for name, x, y in _controls(context):
-            color = (.24, .59, .91, alpha) if current == name else (.72, .73, .74, alpha)
-            if name == 'HOME':
-                _poly([(x - r * .18, y), (x - r * .18, y - r * .18),
-                       (x + r * .18, y - r * .18), (x + r * .18, y)], color)
-                _poly([(x - r * .27, y), (x, y + r * .23), (x + r * .27, y)], color)
-            elif name.startswith('ROLL'):
-                sign = -1 if name == 'ROLL_LEFT' else 1
-                points = [(x + .16 * r * math.cos(a), y + .16 * r * math.sin(a))
-                          for a in [i * math.pi / 12 for i in range(17)]]
-                _poly(points, color, line=True)
-                _poly([(x + sign * .24 * r, y + .12 * r), (x, y + .19 * r), (x + sign * .12 * r, y - .02 * r)], color)
-            else:
-                dx, dy = {'UP': (0, 1), 'DOWN': (0, -1), 'LEFT': (-1, 0), 'RIGHT': (1, 0)}[name]
-                _poly([(x + dx * .15 * r, y + dy * .15 * r),
-                       (x - dx * .1 * r + dy * .13 * r, y - dy * .1 * r - dx * .13 * r),
-                       (x - dx * .1 * r - dy * .13 * r, y - dy * .1 * r + dx * .13 * r)], color)
+        with _offscreen.bind():
+            gpu.state.depth_test_set('NONE')
+            gpu.state.depth_mask_set(False)
+            gpu.state.active_framebuffer_get().clear(color=(0, 0, 0, 0))
+            gpu.state.viewport_set(0, 0, size, size)
+            gpu.state.blend_set('ALPHA')
+            with gpu.matrix.push_pop(), gpu.matrix.push_pop_projection():
+                gpu.matrix.load_matrix(Matrix.Identity(4))
+                gpu.matrix.load_projection_matrix(Matrix(((2 / (x1 - x0), 0, 0, -(x1 + x0) / (x1 - x0)),
+                                                         (0, 2 / (y1 - y0), 0, -(y1 + y0) / (y1 - y0)),
+                                                         (0, 0, -1, 0), (0, 0, 0, 1))))
+                gpu.state.line_width_set(3.5)
+                _draw_art(context, current)
+        gpu.state.viewport_set(*viewport)
+        gpu.state.blend_set('ALPHA_PREMULT')
+        _texture_quad(_offscreen.texture_color, ((x0, y0), (x1, y0), (x1, y1), (x0, y1)),
+                      ((0, 0), (1, 0), (1, 1), (0, 1)), (alpha, alpha, alpha, alpha), (1 / size, 1 / size))
     finally:
-        gpu.state.blend_set('NONE')
+        gpu.state.viewport_set(*viewport)
+        gpu.state.line_width_set(line_width)
+        gpu.state.blend_set(blend)
+        gpu.state.depth_test_set(depth_test)
+        gpu.state.depth_mask_set(depth_mask)
 
 
 def transition(context, rotation, perspective='ORTHO', location=None, distance=None):
@@ -540,14 +746,17 @@ def register():
                 item = km.keymap_items.new('max.viewcube_mouse', event,
                                           'ANY' if event == 'MOUSEMOVE' else 'PRESS', head=True)
                 _keys.append((km, item))
-            item = km.keymap_items.new('max.viewcube_action', 'H', 'PRESS', ctrl=True, alt=True, head=True)
-            item.properties.action = 'TOGGLE'
-            _keys.append((km, item))
+            # Autodesk's 2026 keyboard shortcut tables, ViewCube group.
+            for key, action in (('V', 'TOGGLE'), ('H', 'HOME')):
+                item = km.keymap_items.new('max.viewcube_action', key, 'PRESS', ctrl=True, alt=True, head=True)
+                item.properties.action = action
+                _keys.append((km, item))
     bpy.app.timers.register(_maintain, first_interval=.1, persistent=True)
 
 
 def unregister():
     global _handle, _enabled, _hover, _menu_target, _shader
+    global _offscreen, _atlas_image, _atlas_texture, _image_shader, _smooth_shader
     _enabled = False
     if bpy.app.timers.is_registered(_maintain):
         bpy.app.timers.unregister(_maintain)
@@ -562,3 +771,12 @@ def unregister():
     _hover = None
     _menu_target = None
     _shader = None
+    if _offscreen is not None:
+        _offscreen.free()
+        _offscreen = None
+    _atlas_texture = None
+    if _atlas_image is not None:
+        bpy.data.images.remove(_atlas_image)
+        _atlas_image = None
+    _image_shader = None
+    _smooth_shader = None

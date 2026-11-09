@@ -152,13 +152,13 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 
 You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, labels, random colors) under **Preferences › Add-ons › NotuoDesk 3ds Maxxed**.
 
-**ViewCube.** Alt+Ctrl+H shows or hides it. Its preferences include Tiny, Small, Normal and Large sizes, inactive opacity, Snap to Closest View and Keep Scene Upright. View changes use Blender's Smooth View duration. Set Current View as Home saves the rotation, projection, centre and distance in the scene. Set Current View as Front changes the cube's reference orientation, and Reset Front restores the default. Camera views hide the cube. Turning it off restores Blender's navigation gizmo.
+**ViewCube.** Alt+Ctrl+V shows or hides it. Alt+Ctrl+H returns Home, as in Max 2026. The chamfered cube has lit faces, bold labels mapped onto the faces, and a broad blue-grey compass band. Face views have inward-pointing adjacent-view arrows and curved roll arrows at the top right. Hover targets turn blue with a yellow outline. It starts smaller than Max's default, at 80% opacity when active and 50% when inactive. Preferences and right-click **Configure** offer Tiny, Small, Normal and Large sizes, inactive opacity up to 70%, Snap to Closest View and Keep Scene Upright. View changes use Blender's Smooth View duration. Set Current View as Home saves the rotation, projection, centre and distance in the scene. Set Current View as Front changes the cube's reference orientation, and Reset Front restores the default. Camera views hide the cube. Turning it off restores Blender's navigation gizmo.
 
 ## Known differences from 3ds Max
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot or Ribbon.
-- The ViewCube uses Blender's font and a GPU-drawn approximation of Max's cube. It has no Fit-to-View on View Change or adjustable compass north. Its visibility shortcut is Alt+Ctrl+H, while Autodesk's 2026 help lists Alt+Ctrl+V. Small is the documented size default. Inactive opacity starts at 50%, since Autodesk's help does not state its default.
+- The ViewCube uses a raster label atlas and GPU artwork rather than Autodesk's assets. It has no Fit-to-View on View Change or adjustable compass north. Its smaller default size and permanent transparency are deliberate preferences, rather than Max's stock settings. Tiny is unlabeled, as in Max.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 

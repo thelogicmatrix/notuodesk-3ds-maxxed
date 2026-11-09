@@ -85,7 +85,8 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
     viewcube_size: EnumProperty(name="ViewCube Size", items=[(s, s.title(), "") for s in
                                 ("TINY", "SMALL", "NORMAL", "LARGE")], default="SMALL", update=viewcube.update)
     viewcube_opacity: EnumProperty(name="Inactive Opacity", items=[(str(n), f"{n}%", "") for n in
-                                   (0, 25, 50, 75, 100)], default="50", update=viewcube.update)
+                                   (0, 25, 50, 70)], default="50", update=viewcube.update,
+                                   description="Inactive opacity, below the fixed 80% active opacity")
     viewcube_snap: BoolProperty(name="Snap to Closest View", default=True)
     viewcube_upright: BoolProperty(name="Keep Scene Upright", default=True)
 
@@ -119,6 +120,7 @@ HOTKEY_CHEATSHEET = (
     ("Ctrl+Alt+MMB, Wheel", "Zoom"),
     ("Z / Ctrl+Shift+Z", "Zoom Extents Sel / All"),
     ("Alt+W", "Maximize viewport (quad)"),
+    ("Alt+Ctrl+V / H", "ViewCube visibility / Home"),
     ("T F L B K P U C", "Top Front Left Bottom Back Persp User Camera"),
     ("1 2 3 4 5 (6)", "Vertex Edge Border Poly Element (exit)"),
     ("H", "Select From Scene"),

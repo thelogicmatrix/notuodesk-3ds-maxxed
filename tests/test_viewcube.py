@@ -66,6 +66,7 @@ class ViewCubeTests(unittest.TestCase):
         self.assertEqual(viewcube.pick(geometry, 235, 200), (1, 0, 1))
         self.assertEqual(viewcube.pick(geometry, 235, 235), (1, 1, 1))
         self.assertIsNone(viewcube.pick(geometry, 100, 100))
+        self.assertFalse(viewcube._inside([(0, 10), (0, 10), (10, 10), (10, 10)], 5, 10))
 
     def test_orbit_from_top_preserves_yaw_and_upright_option(self):
         q = viewcube.orbit_rotation(Quaternion(), 12, -6, True)
@@ -76,6 +77,35 @@ class ViewCubeTests(unittest.TestCase):
         self.assertGreaterEqual((q @ Vector((0, 1, 0))).z, 0)
         q = viewcube.orbit_rotation(front, 0, 400, False)
         self.assertLess((q @ Vector((0, 1, 0))).z, 0)
+
+    def test_chamfer_has_six_faces_twelve_edges_and_eight_corners(self):
+        facets = viewcube.cube_facets()
+        self.assertEqual(len(facets), 26)
+        self.assertEqual(sorted(len(f['vertices']) for f in facets), [3] * 8 + [4] * 18)
+        self.assertEqual({f['normal'] for f in facets},
+                         {(x, y, z) for x in (-1, 0, 1) for y in (-1, 0, 1)
+                          for z in (-1, 0, 1) if (x, y, z) != (0, 0, 0)})
+        # A bevel must connect adjacent planes, rather than paint a stripe on a box.
+        edge = next(f for f in facets if f['normal'] == (1, 0, 1))
+        self.assertEqual({round(v.x + v.z, 4) for v in edge['vertices']}, {1.9})
+        self.assertTrue(all(len(set(round(v[i], 4) for v in edge['vertices'])) > 1 for i in (0, 2)))
+
+    def test_compass_band_surrounds_top_face_and_foreshortens_with_cube(self):
+        top = viewcube.compass_geometry(Quaternion(), 0, 0, 1)
+        self.assertEqual(len(top), 96)
+        radii = [(x * x + y * y) ** .5 for poly in top for x, y in poly]
+        self.assertAlmostEqual(min(radii), 1.78, places=5)
+        self.assertAlmostEqual(max(radii), 2.15, places=5)
+        tilted = viewcube.compass_geometry(viewcube.rotation_for((1, -1, 1)), 0, 0, 1)
+        def height(band):
+            ys = [p[1] for poly in band for p in poly]
+            return max(ys) - min(ys)
+        self.assertLess(height(tilted), height(top) * .7)
+
+    def test_widget_never_becomes_opaque(self):
+        self.assertAlmostEqual(viewcube.widget_opacity(True, 100), .8)
+        self.assertLess(viewcube.widget_opacity(False, 100), .8)
+        self.assertEqual(viewcube.widget_opacity(False, 0), 0)
 
 
 result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(ViewCubeTests))
