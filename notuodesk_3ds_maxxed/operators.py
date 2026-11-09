@@ -506,9 +506,9 @@ class MAX_OT_edit_poly(Operator):
             elif o == "SLICE_PLANE":
                 ops.bisect(how)
             elif o == "CUT":
-                ops.knife_tool(how)
+                return bpy.ops.max.cut("INVOKE_DEFAULT")
             elif o == "SWIFT_LOOP":
-                ops.loopcut_slide(how)
+                return bpy.ops.max.swift_loop("INVOKE_DEFAULT")
             elif o == "HIDE_SEL":
                 ops.hide(unselected=False)
             elif o == "HIDE_UNSEL":

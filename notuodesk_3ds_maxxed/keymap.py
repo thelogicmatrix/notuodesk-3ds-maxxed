@@ -21,6 +21,8 @@ VIEWPORT = [
     K("wm.tool_set_by_id", "W", name="builtin.move"),
     K("wm.tool_set_by_id", "E", name="builtin.rotate"),
     K("wm.tool_set_by_id", "R", name="builtin.scale"),
+    K("max.cut", "C", alt=True),
+    K("max.swift_loop", "ONE", alt=True),
     # Selection
     K("max.select_all", "A", ctrl=True, action="SELECT"),
     K("max.select_all", "D", ctrl=True, action="DESELECT"),
@@ -93,7 +95,6 @@ MESH = [
     K("view3d.edit_mesh_extrude_move_normal", "E", shift=True),
     K("max.edit_poly", "E", ctrl=True, shift=True, op="CONNECT"),
     K("max.edit_poly", "C", ctrl=True, shift=True, op="CHAMFER"),
-    K("mesh.knife_tool", "C", alt=True),
     K("max.edit_poly", "BACK_SPACE", op="REMOVE"),
     K("max.edit_poly", "BACK_SPACE", ctrl=True, op="REMOVE_WITH_VERTS"),
     K("max.edit_poly", "L", alt=True, op="LOOP"),
