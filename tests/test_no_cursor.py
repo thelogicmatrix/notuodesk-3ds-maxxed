@@ -16,7 +16,7 @@ class NoCursorTests(unittest.TestCase):
         cases += [("helper " + k, bpy.ops.max.create_helper, {"kind": k}) for k, _, _ in HELPERS]
         cases += [("light " + k, bpy.ops.max.create_light, {"kind": k}) for k, _, _ in LIGHTS if k != "SKYLIGHT"]
         cases += [("camera " + str(t), bpy.ops.max.create_camera, {"target": t}) for t in (False, True)]
-        cases += [("vray " + k, bpy.ops.max.vray_light, {"kind": k}) for k in ("PLANE", "DISC", "SPHERE", "DOME", "SUN", "IES")]
+        cases += [("vray " + k, bpy.ops.max.vray_light, {"kind": k}) for k in ("PLANE", "DISC", "SPHERE", "SUN")]
         cases += [("vray camera", bpy.ops.max.vray_camera, {}), ("vray plane", bpy.ops.max.vray_plane, {})]
         for label, op, props in cases:
             with self.subTest(label=label):
@@ -25,6 +25,12 @@ class NoCursorTests(unittest.TestCase):
                 self.assertEqual(tuple(bpy.context.active_object.location), (0, 0, 0), label)
                 self.assertEqual(tuple(bpy.context.scene.cursor.location), (8, 5, 3), label)
         print("CURSOR_TEST creation cases", len(cases), flush=True)
+        for kind in ("DOME", "IES"):
+            objects = set(bpy.data.objects)
+            self.assertEqual(bpy.ops.max.vray_light(kind=kind), {"CANCELLED"})
+            self.assertEqual(set(bpy.data.objects), objects)
+            self.assertEqual(tuple(bpy.context.scene.cursor.location), (8, 5, 3))
+        print("CURSOR_TEST missing environment and unavailable IES preserve objects and cursor", flush=True)
 
     def test_merged_creation_paths_ignore_displaced_cursor(self):
         from mathutils import Vector

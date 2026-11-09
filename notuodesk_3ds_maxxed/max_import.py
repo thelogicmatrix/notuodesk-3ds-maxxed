@@ -1,519 +1,510 @@
-"""Open / merge 3ds Max scenes.
-
-.max is a closed Autodesk format. Reading it is done by the open-source
-"Import Autodesk MAX (.max)" extension (io_scene_max, GPL, on
-extensions.blender.org), which reads meshes, UVs and Standard / Physical /
-V-Ray / Corona materials. This module wraps it the 3ds Max way:
-
-* File > Open 3ds Max File  -> opens into a new scene (nothing is overwritten)
-* File > Import > Merge 3ds Max File -> adds to the current scene
-* fixes scale from the scene's system units (the reader ignores units)
-* Max-style object colors, VRayMtl panel on imported materials, zoom extents
-* one-click install of the reader if it is missing
-* FBX from 3ds Max: full-fidelity route (animation, rigs, splines, cameras, lights)
-"""
-
-import os
+"""Scene interchange commands with a separate, versioned Max reader dependency."""
+import importlib
+from pathlib import Path
 import re
-import struct
 
+import addon_utils
 import bpy
-from bpy.props import BoolProperty, CollectionProperty, EnumProperty, FloatProperty, StringProperty
-from bpy.types import Operator
+from bpy.props import BoolProperty, CollectionProperty, EnumProperty, StringProperty
+from bpy.types import FileHandler, Operator, OperatorFileListElement
 from bpy_extras.io_utils import ImportHelper
 
-READER_ID = "io_scene_max"
-READER_URL = "https://extensions.blender.org/add-ons/io-scene-max/"
+from . import max_reader
 
-# 3ds Max system units -> meters
-UNITS = [
-    ("INCHES", "Inches", "3ds Max default in the US (1 unit = 1 inch)", 0.0254),
-    ("CENTIMETERS", "Centimeters", "Common metric 3ds Max setup", 0.01),
-    ("MILLIMETERS", "Millimeters", "Product / engineering scenes", 0.001),
-    ("FEET", "Feet", "", 0.3048),
-    ("METERS", "Meters", "", 1.0),
-    ("GENERIC", "Generic Units (1:1)", "Keep the raw numbers: 1 Max unit = 1 Blender meter", 1.0),
-]
-UNIT_SCALE = {k: s for k, _, _, s in UNITS}
-
-
-IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".tga", ".tif", ".tiff", ".bmp", ".exr", ".hdr", ".dds", ".psd", ".webp")
-
-
-def reader_available():
-    return "max" in dir(bpy.ops.import_scene)
+UNITS = (
+    ('INCHES', 'Inches', 'One source unit is one inch', .0254),
+    ('CENTIMETERS', 'Centimeters', 'One source unit is one centimeter', .01),
+    ('MILLIMETERS', 'Millimeters', 'One source unit is one millimeter', .001),
+    ('FEET', 'Feet', 'One source unit is one foot', .3048),
+    ('METERS', 'Meters', 'One source unit is one meter', 1.0),
+    ('GENERIC', 'Generic Units (1:1)', 'Keep raw source numbers', 1.0),
+)
+UNIT_SCALE = {key: scale for key, _label, _description, scale in UNITS}
+UNIT_ITEMS = [(key, label, description) for key, label, description, _scale in UNITS]
+REPLACE_ACTIONS = [('CANCEL', 'Cancel', 'Keep the current scene'),
+                   ('SAVE', 'Save', 'Save the current native .blend scene first'),
+                   ('DISCARD', "Don't Save", 'Replace without saving the current scene')]
 
 
-_PATH_SUFFIX = re.compile(r"^(.*?)_((?:[A-Za-z]:[\\/]|\\\\|/).+)$")
+def _reader_package():
+    cls = bpy.types.Operator.bl_rna_get_subclass_py('IMPORT_SCENE_OT_max')
+    if cls is not None:
+        return importlib.import_module(cls.__module__)
+    # Some separately packaged reader releases have a manifest instead of bl_info.
+    if importlib.util.find_spec('io_scene_max') is not None:
+        addon_utils.enable('io_scene_max', default_set=False)
+        cls = bpy.types.Operator.bl_rna_get_subclass_py('IMPORT_SCENE_OT_max')
+        if cls is not None:
+            return importlib.import_module(cls.__module__)
+    # Locate the separately installed legacy or extension package by its module name.
+    for module in addon_utils.modules():
+        if module.__name__.split('.')[-1] == 'io_scene_max':
+            addon_utils.enable(module.__name__, default_set=False)
+            cls = bpy.types.Operator.bl_rna_get_subclass_py('IMPORT_SCENE_OT_max')
+            if cls is not None:
+                return importlib.import_module(cls.__module__)
+    return None
 
 
-def _split_bitmap_name(name):
-    """The reader names materials '<max name>_<bitmap path stem>'. On macOS/Linux the
-    'stem' of a Windows path is the whole path. Return (max name, bitmap stem)."""
-    m = _PATH_SUFFIX.match(name)
-    if not m:
-        return name, None
-    stem = m.group(2).replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
-    return m.group(1), (stem or None)
+def require_reader():
+    package = _reader_package()
+    if package is None:
+        raise RuntimeError('Install the separate io_scene_max reader 1.9.2 to read .max files')
+    version = getattr(package, '__version__', None)
+    if version != '1.9.2':
+        raise RuntimeError(f'Unsupported .max reader {version!r}. This adapter supports io_scene_max 1.9.2')
+    required = {'filepath', 'scale_objects', 'object_filter', 'use_apply_matrix'}
+    if not required.issubset(bpy.ops.import_scene.max.get_rna_type().properties.keys()):
+        raise RuntimeError('Unsupported .max reader capabilities. Use io_scene_max 1.9.2')
+    return package
 
 
-def _max_display_name(name):
-    """'04___Default' -> '04 - Default' (how 3ds Max shows it)."""
-    if "___" in name:
-        return name.replace("___", " - ")
-    return name
+def _read_max(path, *, materials=True, textures=True, uvs=True, primitives=True):
+    flags = {'EMPTY', 'ARMATURE'}
+    flags.update(key for key, enabled in (('MATERIAL', materials), ('UV', uvs),
+                                         ('PRIMITIVE', primitives)) if enabled)
+    return bpy.ops.import_scene.max(filepath=str(path), scale_objects=1,
+                                    object_filter=flags, use_image_search=textures,
+                                    use_apply_matrix=True, axis_forward='Y', axis_up='Z')
 
 
-def _index_images(folders):
-    """{lowercase stem: path} for every image under the given folders."""
-    found = {}
+def _read_fbx(path, *, animation=True):
+    try:
+        bpy.ops.import_scene.fbx.get_rna_type()
+    except (AttributeError, RuntimeError, KeyError) as exc:
+        raise RuntimeError('FBX import is unavailable in this Blender installation') from exc
+    return bpy.ops.import_scene.fbx(filepath=str(path), use_anim=animation, anim_offset=0,
+                                    use_custom_normals=True, use_image_search=True)
+
+
+def _validate_file(path, extension):
+    path = Path(path)
+    if not path.is_file():
+        raise RuntimeError(f'File not found: {path}')
+    if path.suffix.lower() != extension:
+        raise RuntimeError(f'Choose a {extension} file: {path.name}')
+    return path
+
+
+def _stage(context, load, *, replace=False, before_commit=None):
+    """Commit links only after the reader and retained-data adapters succeed."""
+    target = context.scene
+    previous = {kind: set(getattr(bpy.data, kind)) for kind in
+                ('objects', 'collections', 'meshes', 'curves', 'materials', 'images', 'cameras', 'lights', 'actions')}
+    selected = tuple(context.selected_objects)
+    active = context.view_layer.objects.active
+    if before_commit:
+        before_commit()
+    staging = bpy.data.scenes.new('Maxxed import staging')
+    staging.unit_settings.system = target.unit_settings.system
+    staging.unit_settings.scale_length = target.unit_settings.scale_length
+    staging.max_system_units = target.max_system_units
+    staging.frame_start, staging.frame_end = target.frame_start, target.frame_end
+    window = context.window
+    old_window_scene = window.scene if window else None
+    committed = False
+    try:
+        if window:
+            window.scene = staging
+        with context.temp_override(scene=staging, view_layer=staging.view_layers[0], collection=staging.collection):
+            result = load(staging)
+            if not result or 'FINISHED' not in result:
+                raise RuntimeError('Import cancelled by the reader')
+        objects = tuple(staging.objects)
+        if not objects:
+            raise RuntimeError('The reader returned no supported scene objects')
+        if window:
+            window.scene = target
+        if replace:
+            # Unlink only this scene. Objects used by another scene remain intact.
+            for collection in tuple(target.collection.children):
+                target.collection.children.unlink(collection)
+            for obj in tuple(target.collection.objects):
+                target.collection.objects.unlink(obj)
+        for collection in tuple(staging.collection.children):
+            target.collection.children.link(collection)
+        for obj in tuple(staging.collection.objects):
+            target.collection.objects.link(obj)
+        target.max_system_units = staging.max_system_units
+        if replace:
+            target.frame_start, target.frame_end = staging.frame_start, staging.frame_end
+            target.camera = staging.camera or next((obj for obj in objects if obj.type == 'CAMERA'), None)
+        context.view_layer.update()
+        for obj in context.view_layer.objects:
+            obj.select_set(obj in objects)
+        context.view_layer.objects.active = next((o for o in objects if o.name in context.view_layer.objects), None)
+        committed = True
+        return objects
+    finally:
+        if window:
+            window.scene = old_window_scene
+        bpy.data.scenes.remove(staging)
+        if not committed:
+            # Remove only datablocks made during this attempt, never pre-existing data.
+            for kind, old in previous.items():
+                data = getattr(bpy.data, kind)
+                for block in set(data) - old:
+                    data.remove(block, do_unlink=True)
+            for obj in context.view_layer.objects:
+                obj.select_set(obj in selected)
+            context.view_layer.objects.active = active
+
+
+def import_paths(context, paths, *, replace=False, units='INCHES', materials=True,
+                 textures=True, uvs=True, primitives=True, before_commit=None):
+    require_reader()
+    paths = list(paths)
+    if not paths:
+        raise RuntimeError('Choose at least one .max file')
+    if replace and len(paths) != 1:
+        raise RuntimeError('Open accepts one .max file. Use Merge for multiple files')
+    report = dict(imported=[], errors=[], warnings=[])
+    for path in paths:
+        try:
+            path = _validate_file(path, '.max')
+            warnings = []
+            def load(scene):
+                old_materials = set(bpy.data.materials)
+                result = _read_max(path, materials=materials, textures=textures, uvs=uvs, primitives=primitives)
+                if 'FINISHED' not in result:
+                    return result
+                objects = tuple(scene.objects)
+                factor = UNIT_SCALE[units]
+                if units != 'GENERIC':
+                    length = scene.unit_settings.scale_length if scene.unit_settings.system != 'NONE' else 1
+                    factor /= length
+                max_reader.scale_roots(bpy.context, objects, factor)
+                max_reader.recover_smoothing(objects)
+                imported_materials = set(bpy.data.materials) - old_materials
+                max_reader.recover_materials(imported_materials)
+                if max_reader._reader_data() is None:
+                    warnings.append('Reader supplied no retained mesh or material records. Conversion may be incomplete')
+                missing = max_reader.missing_nodes(objects)
+                if missing:
+                    warnings.append(f'{len(missing)} source nodes were not imported: ' + ', '.join(missing))
+                if textures and materials:
+                    _linked, unresolved = relink_textures(imported_materials, [path.parent])
+                    if unresolved:
+                        warnings.append('Unresolved textures: ' + ', '.join(unresolved))
+                scene.max_system_units = units
+                return result
+            objects = _stage(context, load, replace=replace, before_commit=before_commit)
+            report['imported'].append((str(path), objects))
+            report['warnings'].extend(warnings)
+        except Exception as exc:
+            if replace:
+                raise
+            report['errors'].append(f'{path}: {exc}')
+    return report
+
+
+def import_fbx(context, filepath, *, replace=False, animation=True, before_commit=None):
+    path = _validate_file(filepath, '.fbx')
+    def load(scene):
+        result = _read_fbx(path, animation=animation)
+        if 'FINISHED' in result:
+            from .max_export import remember_fbx_units
+            remember_fbx_units(scene, str(path))
+        return result
+    return _stage(context, load, replace=replace, before_commit=before_commit)
+
+
+def _basename(value):
+    return re.split(r'[/\\]', str(value))[-1]
+
+
+def texture_index(folders):
+    index = {}
     for folder in folders:
-        if not folder or not os.path.isdir(folder):
-            continue
-        for root, _dirs, files in os.walk(folder):
-            for f in files:
-                stem, ext = os.path.splitext(f)
-                if ext.lower() in IMAGE_EXTS:
-                    found.setdefault(stem.lower(), os.path.join(root, f))
-    return found
+        root = Path(folder)
+        if root.is_dir():
+            for path in sorted(root.rglob('*')):
+                if path.is_file() and path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.tga', '.exr', '.hdr', '.dds'}:
+                    index.setdefault(path.name.casefold(), set()).add(str(path.resolve()))
+    return index
 
 
-def _material_has_image(mat):
-    return mat.use_nodes and any(n.type == "TEX_IMAGE" and n.image for n in mat.node_tree.nodes)
+def _find_image(index, name):
+    """Match exact filenames or stems, including Windows' numbered copy suffix."""
+    wanted = _basename(name).casefold()
+    exact, fallback = set(), set()
+    for key, values in index.items():
+        values = {values} if isinstance(values, (str, Path)) else set(values)
+        key = key.casefold()
+        stem = Path(key).stem
+        if key == wanted or (not Path(wanted).suffix and stem == wanted):
+            exact.update(values)
+        if (re.sub(r' \(\d+\)$', '', stem) == Path(wanted).stem
+                and (not Path(wanted).suffix or Path(wanted).suffix == Path(key).suffix)):
+            fallback.update(values)
+    choices = exact or fallback
+    return str(next(iter(choices))) if len(choices) == 1 else None
 
 
-def _find_image(index, stem):
-    path = index.get(stem.lower())
-    if path:
-        return path
-    # Only accept the known renamed-copy suffix, not unrelated fuzzy matches.
-    original = re.sub(r" \(\d+\)$", "", stem.lower())
-    return next((path for key, path in sorted(index.items())
-                 if re.sub(r" \(\d+\)$", "", key) == original), None)
-
-
-def _missing_images(mat):
-    if mat.use_nodes:
-        for node in mat.node_tree.nodes:
-            if node.type != "TEX_IMAGE" or not node.image or node.image.packed_file:
-                continue
-            image = node.image
-            if image.filepath and not os.path.isfile(bpy.path.abspath(image.filepath, library=image.library)):
-                yield image
+def _color_socket(material):
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    shader = next((node for node in nodes if node.type == 'BSDF_PRINCIPLED'), None)
+    if shader is None:
+        shader = nodes.new('ShaderNodeBsdfPrincipled')
+        output = next((node for node in nodes if node.type == 'OUTPUT_MATERIAL'), None)
+        output = output or nodes.new('ShaderNodeOutputMaterial')
+        material.node_tree.links.new(shader.outputs['BSDF'], output.inputs['Surface'])
+    return shader.inputs['Base Color']
 
 
 def relink_textures(materials, folders):
-    """Wire missing bitmaps into the materials' base color. Returns (linked, missing)."""
-    from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
-    index = _index_images(folders)
-    linked, missing = [], []
+    index = texture_index(folders)
+    linked, unresolved = [], []
     for mat in materials:
-        for image in _missing_images(mat):
-            stem = os.path.splitext(image.filepath.replace("\\", "/").rsplit("/", 1)[-1])[0]
-            path = _find_image(index, stem)
-            if path:
-                image.filepath = path
-                image.reload()
-                linked.append(stem)
-            else:
-                missing.append(stem)
-        stem = mat.get("max_bitmap")
-        if not stem or _material_has_image(mat):
-            continue
-        path = _find_image(index, stem)
-        if path is None:
-            missing.append(stem)
-            continue
-        img = bpy.data.images.load(path, check_existing=True)
-        shader = PrincipledBSDFWrapper(mat, is_readonly=False)
-        shader.base_color_texture.image = img
-        linked.append(stem)
-    return linked, sorted(set(missing))
-
-
-def _post_process(context, before_objs, before_mats, label, zoom=True, max_material_names=True):
-    """Max-style cleanup of whatever the import just created."""
-    from .create import random_color
-    new_objs = [o for o in context.scene.objects if o.name not in before_objs]
-    new_mats = [m for m in bpy.data.materials if m.name not in before_mats]
-    for ob in new_objs:
-        if ob.type in {"MESH", "CURVE", "FONT", "SURFACE", "META"} and tuple(ob.color) == (1.0, 1.0, 1.0, 1.0):
-            ob.color = random_color()
-            ob["max_keep_color"] = 1
-    for mat in new_mats:
-        if mat.use_nodes and any(n.type == "BSDF_PRINCIPLED" for n in mat.node_tree.nodes):
-            mat["max_vray"] = 1          # editable in Modify > Material with V-Ray names
-        if max_material_names:
-            base, stem = _split_bitmap_name(mat.name)
-            if stem:
-                mat["max_bitmap"] = stem
-            mat.name = _max_display_name(base)
-    for o in context.selected_objects:
-        o.select_set(False)
-    for ob in new_objs:
-        try:
-            ob.select_set(True)
-        except RuntimeError:
-            pass
-    if new_objs:
-        context.view_layer.objects.active = new_objs[0]
-    if zoom and new_objs:
-        from .operators import viewport_override
-        ov = viewport_override(context)
-        if ov:
+        image_nodes = [n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE'] if mat.node_tree else []
+        requests = [(node, _basename(node.image.filepath) or node.image.name) for node in image_nodes
+                    if node.image and node.image.source == 'FILE' and not node.image.packed_file
+                    and not Path(bpy.path.abspath(node.image.filepath)).is_file()]
+        bitmap = mat.get('max_bitmap')
+        if bitmap and not requests and not any(n.image for n in image_nodes):
+            requests.append((None, bitmap))
+        # Generated images with an imported bitmap identity can also represent missing files.
+        if bitmap and not requests:
+            requests.extend((n, bitmap) for n in image_nodes if n.image
+                            and not Path(bpy.path.abspath(n.image.filepath)).is_file())
+        for node, name in requests:
+            path = _find_image(index, name) or (_find_image(index, bitmap) if bitmap else None)
+            if path is None:
+                unresolved.append(str(bitmap or name))
+                continue
             try:
-                with context.temp_override(**ov):
-                    bpy.ops.view3d.view_selected(use_all_regions=True)
+                image = bpy.data.images.load(path, check_existing=True)
+                if node is None:
+                    socket = _color_socket(mat)
+                    node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                    mat.node_tree.links.new(node.outputs['Color'], socket)
+                node.image = image
+                linked.append(str(bitmap or name))
             except RuntimeError:
-                pass
-    return new_objs, new_mats
+                unresolved.append(str(bitmap or name))
+    return linked, unresolved
 
 
-def _report_textures(op, materials, folder):
-    linked, missing = relink_textures(materials, [folder])
-    if missing:
-        op.report({"WARNING"}, f"Missing External Files ({len(missing)}): {', '.join(missing)}. "
-                               "Use File > External Data > Relink 3ds Max Textures")
-    return linked, missing
+def _replacement_guard(operator):
+    def confirm():
+        if not bpy.data.is_dirty:
+            return
+        if operator.scene_action == 'CANCEL':
+            raise RuntimeError('Open cancelled. Choose Save or Don\'t Save to replace this scene')
+        if operator.scene_action == 'SAVE':
+            if not bpy.data.filepath:
+                raise RuntimeError('Save the current scene as a .blend file before Open')
+            if 'FINISHED' not in bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath):
+                raise RuntimeError('Scene save cancelled')
+    return confirm
 
 
-def _new_scene(context, name):
-    scene = bpy.data.scenes.new(name)
-    scene.unit_settings.system = context.scene.unit_settings.system
-    scene.unit_settings.scale_length = context.scene.unit_settings.scale_length
-    scene.max_system_units = context.scene.max_system_units
-    if context.scene.world:
-        scene.world = context.scene.world
-    context.window.scene = scene
-    return scene
-
-
-EXT_API = "https://extensions.blender.org/api/v1/extensions/"
-
-
-def _direct_install_reader():
-    """Fallback: download io_scene_max straight from extensions.blender.org, verify its
-    published SHA-256, and install it into the user repository."""
-    import hashlib
-    import json
-    import tempfile
-    import urllib.request
-    ua = {"User-Agent": "NotuoDesk-3ds-Maxxed"}
-    with urllib.request.urlopen(urllib.request.Request(EXT_API, headers=ua), timeout=30) as r:
-        data = json.loads(r.read().decode("utf-8"))
-    item = next((e for e in data.get("data", []) if e.get("id") == READER_ID), None)
-    if item is None:
-        raise RuntimeError("io_scene_max is not listed on extensions.blender.org")
-    with urllib.request.urlopen(urllib.request.Request(item["archive_url"], headers=ua), timeout=60) as r:
-        payload = r.read()
-    expected = (item.get("archive_hash") or "").split(":")[-1].lower()
-    if expected and hashlib.sha256(payload).hexdigest() != expected:
-        raise RuntimeError("downloaded file failed its checksum")
-    path = os.path.join(tempfile.mkdtemp(prefix="maxxed_reader_"), "io_scene_max.zip")
-    with open(path, "wb") as fh:
-        fh.write(payload)
-    bpy.ops.extensions.package_install_files(filepath=path, repo="user_default",
-                                             enable_on_install=True, overwrite=True)
-
-
-class MAX_OT_install_max_reader(Operator):
-    """Install the open-source .max reader (io_scene_max) from extensions.blender.org"""
-    bl_idname = "max.install_max_reader"
-    bl_label = "Install .max Reader"
-
-    def execute(self, context):
-        if not bpy.app.online_access:
-            self.report({"WARNING"}, "Turn on Preferences > System > Network > Allow Online Access, then try again")
-            try:
-                context.preferences.active_section = "SYSTEM"
-                bpy.ops.screen.userpref_show("INVOKE_DEFAULT")
-            except Exception:
-                pass
-            return {"CANCELLED"}
-        if context.window:
-            context.window.cursor_set("WAIT")
-        errors = []
-        repos = context.preferences.extensions.repos
-        idx = next((i for i, r in enumerate(repos)
-                    if r.enabled and "extensions.blender.org" in (r.remote_url or "")), -1)
-        if idx >= 0:
-            try:
-                # The package list (index.json) must be downloaded before installing from it;
-                # called without INVOKE these run to completion (blocking)
-                bpy.ops.extensions.repo_sync(repo_index=idx)
-                bpy.ops.extensions.package_install(repo_index=idx, pkg_id=READER_ID, enable_on_install=True)
-            except Exception as exc:
-                errors.append(str(exc).strip().splitlines()[-1])
-        if not reader_available():
-            try:
-                _direct_install_reader()
-            except Exception as exc:
-                errors.append(str(exc).strip().splitlines()[-1])
-        if context.window:
-            context.window.cursor_set("DEFAULT")
-        if reader_available():
-            self.report({"INFO"}, ".max reader installed: File > Open 3ds Max File is ready")
-            return {"FINISHED"}
-        bpy.ops.wm.url_open(url=READER_URL)
-        self.report({"ERROR"}, "Could not install the .max reader automatically "
-                               f"({'; '.join(errors) or 'unknown error'}). Its page is now open: "
-                               "click 'Get Add-on' there, or drag the downloaded .zip into Blender")
-        return {"CANCELLED"}
-
-
-class _MaxImportBase(ImportHelper):
-    filename_ext = ".max"
-    filter_glob: StringProperty(default="*.max", options={"HIDDEN"})
-    files: CollectionProperty(type=bpy.types.OperatorFileListElement, options={"HIDDEN", "SKIP_SAVE"})
-    directory: StringProperty(subtype="DIR_PATH", options={"HIDDEN", "SKIP_SAVE"})
-
-    units: EnumProperty(name="System Units", items=[(k, n, d) for k, n, d, _ in UNITS], default="INCHES",
-                        description="The System Unit Setup of the 3ds Max file (Customize > Units Setup in Max)")
-    textures: BoolProperty(name="Search for Textures", default=True,
-                           description="Look for bitmaps next to the .max file and in its subfolders")
-    materials: BoolProperty(name="Materials", default=True)
-    uvs: BoolProperty(name="Texture Coordinates", default=True)
-    primitives: BoolProperty(name="Primitives / Helpers", default=True)
-
-    def draw(self, context):
-        lay = self.layout
-        lay.use_property_split = True
-        lay.prop(self, "units")
-        lay.prop(self, "textures")
-        lay.prop(self, "materials")
-        lay.prop(self, "uvs")
-        lay.prop(self, "primitives")
-        if not reader_available():
-            box = lay.box()
-            box.label(text="The .max reader is not installed", icon="ERROR")
-            box.operator("max.install_max_reader", icon="IMPORT")
+class MAX_OT_install_max_reader(Operator, ImportHelper):
+    """Locate the independent reader, or install a reader ZIP chosen by the user"""
+    bl_idname = 'max.install_max_reader'
+    bl_label = 'Install .max Reader'
+    filename_ext = '.zip'
+    filter_glob: StringProperty(default='*.zip', options={'HIDDEN'})
 
     def invoke(self, context, event):
-        if not self.properties.is_property_set("units"):
-            self.units = context.scene.max_system_units
-        if self.filepath and os.path.isfile(self.filepath):   # drag & drop
-            return context.window_manager.invoke_props_dialog(self, width=320)
+        if _reader_package() is not None:
+            return self.execute(context)
         return ImportHelper.invoke(self, context, event)
 
-    def _paths(self):
-        if self.files and self.directory:
-            return [os.path.join(self.directory, f.name) for f in self.files if f.name.lower().endswith(".max")]
-        return [self.filepath]
-
-    def run(self, context, new_scene):
-        from . import max_reader
-        if not reader_available():
-            self.report({"ERROR"}, "Install the .max reader first (File > Import > Install .max Reader)")
-            bpy.ops.max.install_max_reader()
-            return {"CANCELLED"}
-        if context.mode != "OBJECT":
-            bpy.ops.object.mode_set(mode="OBJECT")
-        filters = {"EMPTY", "ARMATURE"}
-        if self.materials:
-            filters.add("MATERIAL")
-        if self.uvs:
-            filters.add("UV")
-        if self.primitives:
-            filters.add("PRIMITIVE")
-        total = 0
-        units = self.units if self.properties.is_property_set("units") else context.scene.max_system_units
-        for path in self._paths():
-            name = os.path.splitext(os.path.basename(path))[0]
-            if new_scene:
-                _new_scene(context, name)
-            before_o = {o.name for o in context.scene.objects}
-            before_m = {m.name for m in bpy.data.materials}
-            try:
-                result = bpy.ops.import_scene.max(
-                    filepath=path, scale_objects=1.0, use_image_search=self.textures,
-                    axis_forward="Y", axis_up="Z",
-                    object_filter=filters, use_collection=not new_scene, use_apply_matrix=True)
-            except (RuntimeError, TypeError) as exc:
-                self.report({"ERROR"}, f"{os.path.basename(path)}: {str(exc).splitlines()[-1]}")
-                continue
-            if "FINISHED" not in result:
-                self.report({"WARNING"}, f"{os.path.basename(path)} could not be read")
-                continue
-            try:
-                max_reader.recover_materials([m for m in bpy.data.materials if m.name not in before_m])
-            except (AttributeError, IndexError, TypeError, ValueError) as exc:
-                self.report({"WARNING"}, f"Source material names could not be recovered: {exc}")
-            objs = [o for o in context.scene.objects if o.name not in before_o]
-            meters = context.scene.unit_settings.scale_length if context.scene.unit_settings.system != "NONE" else 1.0
-            max_reader.scale_roots(context, objs, UNIT_SCALE[units] / meters)
-            try:
-                restored = max_reader.recover_smoothing(objs)
-                print(f"[3ds Maxxed] Recovered smoothing groups on {restored} meshes")
-                missing = max_reader.missing_nodes(objs)
-                if missing:
-                    self.report({"WARNING"}, f"{len(missing)} source nodes were not imported: {', '.join(missing[:8])}. "
-                                             "Use FBX from 3ds Max for unsupported objects")
-            except (AttributeError, IndexError, TypeError, ValueError, struct.error) as exc:
-                self.report({"WARNING"}, f"Smoothing groups could not be recovered: {exc}")
-            objs, mats = _post_process(context, before_o, before_m, name)
-            context.scene.max_system_units = units
-            _report_textures(self, mats, os.path.dirname(path))
-            total += len(objs)
-        if total == 0:
-            self.report({"WARNING"}, "Nothing was imported. For newer or compressed files, "
-                                     "save as FBX from 3ds Max (see tools/max_to_blender.ms)")
-            return {"CANCELLED"}
-        self.report({"INFO"}, f"Imported {total} objects")
-        return {"FINISHED"}
-
-
-class MAX_OT_load_bitmap(Operator, ImportHelper):
-    """Load a bitmap into the active material's Diffuse / Base Color (like a Max Bitmap map)"""
-    bl_idname = "max.load_bitmap"
-    bl_label = "Load Bitmap"
-    bl_options = {"REGISTER", "UNDO"}
-
-    filter_glob: StringProperty(default="*" + ";*".join(IMAGE_EXTS), options={"HIDDEN"})
-    apply_to_object: BoolProperty(name="All materials on this object that use the same bitmap", default=True)
-
-    @classmethod
-    def poll(cls, context):
-        ob = context.active_object
-        return ob is not None and ob.active_material is not None
-
     def execute(self, context):
-        from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
-        ob = context.active_object
-        mat = ob.active_material
-        mat.use_nodes = True
-        img = bpy.data.images.load(self.filepath, check_existing=True)
-        targets = [mat]
-        stem = mat.get("max_bitmap")
-        if self.apply_to_object and stem:
-            targets = [m for m in bpy.data.materials if m.get("max_bitmap") == stem]
-        for m in targets:
-            m.use_nodes = True
-            PrincipledBSDFWrapper(m, is_readonly=False).base_color_texture.image = img
-            m["max_bitmap"] = m.get("max_bitmap") or os.path.splitext(os.path.basename(self.filepath))[0]
-        self.report({"INFO"}, f"{img.name} -> {', '.join(m.name for m in targets)}")
-        return {"FINISHED"}
+        try:
+            if self.filepath:
+                _validate_file(self.filepath, '.zip')
+                bpy.ops.preferences.addon_install(filepath=self.filepath)
+            require_reader()
+        except Exception as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
+        self.report({'INFO'}, 'Separate io_scene_max 1.9.2 reader is ready')
+        return {'FINISHED'}
 
 
-class MAX_OT_relink_textures(Operator):
-    """Find missing 3ds Max bitmaps in a folder (searched recursively, any image format)"""
-    bl_idname = "max.relink_textures"
-    bl_label = "Relink 3ds Max Textures"
-    bl_options = {"REGISTER", "UNDO"}
+class _MaxFileOptions(ImportHelper):
+    filename_ext = '.max'
+    filter_glob: StringProperty(default='*.max', options={'HIDDEN'})
+    files: CollectionProperty(type=OperatorFileListElement)
+    directory: StringProperty(subtype='DIR_PATH')
+    units: EnumProperty(name='System Units', items=UNIT_ITEMS, default='INCHES')
+    textures: BoolProperty(name='Textures', default=True)
+    materials: BoolProperty(name='Materials', default=True)
+    uvs: BoolProperty(name='UV Maps', default=True)
+    primitives: BoolProperty(name='Primitives', default=True)
+    scene_action: EnumProperty(name='Save changes to current scene?', items=REPLACE_ACTIONS, default='CANCEL')
 
-    directory: StringProperty(subtype="DIR_PATH")
+    def draw(self, context):
+        self.layout.prop(self, 'units')
+        for name in ('materials', 'textures', 'uvs', 'primitives'):
+            self.layout.prop(self, name)
+        self.layout.label(text='Supported reader data only. Some Max materials and objects cannot be converted.')
+        if self.bl_idname == 'max.open_max' and bpy.data.is_dirty:
+            self.layout.label(text=Path(bpy.data.filepath).name or 'Untitled.blend')
+            self.layout.prop(self, 'scene_action', expand=True)
 
     def invoke(self, context, event):
-        context.window_manager.fileselect_add(self)
-        return {"RUNNING_MODAL"}
+        if not self.properties.is_property_set('units'):
+            self.units = context.scene.max_system_units
+        return ImportHelper.invoke(self, context, event)
+
+    def run(self, context, replace):
+        paths = [Path(self.directory)/item.name for item in self.files] or ([Path(self.filepath)] if self.filepath else [])
+        try:
+            report = import_paths(context, paths, replace=replace, units=self.units,
+                                  materials=self.materials, textures=self.textures, uvs=self.uvs,
+                                  primitives=self.primitives,
+                                  before_commit=_replacement_guard(self) if replace else None)
+        except Exception as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
+        for warning in report['errors'] + report['warnings']:
+            self.report({'WARNING'}, warning)
+        self.report({'INFO'}, f"Imported {len(report['imported'])} file(s), {len(report['errors'])} failed")
+        return {'FINISHED'} if report['imported'] else {'CANCELLED'}
+
+
+class MAX_OT_open_max(Operator, _MaxFileOptions):
+    """Open a supported .max scene after saving or discarding current changes"""
+    bl_idname = 'max.open_max'
+    bl_label = 'Open 3ds Max File'
+    bl_options = {'UNDO'}
 
     def execute(self, context):
-        mats = [m for m in bpy.data.materials if m.get("max_bitmap") or any(_missing_images(m))]
-        if not mats:
-            self.report({"INFO"}, "No missing image files or 3ds Max bitmap references in this file")
-            return {"CANCELLED"}
-        linked, missing = relink_textures(mats, [self.directory])
-        msg = f"Relinked {len(linked)} texture(s)"
-        if missing:
-            msg += f"; still missing: {', '.join(missing)}"
-        self.report({"WARNING" if missing else "INFO"}, msg)
-        return {"FINISHED"}
+        return self.run(context, True)
 
 
-class MAX_OT_open_max(Operator, _MaxImportBase):
-    """Open a 3ds Max scene (.max) in a new scene"""
-    bl_idname = "max.open_max"
-    bl_label = "Open 3ds Max File"
-    bl_options = {"REGISTER", "UNDO"}
+class MAX_OT_merge_max(Operator, _MaxFileOptions):
+    """Merge supported .max objects into the current scene"""
+    bl_idname = 'max.merge_max'
+    bl_label = 'Merge 3ds Max File'
+    bl_options = {'UNDO'}
 
     def execute(self, context):
-        return self.run(context, new_scene=True)
-
-
-class MAX_OT_merge_max(Operator, _MaxImportBase):
-    """Merge objects from a 3ds Max scene (.max) into the current scene"""
-    bl_idname = "max.merge_max"
-    bl_label = "Merge 3ds Max File"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        return self.run(context, new_scene=False)
+        return self.run(context, False)
 
 
 class MAX_OT_import_max_fbx(Operator, ImportHelper):
-    """Import an FBX exported from 3ds Max with Max-friendly settings
-    (animation, rigs, cameras, lights, TurboSmooth as subdivision)"""
-    bl_idname = "max.import_max_fbx"
-    bl_label = "Import FBX from 3ds Max"
-    bl_options = {"REGISTER", "UNDO"}
+    """Import FBX interchange data with optional animation"""
+    bl_idname = 'max.import_max_fbx'
+    bl_label = 'Import FBX from 3ds Max'
+    bl_options = {'UNDO'}
+    filename_ext = '.fbx'
+    filter_glob: StringProperty(default='*.fbx', options={'HIDDEN'})
+    new_scene: BoolProperty(name='New Scene', default=False)
+    animation: BoolProperty(name='Animation', default=True)
+    scene_action: EnumProperty(name='Save changes to current scene?', items=REPLACE_ACTIONS, default='CANCEL')
 
-    filename_ext = ".fbx"
-    filter_glob: StringProperty(default="*.fbx", options={"HIDDEN"})
-    new_scene: BoolProperty(name="Open as New Scene", default=False)
-    animation: BoolProperty(name="Animation", default=True)
+    def draw(self, context):
+        self.layout.prop(self, 'animation')
+        self.layout.prop(self, 'new_scene')
+        if self.new_scene and bpy.data.is_dirty:
+            self.layout.prop(self, 'scene_action', expand=True)
 
     def execute(self, context):
-        if context.mode != "OBJECT":
-            bpy.ops.object.mode_set(mode="OBJECT")
-        name = os.path.splitext(os.path.basename(self.filepath))[0]
-        if self.new_scene:
-            _new_scene(context, name)
-        before_o = {o.name for o in context.scene.objects}
-        before_m = {m.name for m in bpy.data.materials}
         try:
-            bpy.ops.import_scene.fbx(filepath=self.filepath, use_custom_normals=True, use_image_search=True,
-                                     use_anim=self.animation, anim_offset=0.0, use_subsurf=True,
-                                     use_manual_orientation=False,
-                                     automatic_bone_orientation=True, use_custom_props=True)
-        except RuntimeError as exc:
-            self.report({"ERROR"}, str(exc).splitlines()[-1])
-            return {"CANCELLED"}
-        objs, mats = _post_process(context, before_o, before_m, name, max_material_names=False)
-        from .max_export import remember_fbx_units
-        remember_fbx_units(context.scene, self.filepath)
-        self.report({"INFO"}, f"Imported {len(objs)} objects from {os.path.basename(self.filepath)}")
-        return {"FINISHED"}
+            import_fbx(context, self.filepath, replace=self.new_scene, animation=self.animation,
+                       before_commit=_replacement_guard(self) if self.new_scene else None)
+        except Exception as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
+        return {'FINISHED'}
 
 
-class MAX_FH_max(bpy.types.FileHandler):
-    """Drag a .max file onto Blender to open it the 3ds Maxxed way"""
-    bl_idname = "MAX_FH_max"
-    bl_label = "3ds Maxxed: Merge 3ds Max File"
-    bl_import_operator = "max.merge_max"
-    bl_file_extensions = ".max"
+class MAX_OT_load_bitmap(Operator, ImportHelper):
+    """Load an image and optionally assign it to the active object's material"""
+    bl_idname = 'max.load_bitmap'
+    bl_label = 'Load Bitmap'
+    bl_options = {'UNDO'}
+    filter_glob: StringProperty(default='*.png;*.jpg;*.jpeg;*.tif;*.tiff;*.bmp;*.tga;*.exr;*.hdr;*.dds', options={'HIDDEN'})
+    apply_to_object: BoolProperty(name='Apply to Object', default=True)
+
+    def execute(self, context):
+        try:
+            if not Path(self.filepath).is_file():
+                raise RuntimeError('Bitmap file not found')
+            obj = context.object
+            if self.apply_to_object and (obj is None or not hasattr(obj.data, 'materials')):
+                raise RuntimeError('Select an object that supports materials')
+            image = bpy.data.images.load(self.filepath, check_existing=True)
+            mat = obj.active_material if self.apply_to_object else None
+            if mat is None:
+                mat = bpy.data.materials.new(Path(self.filepath).stem)
+                if self.apply_to_object:
+                    if obj.material_slots:
+                        obj.material_slots[obj.active_material_index].material = mat
+                    else:
+                        obj.data.materials.append(mat)
+            socket = _color_socket(mat)
+            node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+            node.image = image
+            mat.node_tree.links.new(node.outputs['Color'], socket)
+            mat['max_bitmap'] = Path(self.filepath).name
+        except Exception as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
+        return {'FINISHED'}
+
+
+class MAX_OT_relink_textures(Operator):
+    """Find missing bitmaps by exact filename in a folder and its subfolders"""
+    bl_idname = 'max.relink_textures'
+    bl_label = 'Relink 3ds Max Textures'
+    bl_options = {'UNDO'}
+    directory: StringProperty(name='Search Folder', subtype='DIR_PATH')
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        if not Path(self.directory).is_dir():
+            self.report({'WARNING'}, 'Choose an existing texture folder')
+            return {'CANCELLED'}
+        linked, missing = relink_textures(bpy.data.materials, [self.directory])
+        self.report({'WARNING'} if missing else {'INFO'},
+                    f'Relinked {len(linked)} texture(s), {len(missing)} unresolved' +
+                    (': ' + ', '.join(missing) if missing else ''))
+        return {'FINISHED'}
+
+
+class MAX_FH_max(FileHandler):
+    bl_idname = 'MAX_FH_max'
+    bl_label = '3ds Maxxed: Merge 3ds Max File'
+    bl_import_operator = 'max.merge_max'
+    bl_file_extensions = '.max'
 
     @classmethod
     def poll_drop(cls, context):
-        return context.area is not None and context.area.type in {"VIEW_3D", "OUTLINER"}
+        return context.area is not None and context.area.type == 'VIEW_3D'
 
 
 def menu_import(self, context):
-    lay = self.layout
-    lay.separator()
-    lay.operator("max.merge_max", text="Merge 3ds Max File (.max)")
-    lay.operator("max.import_max_fbx", text="FBX from 3ds Max (.fbx)")
-    if not reader_available():
-        lay.operator("max.install_max_reader", text="Install .max Reader...", icon="IMPORT")
+    self.layout.operator('max.open_max', text='Open 3ds Max (.max)...')
+    self.layout.operator('max.merge_max', text='Merge 3ds Max (.max)...')
+    self.layout.operator('max.import_max_fbx', text='3ds Max Interchange (FBX)...')
 
 
-def menu_file(self, context):
-    self.layout.operator("max.open_max", text="Open 3ds Max File...", icon="FILE_FOLDER")
-
-
-classes = (MAX_OT_install_max_reader, MAX_OT_open_max, MAX_OT_merge_max, MAX_OT_import_max_fbx,
-           MAX_OT_relink_textures, MAX_OT_load_bitmap, MAX_FH_max)
-
-
-def menu_external(self, context):
-    self.layout.operator("max.relink_textures", text="Relink 3ds Max Textures...")
+_menus_installed = False
 
 
 def register_menus():
-    bpy.types.TOPBAR_MT_file_import.append(menu_import)
-    bpy.types.TOPBAR_MT_file.prepend(menu_file)
-    bpy.types.TOPBAR_MT_file_external_data.append(menu_external)
+    """Transitional native host hook. The curated File host may call menu_import directly."""
+    global _menus_installed
+    if not _menus_installed:
+        bpy.types.TOPBAR_MT_file_import.append(menu_import)
+        _menus_installed = True
 
 
 def unregister_menus():
-    bpy.types.TOPBAR_MT_file_import.remove(menu_import)
-    bpy.types.TOPBAR_MT_file.remove(menu_file)
-    bpy.types.TOPBAR_MT_file_external_data.remove(menu_external)
+    global _menus_installed
+    if _menus_installed:
+        bpy.types.TOPBAR_MT_file_import.remove(menu_import)
+        _menus_installed = False
+
+
+classes = (MAX_OT_install_max_reader, MAX_OT_load_bitmap, MAX_OT_relink_textures,
+           MAX_OT_open_max, MAX_OT_merge_max, MAX_OT_import_max_fbx, MAX_FH_max)
