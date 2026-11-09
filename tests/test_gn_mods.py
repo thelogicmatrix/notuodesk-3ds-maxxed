@@ -73,15 +73,65 @@ class DeformerTests(unittest.TestCase):
         pts, _, _ = evaluated(self.ob)
         self.assertGreater(max(p[0] for p in pts), 1)
 
-    def test_slice_inserts_plane_vertices_and_removes_lower_side(self):
+    def test_slice_saved_fraction_and_remove_side_meanings(self):
+        # Local bounds [2, 10] deliberately differ from a centered unit cube.
+        for vertex in self.ob.data.vertices:
+            vertex.co.z = 6 + 4 * vertex.co.z
+        self.ob.scale = (2, .5, 3)
+        self.ob.rotation_euler.y = .4
         mod = self.gn.add(self.ob, 'Slice')
-        self.gn.set_input(mod, 'Slice Height', 0)
-        pts, faces, _ = evaluated(self.ob)
-        self.assertTrue(any(abs(p[2]) < 1e-5 for p in pts))
-        self.assertGreater(len(faces), 6)
-        self.gn.set_input(mod, 'Remove Bottom', True)
+        for fraction, plane in ((.25, 4.), (.5, 6.), (.75, 8.)):
+            for remove, expected in ((False, (2., plane)), (True, (plane, 10.))):
+                with self.subTest(fraction=fraction, remove_bottom=remove):
+                    self.gn.set_input(mod, 'Slice Height', fraction)
+                    self.gn.set_input(mod, 'Remove Bottom', remove)
+                    pts, faces, _ = evaluated(self.ob)
+                    self.assertTrue(pts)
+                    self.assertTrue(faces)
+                    self.assertAlmostEqual(min(p[2] for p in pts), expected[0], places=4)
+                    self.assertAlmostEqual(max(p[2] for p in pts), expected[1], places=4)
+                    self.assertTrue(any(abs(p[2] - plane) < 1e-4 for p in pts))
+        name = self.ob.name
+        filepath = str(Path(os.environ['MAXXED_OUT']) / 'w11-slice-fraction.blend')
+        bpy.ops.wm.save_as_mainfile(filepath=filepath)
+        bpy.ops.wm.open_mainfile(filepath=filepath)
+        self.ob = bpy.data.objects[name]
+        mod = self.ob.modifiers[0]
+        self.assertAlmostEqual(self.gn.value(mod, 'Slice Height'), .75)
+        self.assertTrue(self.gn.value(mod, 'Remove Bottom'))
         pts, _, _ = evaluated(self.ob)
-        self.assertGreaterEqual(min(p[2] for p in pts), -1e-5)
+        self.assertAlmostEqual(min(p[2] for p in pts), 8., places=4)
+        self.assertAlmostEqual(max(p[2] for p in pts), 10., places=4)
+
+    def test_continuous_saved_inputs_keep_float_sockets_and_fractional_seeds(self):
+        for kind, name in (('Melt', 'Solidity'), ('Melt', 'Seed'), ('Noise', 'Seed')):
+            with self.subTest(kind=kind, name=name):
+                self.ob.modifiers.clear()
+                mod = self.gn.add(self.ob, kind)
+                ident = next(i for i, n in self.gn.inputs(mod) if n == name)
+                socket = next(s for s in mod.node_group.interface.items_tree if s.identifier == ident)
+                self.assertEqual(socket.socket_type, 'NodeSocketFloat')
+                self.gn.set_input(mod, name, .375)
+                owner, path = self.gn.input_ref(mod, ident)
+                owner.keyframe_insert(data_path=path, frame=1)
+                self.gn.set_input(mod, name, .625)
+                owner.keyframe_insert(data_path=path, frame=11)
+                bpy.context.scene.frame_set(6)
+                self.assertAlmostEqual(self.gn.value(mod, name), .5)
+                bpy.context.scene.frame_set(1)
+                self.assertAlmostEqual(self.gn.value(mod, name), .375)
+                self.ob.animation_data_clear()
+                filepath = str(Path(os.environ['MAXXED_OUT']) / 'w11-float-inputs.blend')
+                ob_name = self.ob.name
+                bpy.ops.wm.save_as_mainfile(filepath=filepath)
+                bpy.ops.wm.open_mainfile(filepath=filepath)
+                self.ob = bpy.data.objects[ob_name]
+                mod = self.ob.modifiers[0]
+                self.assertAlmostEqual(self.gn.value(mod, name), .375)
+                if name == 'Seed':
+                    before = evaluated(self.ob)[0]
+                    self.gn.set_input(mod, name, .625)
+                    self.assertNotEqual(before, evaluated(self.ob)[0])
 
     def test_saved_named_inputs_and_animation(self):
         mod = self.gn.add(self.ob, 'Melt')

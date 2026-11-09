@@ -128,12 +128,12 @@ def value(modifier, name, default=None):
 
 PARAMETERS = {
     'Melt': (('Amount', 'FLOAT', .5), ('% of Melt Spread', 'FLOAT', .19),
-             ('Solidity', 'INT', 2), ('Irregularity', 'FLOAT', .35),
-             ('Drip Size', 'FLOAT', 1.), ('Seed', 'INT', 0), ('Flip Axis', 'BOOL', False)),
+             ('Solidity', 'FLOAT', 2.), ('Irregularity', 'FLOAT', .35),
+             ('Drip Size', 'FLOAT', 1.), ('Seed', 'FLOAT', 0.), ('Flip Axis', 'BOOL', False)),
     'Skew': (('Amount', 'FLOAT', .5), ('Direction', 'FLOAT', 0.)),
     'Squeeze': (('Axial Bulge', 'FLOAT', .5), ('Curve', 'FLOAT', 2.), ('Radial Squeeze', 'FLOAT', 0.)),
     'Slice': (('Slice Height', 'FLOAT', .5), ('Remove Bottom', 'BOOL', False)),
-    'Noise': (('Seed', 'INT', 0), ('Scale', 'FLOAT', 1.), ('Strength X', 'FLOAT', 0.),
+    'Noise': (('Seed', 'FLOAT', 0.), ('Scale', 'FLOAT', 1.), ('Strength X', 'FLOAT', 0.),
               ('Strength Y', 'FLOAT', 0.), ('Strength Z', 'FLOAT', .3), ('Fractal Detail', 'FLOAT', 2.)),
     'Push': (('Push Value', 'FLOAT', .1),),
     'Spherify': (('Percent', 'FLOAT', 1.),),
@@ -176,7 +176,7 @@ def _slice(g, low, high, span):
     lx, ly, lz = g.xyz(low)
     hx, hy, hz = g.xyz(high)
     sx, sy, sz = g.xyz(span)
-    height = g.g('Slice Height')
+    height = g.m('ADD', lz, g.m('MULTIPLY', sz, g.g('Slice Height')))
     margin = g.m('ADD', g.vm('LENGTH', span, output=1), 1)
     top = g.m('ADD', hz, margin)
     bottom = g.m('SUBTRACT', lz, margin)
@@ -197,13 +197,10 @@ def _slice(g, low, high, span):
         g.links.new(g.g('Geometry'), boolean.inputs[1])
         g.links.new(move.outputs['Geometry'], boolean.inputs[1])
         halves.append(boolean.outputs['Mesh'])
-    join = g.nodes.new('GeometryNodeJoinGeometry')
-    for half in halves:
-        g.links.new(half, join.inputs['Geometry'])
     choice = g.nodes.new('GeometryNodeSwitch')
     choice.input_type = 'GEOMETRY'
     g._set(choice, 'Switch', g.g('Remove Bottom'))
-    g._set(choice, 'False', join.outputs['Geometry'])
+    g._set(choice, 'False', halves[1])
     g._set(choice, 'True', halves[0])
     return choice.outputs['Output']
 

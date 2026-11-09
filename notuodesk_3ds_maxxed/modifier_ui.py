@@ -1,10 +1,12 @@
 """Supported Max modifier parameters. The wave-2 host owns panel registration."""
 import bpy
+import math
 from bpy.props import EnumProperty, FloatProperty, IntProperty, PointerProperty
 from . import ffd, gn_mods, max_widgets as w, turbosmooth
 
 _targets = {}
 _installations = {}
+_SOLIDITY_VALUES = (2., .5, .4, .1)
 
 CATALOGUE = (
     ('BEND', 'Bend', 'Bend angle and axis using simple deformation'),
@@ -28,7 +30,7 @@ LIMITS = {
     'BOOLEAN': 'Exact mesh operations against one object. Material transfer follows Blender.',
     'UVW_MAP': 'Planar projector and existing UV channel. Box, spherical and cylindrical mapping are unavailable.',
     'Melt': 'Local Z collapse with radial spread. Material presets shape the falloff, not a physical simulation.',
-    'Slice': 'Plane intersections on solid meshes. Open and nonmanifold meshes need separate acceptance.',
+    'Slice': 'Capped plane cut on solid meshes. Height is a local Z bounds fraction. Open, nonmanifold and uncapped cuts are unsupported.',
     'Noise': 'Spatial noise with a repeatable seed. Fractal Detail is the saved Maxxed input.',
     'FFD': 'Lattice interpolation equivalents. Conform uses nearest-face normals.',
     'TURBOSMOOTH': 'Catmull-Clark refinement. Creases preserve material and smoothing-group boundaries.',
@@ -98,7 +100,8 @@ class MaxModifierParameters(bpy.types.PropertyGroup):
     shell_outer: FloatProperty(name='Outer Amount', min=0, unit='LENGTH',
                                get=lambda s: _shell_value(s, 1), set=lambda s, v: _shell_put(s, v, 1))
     melt_solidity: EnumProperty(name='Solidity', items=(('ICE', 'Ice', ''), ('GLASS', 'Glass', ''),
-                                                       ('JELLY', 'Jelly', ''), ('PLASTIC', 'Plastic', '')),
+                                                       ('JELLY', 'Jelly', ''), ('PLASTIC', 'Plastic', ''),
+                                                       ('CUSTOM', 'Custom', 'Continuous saved or animated value')),
                                 get=lambda s: _solidity_get(s), set=lambda s, v: _solidity_put(s, v))
 
 
@@ -110,13 +113,16 @@ def _solidity_modifier(settings):
 
 def _solidity_get(settings):
     mod = _solidity_modifier(settings)
-    return max(0, min(3, int(gn_mods.value(mod, 'Solidity', 2)))) if mod else 2
+    value = gn_mods.value(mod, 'Solidity', 2.) if mod else 2.
+    # Tolerate socket float precision without rounding arbitrary values to presets.
+    return next((i for i, preset in enumerate(_SOLIDITY_VALUES)
+                 if math.isclose(value, preset, rel_tol=0., abs_tol=1e-8)), 4)
 
 
 def _solidity_put(settings, value):
     mod = _solidity_modifier(settings)
-    if mod:
-        gn_mods.set_input(mod, 'Solidity', value)
+    if mod and 0 <= value < len(_SOLIDITY_VALUES):
+        gn_mods.set_input(mod, 'Solidity', _SOLIDITY_VALUES[value])
 
 
 def add_modifier(ob, kind):
@@ -308,6 +314,8 @@ def draw_parameters(layout, context, mod=None, *, extensions=False, advanced=Fal
             parameters.label(text='Solidity')
             w.radios(parameters, ob.max_modifier_parameters, 'melt_solidity', (('ICE', 'Ice'), ('GLASS', 'Glass')))
             w.radios(parameters, ob.max_modifier_parameters, 'melt_solidity', (('JELLY', 'Jelly'), ('PLASTIC', 'Plastic')))
+            if ob.max_modifier_parameters.melt_solidity == 'CUSTOM':
+                _named(parameters, mod, ['Solidity'])
             _named(parameters, mod, ['Flip Axis'])
         if kind == 'Melt' and extensions:
             _named(w.group(layout, 'Maxxed Extensions'), mod, ['Irregularity', 'Drip Size', 'Seed'])
