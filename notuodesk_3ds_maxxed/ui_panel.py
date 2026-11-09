@@ -536,7 +536,6 @@ def hier_pivot(layout, context):
     col.operator("max.object_cmd", text="Center to Object").cmd = "CENTER_PIVOT"
     col.operator("max.object_cmd", text="Align to World").cmd = "PIVOT_TO_WORLD"
     col.operator("max.object_cmd", text="Center Object to Pivot").cmd = "OBJECT_TO_PIVOT"
-    col.operator("object.origin_set", text="Pivot to 3D Cursor").type = "ORIGIN_CURSOR"
 
 
 @rollout("Adjust Transform", {"HIERARCHY"}, 11)

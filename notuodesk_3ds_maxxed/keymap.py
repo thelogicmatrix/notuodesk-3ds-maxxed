@@ -16,6 +16,9 @@ def K(idname, key, value="PRESS", ctrl=False, shift=False, alt=False, **props):
 # Active in every viewport mode (registered in 3D View + each mode keymap, because
 # Blender's mode keymaps (Object Mode, Mesh, ...) are checked before "3D View").
 VIEWPORT = [
+    # No 3D cursor in Max: swallow Blender's Shift+right-click place and drag
+    K("max.block_cursor", "RIGHTMOUSE", shift=True),
+    K("max.block_cursor", "RIGHTMOUSE", "CLICK_DRAG", shift=True),
     # Main toolbar tools
     K("wm.tool_set_by_id", "Q", name="builtin.select_box"),
     K("wm.tool_set_by_id", "W", name="builtin.move"),

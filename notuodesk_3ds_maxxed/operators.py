@@ -1154,6 +1154,9 @@ def _configure_viewport(context, window, area, quad=True):
     sh.wireframe_color_type = "OBJECT"
     space.overlay.show_text = False           # only our [+] [Perspective] labels
     space.overlay.show_wireframes = False
+    space.overlay.show_cursor = False         # Max has no 3D cursor
+    context.scene.cursor.location = (0, 0, 0)  # creation tools that use it start at the origin
+    context.scene.cursor.rotation_euler = (0, 0, 0)
     for r in area.regions:
         if r.type == "UI":
             try:
@@ -1407,7 +1410,18 @@ class MAX_OT_restore(Operator):
         return {"FINISHED"}
 
 
+class MAX_OT_block_cursor(Operator):
+    """Swallow Blender's Shift+right-click 3D cursor placement (Max has no 3D cursor)"""
+    bl_idname = "max.block_cursor"
+    bl_label = "Block 3D Cursor"
+    bl_options = {"INTERNAL"}
+
+    def invoke(self, context, event):
+        return {"FINISHED"}
+
+
 classes = (
+    MAX_OT_block_cursor,
     MAX_OT_subobject, MAX_OT_set_view, MAX_OT_zoom_extents, MAX_OT_toggle, MAX_OT_expert_mode,
     MAX_OT_select_all, MAX_OT_delete, MAX_OT_select_by_name, MAX_OT_clone, MAX_OT_edit_poly,
     MAX_OT_object_cmd, MAX_OT_camera_from_view, MAX_OT_open_editor, MAX_OT_transform_typein,
