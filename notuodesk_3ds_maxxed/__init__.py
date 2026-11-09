@@ -30,6 +30,7 @@ from . import create, ffd, keymap, max_import, operators, overlay, prims, theme,
 from . import cut_loop
 from . import keyboard_entry
 from . import line_tool
+from . import poly_tools
 
 
 _prefs_cache = [None]
@@ -85,6 +86,11 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
                                 description="Give new objects a random wireframe/object color like 3ds Max")
     first_run_done: BoolProperty(default=False)
     imported_hsx: StringProperty(name="Imported 3ds Max Hotkeys", default="", options={"HIDDEN"})
+    auto_pivot_on_create: EnumProperty(name="Auto Pivot on Create", default="OFF",
+        items=[("OFF", "Off", "Keep the normal creation pivot"),
+               ("BOTTOM", "Bottom", "Bottom center of the world bounding box"),
+               ("CENTER", "Center", "Center of the world bounding box")],
+        description="Set the pivot when finishing an add-on primitive or spline")
 
     def draw(self, context):
         lay = self.layout
@@ -95,6 +101,7 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
         col = lay.column(heading="Features")
         for p in ("use_keymap", "max_menubar", "show_toolbar", "show_statusbar", "show_labels", "random_colors"):
             col.prop(self, p)
+        col.prop(self, "auto_pivot_on_create")
 
         updater.draw_update_box(lay, self)
         hsx_import.draw_preferences(lay, self)
@@ -152,6 +159,7 @@ _classes = (
     + ui_menus.classes + line_tool.classes
     + cut_loop.classes
     + hsx_import.classes
+    + poly_tools.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
@@ -188,6 +196,7 @@ def register():
                                     ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", "")])
     prims.register_props()
     keyboard_entry.register_props()
+    poly_tools.register()
     ui_panel.register_props()
     vray.register_props()
     mtl_editor.register_props()
@@ -222,6 +231,7 @@ def unregister():
     ui_panel.unregister_props()
     prims.unregister_props()
     keyboard_entry.unregister_props()
+    poly_tools.unregister()
     for prop in ("max_cmd_tab", "max_create_cat", "max_create_sub", "max_sublevel"):
         if hasattr(wm, prop):
             delattr(wm, prop)

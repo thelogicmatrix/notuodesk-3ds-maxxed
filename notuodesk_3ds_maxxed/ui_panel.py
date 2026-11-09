@@ -4,7 +4,7 @@ import bpy
 from bpy.props import IntProperty
 from bpy.types import Menu, Panel, UIList
 
-from . import create, prims
+from . import create, prims, poly_tools
 from . import keyboard_entry
 from .operators import EDIT_POLY_OPS, current_level
 
@@ -60,13 +60,13 @@ def _stack_get(ob):
     if bpy.context.mode.startswith("EDIT"):
         return -1          # sub-object editing happens at the base of the stack
     act = ob.modifiers.active
-    if act is not None and act.is_active:
+    if act is not None and act.is_active and not poly_tools.is_font_pivot(act):
         return ob.modifiers.find(act.name)
     return -1
 
 
 def _stack_set(ob, value):
-    if 0 <= value < len(ob.modifiers):
+    if 0 <= value < len(ob.modifiers) and not poly_tools.is_font_pivot(ob.modifiers[value]):
         ob.modifiers.active = ob.modifiers[value]
 
 
@@ -79,8 +79,9 @@ class MAX_UL_stack(UIList):
         row.prop(item, "name", text="", emboss=False)
 
     def filter_items(self, context, data, propname):
-        n = len(getattr(data, propname))
-        return [self.bitflag_filter_item] * n, list(reversed(range(n)))
+        modifiers = getattr(data, propname)
+        flags = [0 if poly_tools.is_font_pivot(mod) else self.bitflag_filter_item for mod in modifiers]
+        return flags, list(reversed(range(len(modifiers))))
 
     def draw_filter(self, context, layout):
         pass
@@ -169,8 +170,10 @@ class MAX_PT_command_panel(Panel):
                 row.operator("object.make_single_user", text="", icon="DUPLICATE").object = True
                 row.operator("object.modifier_remove", text="", icon="TRASH").modifier = active.name
                 row.separator()
-                row.operator("object.modifier_move_down", text="", icon="TRIA_UP").modifier = active.name
-                row.operator("object.modifier_move_up", text="", icon="TRIA_DOWN").modifier = active.name
+                move = row.operator("max.stack_move", text="", icon="TRIA_UP")
+                move.modifier, move.direction = active.name, "DOWN"
+                move = row.operator("max.stack_move", text="", icon="TRIA_DOWN")
+                move.modifier, move.direction = active.name, "UP"
                 row.operator("object.modifier_apply", text="", icon="CHECKMARK").modifier = active.name
             else:
                 row.operator("max.object_cmd", text="", icon="CHECKMARK").cmd = "CONVERT_POLY"
@@ -509,8 +512,11 @@ def poly_edit_level(layout, context):
     g = _grid(layout)
     for op in per_level:
         _btn(g, op)
+        if op == "CAP":
+            g.operator("max.quad_cap", text="Quad Cap")
     if lvl in (2, 3):
         layout.operator("mesh.edge_face_add", text="Create Shape / Fill")
+        layout.operator("max.loop_regularize", text="Edge Loop Regularizer")
 
 
 @rollout("Edit Geometry", {"MODIFY"}, 6)
@@ -541,6 +547,8 @@ def hier_pivot(layout, context):
     col.prop(ts, "use_transform_skip_children", text="Don't Affect Children", toggle=True)
     layout.label(text="Alignment:")
     col = layout.column(align=True)
+    col.operator("max.pivot_bounds", text="Pivot to Bottom").mode = "BOTTOM"
+    col.operator("max.pivot_bounds", text="Pivot to Center").mode = "CENTER"
     col.operator("max.object_cmd", text="Center to Object").cmd = "CENTER_PIVOT"
     col.operator("max.object_cmd", text="Align to World").cmd = "PIVOT_TO_WORLD"
     col.operator("max.object_cmd", text="Center Object to Pivot").cmd = "OBJECT_TO_PIVOT"

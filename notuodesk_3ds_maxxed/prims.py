@@ -183,6 +183,8 @@ def rebuild(ob):
         finally:
             _guard[0] = guarded
     bm = build_bmesh(p.kind, p)
+    if "max_pivot_offset" in ob:
+        bmesh.ops.translate(bm, verts=bm.verts, vec=ob["max_pivot_offset"])
     bm.to_mesh(me)
     bm.free()
     me.update()

@@ -87,6 +87,16 @@ Object Type follows Max's button order. Parameters use compact labelled fields. 
 
 Parameter names and segment defaults follow [Autodesk's Extended Primitives reference](https://help.autodesk.com/cloudhelp/2015/ENU/3DSMax/files/GUID-BF868DCF-12E3-431C-A73B-C16C0FD67C98.htm). Types whose Max constructor starts with zero dimensions start at one Blender unit here. ChamferBox, Capsule, Hedra and Prism keep their documented nonzero dimensions. Click-drag creation replaces these dimensions with the size you draw.
 
+## Poly tools and pivots
+
+- **Quad Cap:** in Edit Poly at Border level, next to Cap, or in the modeling quad menu. Select the border edges or just one edge of a hole. It fills each selected hole with a quad grid and chooses the grid corners from the border angles. An odd edge count uses triangles and quads, with a warning.
+- **Edge Loop Regularizer:** in Edit Sub-Object at Edge or Border level, or in the modeling quad menu. The default is **Circle**, like rapidTools' round-loop command. It handles separate loops and open arcs together. The redo panel has **Even Spacing** along the existing polyline and **Strength**. Even Spacing keeps open endpoints fixed. Circle fits a plane and circle, then spaces vertices by angle. Straight chains use Even Spacing.
+- **Auto Pivot on Create:** choose **Off**, **Bottom** or **Center** in the add-on preferences. Off is the default. It runs when you finish an add-on standard primitive or spline, including Text. Bottom uses the bottom center of the world bounding box. Center uses its center. Lights, cameras, helpers, imports, duplicates and Blender's own Add menu keep their usual pivots. **Hierarchy > Adjust Pivot** also has **Pivot to Bottom** and **Pivot to Center** for selected meshes and splines. Primitive parameter edits retain the pivot offset, without recentering after each edit.
+
+These tools follow the public descriptions of [rapidTools](https://rapidmxs.com/store/rapidtools/) and [AutoPivot](https://www.scriptspot.com/3ds-max/scripts/autopivot). The original scripts do not run inside Blender.
+
+Creation tools call `poly_tools.finalize_new_object(context, ob)` after setting the final geometry and transform, before recording creation undo. The standard primitive and Shapes paths use it. Integrators should call the same function from Keyboard Entry and interactive Line when those creation paths finish, never during previews.
+
 ## Opening 3ds Max files
 
 ![A 3ds Max 2015 character opened with File › Open 3ds Max File](docs/open-max-file.png)
@@ -221,6 +231,10 @@ Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments*
 - Generate Mapping Coords on Extended Primitives uses box projection. It does not reproduce Max's UV layouts. Torus Knot uses whole-number winding, twist, warp and lump counts, and Smooth is an on/off setting. Real-World Map Size and mapping offset/tiling controls are not included.
 - Line uses Blender's automatic handles for Smooth vertices, so its curvature can differ from Max. The close prompt uses Blender's Cancel button to keep drawing.
 - Spline Adaptive uses a fixed 64 subdivisions per curved segment. Blender does not expose Max's curvature-based adaptive interpolation.
+
+- Quad Cap uses an interpolated grid. It does not reproduce rapidQCap's surface smoothing. Borders too concave or twisted for a grid without folded cells are skipped with a warning. Odd borders cannot be all quads without changing the boundary.
+- AutoPivot's original buttons use center-of-mass calculations for meshes and vertex averages for splines. This add-on uses the bounding box and adds an optional creation preference. Moving an origin can change modifiers that depend on that origin, such as Mirror.
+- Text stays editable after a pivot move. A protected Geometry Nodes translation handles depth on tilted text. It stays below user modifiers and outside the Max stack, so stack controls cannot disable, remove or reorder it. Conversion to Editable Spline or Editable Poly bakes the translation. Existing Text Pivot Offset modifiers migrate when a file loads or the add-on is enabled.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.

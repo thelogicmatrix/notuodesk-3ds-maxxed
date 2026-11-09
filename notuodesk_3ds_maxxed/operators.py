@@ -590,6 +590,8 @@ class MAX_OT_object_cmd(Operator):
                         ob.max_prim.kind = ""
             elif c == "CONVERT_SPLINE":
                 bpy.ops.object.convert(target="CURVE")
+                from . import poly_tools
+                poly_tools.bake_converted_text_pivots(context.selected_objects)
             elif c == "RESET_XFORM":
                 bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
             elif c == "CENTER_PIVOT":
@@ -1040,6 +1042,9 @@ class MAX_OT_modifier_set_active(Operator):
     def execute(self, context):
         ob = context.active_object
         mod = ob.modifiers.get(self.name) if ob else None
+        from . import poly_tools
+        if mod is not None and poly_tools.is_font_pivot(mod):
+            return {"CANCELLED"}
         if mod is None:
             if ob:  # clicked the base object: deselect modifiers
                 for m in ob.modifiers:
