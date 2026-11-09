@@ -450,46 +450,6 @@ class PolyToolsTests(unittest.TestCase):
             self.assert_glyphs(ob, before, cmd + " after removing all modifiers", reordered=True)
         print("PASS Text pivot: Editable Spline and Editable Poly bake compensation, all modifiers removable", flush=True)
 
-    def test_text_pivot_legacy_load_migration(self):
-        from notuodesk_3ds_maxxed.gn_mods import G
-        bpy.ops.max.create_shape(kind="TEXT")
-        ob = bpy.context.object
-        ob.name = "Legacy Text pivot fixture"
-        ob.data.size = 2.5
-        ob.data.extrude = .15
-        user = G("Legacy user modifier")
-        user.out(user.g("Geometry"))
-        user_mod = ob.modifiers.new("Legacy user modifier", "NODES")
-        user_mod.node_group = user.ng
-        g = G("Text Pivot Offset")
-        transform = g.nodes.new("GeometryNodeTransform")
-        g.links.new(g.g("Geometry"), transform.inputs["Geometry"])
-        g.out(transform.outputs["Geometry"])
-        transform.inputs["Translation"].default_value = (-2, -.5, -.7)
-        mod = ob.modifiers.new("Text Pivot Offset", "NODES")
-        mod.node_group = g.ng
-        mod["max_font_pivot"] = True
-        ob.modifiers.active = mod
-        before = evaluated_world_vertices(ob)
-        with tempfile.TemporaryDirectory(prefix="maxxed-pivot-") as folder:
-            path = str(Path(folder) / "legacy.blend")
-            bpy.ops.wm.save_as_mainfile(filepath=path)
-            bpy.ops.wm.open_mainfile(filepath=path)
-            ob = bpy.data.objects["Legacy Text pivot fixture"]
-            self.assert_glyphs(ob, before, "Legacy file load")
-            self.assertEqual([m.name for m in visible_modifiers(ob)], ["Legacy user modifier"])
-            self.assertNotIn(ob.modifiers[0], visible_modifiers(ob))
-            self.assertNotIn("Text Pivot Offset", ob.modifiers)
-            bpy.ops.object.modifier_remove(modifier="Legacy user modifier")
-            self.assert_glyphs(ob, before, "Legacy user Remove Modifier")
-            bpy.ops.wm.save_as_mainfile(filepath=path)
-            bpy.ops.wm.open_mainfile(filepath=path)
-            ob = bpy.data.objects["Legacy Text pivot fixture"]
-            self.assert_glyphs(ob, before, "Migrated file reload")
-            self.assertEqual(len(ob.modifiers), 1)
-            self.assertEqual(visible_modifiers(ob), [])
-        print("PASS Text pivot: legacy offset migrates on load, glyphs unchanged across save/reload", flush=True)
-
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(PolyToolsTests)

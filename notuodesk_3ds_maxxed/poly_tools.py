@@ -4,7 +4,6 @@ import math
 
 import bmesh
 import bpy
-from bpy.app.handlers import persistent
 from bpy.props import EnumProperty, FloatProperty, StringProperty
 from mathutils import Matrix, Vector
 from mathutils.geometry import normal
@@ -20,8 +19,7 @@ def is_font_pivot(modifier):
     group = modifier.node_group
     # Blender rebuilds Geometry Nodes modifier socket properties on file load
     # and Text conversion. Store the identity on the node group instead.
-    legacy = group.name.split(".")[0] == "3dsMaxxed Text Pivot Offset"
-    return bool(group.get(FONT_PIVOT) or modifier.get(FONT_PIVOT) or legacy)
+    return bool(group.get(FONT_PIVOT) or modifier.get(FONT_PIVOT))
 
 
 def _protect_font_pivot(ob, modifier):
@@ -52,29 +50,12 @@ def bake_converted_text_pivots(objects):
         ob.data.update_tag()
 
 
-@persistent
-def _migrate_text_pivots(_=None):
-    for ob in bpy.data.objects:
-        if ob.library:
-            continue
-        if ob.type == "FONT":
-            for mod in ob.modifiers:
-                if is_font_pivot(mod):
-                    _protect_font_pivot(ob, mod)
-        elif ob.type == "CURVE":
-            bake_converted_text_pivots([ob])
-
-
 def register():
-    bpy.app.handlers.load_post.append(_migrate_text_pivots)
-    # Blender restricts bpy.data during add-on registration.
-    bpy.app.timers.register(_migrate_text_pivots, first_interval=0)
+    pass
 
 
 def unregister():
-    bpy.app.handlers.load_post.remove(_migrate_text_pivots)
-    if bpy.app.timers.is_registered(_migrate_text_pivots):
-        bpy.app.timers.unregister(_migrate_text_pivots)
+    pass
 
 
 class MAX_OT_stack_move(bpy.types.Operator):
