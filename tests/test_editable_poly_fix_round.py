@@ -43,7 +43,8 @@ class FixRoundTests(unittest.TestCase):
         from notuodesk_3ds_maxxed import keymap
         binding = ("max.edit_poly", "W", "PRESS", True, True, False, {"op": "TARGET_WELD"})
         self.assertIn(binding, keymap.MESH)
-        self.assertIn(("max.edit_poly", "C", "PRESS", False, False, True, {"op": "CUT"}), keymap.MESH)
+        self.assertIn(("max.cut", "C", "PRESS", False, False, True, {}), keymap.VIEWPORT)
+        self.assertFalse(any(item[1:6] == ("C", "PRESS", False, False, True) for item in keymap.MESH))
 
     def test_hsx_settings_execute_uses_panel_last_values(self):
         from notuodesk_3ds_maxxed import editable_poly as ep

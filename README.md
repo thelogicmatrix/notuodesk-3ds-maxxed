@@ -121,9 +121,9 @@ then click the endpoint. Keep slicing until right-click or click QuickSlice
 again. Polygon and Element levels affect selected visible polygons and retain
 the new polygons in the selection. Split uses the Slice Plane setting.
 Object-level QuickSlice affects the object and returns to Object level on exit.
-Cut also works at Object level. It calls the companion `max.cut` when installed.
-This branch otherwise uses Blender's knife, with Enter to accept the cut, and
-returns to Object level when the knife exits. Alt+C uses the same Cut route.
+Cut also works at Object level. The panel and quad menu call `max.cut`.
+Alt+C starts the same tool. Right-click ends the chain, then right-click again
+to leave Cut and return to Object level.
 
 Imported `.hsx` settings shortcuts use the same caddies and stored values as
 the panel. When the import module is present, its settings registration uses
@@ -359,7 +359,7 @@ Cut and SwiftLoop pick visible polygons behind hidden polygons. Cut keeps endpoi
 
 Use **Customize › Import 3ds Max Hotkeys (.hsx)...** to load your Max shortcuts. Imported assignments and unassignments override the add-on's default keys. They stay in the add-on preferences when you save preferences. The preferences show every imported entry and a **Clear Imported Hotkeys** button to restore the defaults. The import reports mapped assignments and lists unsupported actions.
 
-Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments**, starting at 1 with no intermediate ring. Chamfer starts at **Amount** 1.0. Edge and vertex Extrude settings move the new geometry along averaged adjacent surface normals. Tessellate offers **Edge** and **Face** types. Export Selected opens Blender's FBX exporter with **Selected Objects** on. rapidTools fastBridge and RappaTools3 Inset, Relax and MePoly use the add-on's Bridge, Inset, Relax and Convert to Editable Poly. rapidQCap and fastEdgeLoopRegularizer work when the add-on's Quad Cap and Loop Regularize operators are installed.
+Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments**, starting at 1 with no intermediate ring. Chamfer reuses the panel's last accepted **Amount**, starting at 0.1. Edge and vertex Extrude settings move the new geometry along averaged adjacent surface normals. Tessellate offers **Edge** and **Face** types. Export Selected opens Blender's FBX exporter with **Selected Objects** on. rapidTools fastBridge and RappaTools3 Inset, Relax and MePoly use the add-on's Bridge, Inset, Relax and Convert to Editable Poly. rapidQCap and fastEdgeLoopRegularizer work when the add-on's Quad Cap and Loop Regularize operators are installed.
 **ViewCube.** Alt+Ctrl+V shows or hides it. Alt+Ctrl+H returns Home, as in Max 2026. The chamfered cube has lit faces, bold labels mapped onto the faces, and a broad blue-grey compass band. Face views have inward-pointing adjacent-view arrows and curved roll arrows at the top right. Hover targets turn blue with a yellow outline. It starts smaller than Max's default, at 80% opacity when active and 50% when inactive. Preferences and right-click **Configure** offer Tiny, Small, Normal and Large sizes, inactive opacity up to 70%, Snap to Closest View and Keep Scene Upright. View changes use Blender's Smooth View duration. Set Current View as Home saves the rotation, projection, centre and distance in the scene. Set Current View as Front changes the cube's reference orientation, and Reset Front restores the default. Camera views hide the cube. Turning it off restores Blender's navigation gizmo.
 
 Keep Scene Upright also controls clicked views. Turn it off to carry the current roll into an edge or corner view. Dark text and outlines use slightly higher opacity than the faces so they stay readable over bright viewports. Opening a saved file rebuilds the cube's drawing resources. Files keep each viewport's original navigation gizmo setting, so turning the ViewCube or add-on off after reopening restores that setting.
@@ -373,7 +373,7 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 - Cut uses three Blender cursor shapes instead of Max's cursor artwork. Its Undo groups one committed segment per step. Max's exact Undo grouping has not been confirmed.
 - SwiftLoop follows quad rings and stops at triangles, n-gons and hidden faces. Shift uses cubic interpolation of surface normals, so its flow can differ from Max's proprietary result. Sliding needs a regular loop with two bounding edges at each vertex.
 - Imported hotkeys call Blender equivalents. Relax uses vertex smoothing, including Paint Deform Relax. Edit Poly enters mesh editing through the add-on's existing Edit Poly command. Unassignments affect only this add-on's keys. Unknown actions stay in the imported list but get no binding.
-- Settings dialogs expose a subset of Max's caddy controls. Edge and vertex Extrude use Blender's topology and omit Max's Extrusion Base Width. Vertex extrusion adds connected vertices and edges, rather than Max's polygon base. Surface normals are equal-weight averages in mesh space. An extrusion without an adjacent surface normal leaves the mesh unchanged. Tessellate Edge Tension maps inversely to Blender's subdivision smoothness over 0 to 1. It does not reproduce Max's full tension range. Extrusion Height starts at 0.1 and Edge Tension at 1.0, since the reference does not specify their initial values.
+- Settings dialogs expose a subset of Max's caddy controls. Edge and vertex Extrude use Blender's topology and omit Max's Extrusion Base Width. Vertex extrusion adds connected vertices and edges, rather than Max's polygon base. Surface normals are equal-weight averages in mesh space. Extrusion without an adjacent surface normal uses local Z. Tessellate Edge Tension maps inversely to Blender's subdivision smoothness over 0 to 1. It does not reproduce Max's full tension range. Extrusion Height starts at 0.1 and Edge Tension at 1.0, since the reference does not specify their initial values.
 - Extended Primitives do not include RingWave or Hose. Creation uses the default Corners, Center or Isosceles method. Alternate creation methods and Slice controls are not included.
 - Hedra uses reflection-generated polyhedra. Star1, Star2 and axis scaling approximate Max's shapes. Its facet topology and the other primitives' triangulation can differ from Max. OilTank and Spindle use Blender's bevel for Blend.
 - Generate Mapping Coords on Extended Primitives uses box projection. It does not reproduce Max's UV layouts. Torus Knot uses whole-number winding, twist, warp and lump counts, and Smooth is an on/off setting. Real-World Map Size and mapping offset/tiling controls are not included.
@@ -421,8 +421,8 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
   Insert Vertex splits selected edges at their midpoint, or pokes selected faces.
   Create Shape From Selection copies each selected edge to a separate poly spline.
 - Slice Plane uses numeric local coordinates without Max's plane gizmo. QuickSlice
-  cuts a view-aligned BMesh plane through two clicked screen points. Without the
-  companion Cut module, Cut uses Blender's knife gestures. Ring and Loop shifts use quad topology and
+  cuts a view-aligned BMesh plane through two clicked screen points.
+  Ring and Loop shifts use quad topology and
   Blender's face/vertex order, so direction can differ on irregular meshes.
   Named Selections Copy/Paste stores one selection per mesh and sub-object level.
 - Weight and Subdivision Surface Smoothness are disabled because Blender's

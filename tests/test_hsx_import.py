@@ -11,7 +11,7 @@ import bmesh
 import addon_utils
 
 addon_utils.enable("notuodesk_3ds_maxxed", default_set=True)
-from notuodesk_3ds_maxxed import hsx_import as hsx
+from notuodesk_3ds_maxxed import hsx_import as hsx, editable_poly as ep
 
 FIXTURE = '''<MaxHotkeyTransformations>
 <Unassign_Hotkey Shortcut="Shift+E" Description="Extrude Mode" Id="1250838234-40017"/>
@@ -28,6 +28,13 @@ FIXTURE = '''<MaxHotkeyTransformations>
 class HsxTests(unittest.TestCase):
     def setUp(self):
         self.entries = hsx.parse_hsx(FIXTURE)
+        bpy.context.scene.max_poly_operations.clear()
+
+    def apply_settings(self, op, **values):
+        settings = ep.settings(bpy.context, op)
+        for name, value in values.items():
+            setattr(settings, name, value)
+        return bpy.ops.max.hsx_settings(op=op)
 
     def edit_mesh(self, vertices, edges=(), faces=(), mode="EDGE", selected=None):
         if bpy.context.mode != "OBJECT":
@@ -57,7 +64,7 @@ class HsxTests(unittest.TestCase):
         for kwargs, want_faces, want_vertices in [({}, 4, 8), ({"segments": 3}, 12, 16)]:
             with self.subTest(kwargs=kwargs):
                 obj, bm = self.edit_mesh(vertices, edges)
-                self.assertEqual(bpy.ops.max.hsx_settings(op="BRIDGE", **kwargs), {"FINISHED"})
+                self.assertEqual(self.apply_settings(op="BRIDGE", **kwargs), {"FINISHED"})
                 self.assertEqual((len(bm.faces), len(bm.verts)), (want_faces, want_vertices))
                 print(f"HSX FIX PASS Bridge {kwargs or 'defaults'} faces={len(bm.faces)} vertices={len(bm.verts)}", flush=True)
 
@@ -65,22 +72,22 @@ class HsxTests(unittest.TestCase):
         for kwargs, want_edges in [({}, 2), ({"segments": 2}, 3)]:
             with self.subTest(kwargs=kwargs):
                 obj, bm = self.edit_mesh([(0, 0, 0), (3, 0, 0)], [(0, 1)])
-                self.assertEqual(bpy.ops.max.hsx_settings(op="CONNECT", **kwargs), {"FINISHED"})
+                self.assertEqual(self.apply_settings(op="CONNECT", **kwargs), {"FINISHED"})
                 self.assertEqual(len(bm.edges), want_edges)
 
-    def test_chamfer_default_amount_is_one(self):
+    def test_chamfer_reuses_panel_amount(self):
         obj, bm = self.edit_mesh([(0, 0, 0), (4, 0, 0), (4, 4, 0), (0, 4, 0)],
                                  faces=[(0, 1, 2, 3)], mode="VERT", selected=[0])
-        self.assertEqual(bpy.ops.max.hsx_settings(op="CHAMFER"), {"FINISHED"})
+        self.assertEqual(self.apply_settings(op="CHAMFER", amount=.375), {"FINISHED"})
         points = {tuple(round(c, 5) for c in v.co) for v in bm.verts}
-        self.assertIn((1.0, 0.0, 0.0), points)
-        self.assertIn((0.0, 1.0, 0.0), points)
-        print("HSX FIX PASS Chamfer default Amount=1.0", flush=True)
+        self.assertIn((0.375, 0.0, 0.0), points)
+        self.assertIn((0.0, 0.375, 0.0), points)
+        print("HSX FIX PASS Chamfer shared panel Amount=0.375", flush=True)
 
     def test_tessellate_face_type(self):
         obj, bm = self.edit_mesh([(0, 0, 0), (2, 0, 0), (2, 2, 0), (0, 2, 0)], faces=[(0, 1, 2, 3)])
-        self.assertIn("tessellate_type", bpy.ops.max.hsx_settings.get_rna_type().properties)
-        self.assertEqual(bpy.ops.max.hsx_settings(op="TESSELLATE", tessellate_type="FACE"), {"FINISHED"})
+        self.assertIn("tessellate_type", bpy.ops.max.poly_settings.get_rna_type().properties)
+        self.assertEqual(self.apply_settings(op="TESSELLATE", tessellate_type="FACE"), {"FINISHED"})
         self.assertEqual((len(bm.faces), len(bm.verts)), (4, 5))
         self.assertTrue(all(len(f.verts) == 3 for f in bm.faces))
         print("HSX FIX PASS Tessellate Type=Face makes 4 triangles", flush=True)
@@ -104,7 +111,7 @@ class HsxTests(unittest.TestCase):
                             bpy.context.view_layer.update()
                         old = set(bm.verts)
                         before = {v: v.co.copy() for v in old}
-                        self.assertEqual(bpy.ops.max.hsx_settings(op="EXTRUDE", amount=amount), {"FINISHED"})
+                        self.assertEqual(self.apply_settings(op="EXTRUDE", amount=amount), {"FINISHED"})
                         new = set(bm.verts) - old
                         self.assertEqual(len(new), 2 if mode == "EDGE" else 1)
                         matrix = obj.matrix_world.to_3x3()
@@ -126,19 +133,22 @@ class HsxTests(unittest.TestCase):
                 obj.rotation_euler.x = radians(90)
                 bpy.context.view_layer.update()
                 old = set(bm.verts)
-                self.assertEqual(bpy.ops.max.hsx_settings(op="EXTRUDE", amount=1), {"FINISHED"})
+                self.assertEqual(self.apply_settings(op="EXTRUDE", amount=1), {"FINISHED"})
                 for vert in set(bm.verts) - old:
                     source = next(e.other_vert(vert) for e in vert.link_edges if e.other_vert(vert) in old)
                     delta = obj.matrix_world.to_3x3() @ (vert.co - source.co)
                     for got, want in zip(delta, (0, -1, 0)):
                         self.assertAlmostEqual(got, want, places=5)
 
-    def test_extrude_without_surface_normal_preserves_geometry(self):
+    def test_extrude_without_surface_normal_uses_panel_local_z_fallback(self):
         for mode in ("VERT", "EDGE"):
             with self.subTest(mode=mode):
                 obj, bm = self.edit_mesh([(0, 0, 0), (1, 0, 0)], [(0, 1)], mode=mode)
-                self.assertEqual(bpy.ops.max.hsx_settings(op="EXTRUDE", amount=1), {"CANCELLED"})
-                self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (2, 1, 0))
+                old = set(bm.verts)
+                self.assertEqual(self.apply_settings(op="EXTRUDE", amount=1), {"FINISHED"})
+                self.assertEqual(len(bm.verts), 4)
+                self.assertTrue(all(abs(v.co.z - 1) < 1e-6 for v in set(bm.verts) - old))
+                self.assertTrue(all(abs(v.co.z) < 1e-6 for v in old))
 
     def test_parse_and_resolve(self):
         self.assertEqual(len(self.entries), 8)
@@ -205,16 +215,16 @@ class HsxTests(unittest.TestCase):
             bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.select_mode(type="EDGE")
             bpy.ops.mesh.select_all(action="SELECT")
-            self.assertEqual(bpy.ops.max.hsx_settings(op=operation, amount=0.2, segments=1), {"FINISHED"})
+            self.assertEqual(self.apply_settings(op=operation, amount=0.2, segments=1), {"FINISHED"})
             self.assertEqual(len(bmesh.from_edit_mesh(bpy.context.object.data).faces), want_faces)
         bpy.ops.object.mode_set(mode="OBJECT")
         bpy.ops.mesh.primitive_plane_add()
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_mode(type="FACE")
-        self.assertEqual(bpy.ops.max.hsx_settings(op="EXTRUDE", amount=0.75), {"FINISHED"})
+        self.assertEqual(self.apply_settings(op="EXTRUDE", amount=0.75), {"FINISHED"})
         mesh = bmesh.from_edit_mesh(bpy.context.object.data)
-        # Blender's region extrusion retains the base of an isolated plane.
-        self.assertEqual(len(mesh.faces), 6)
+        # The shared panel operation removes the original face.
+        self.assertEqual(len(mesh.faces), 5)
         self.assertAlmostEqual(max(v.co.z for v in mesh.verts), 0.75)
         bpy.ops.object.mode_set(mode="OBJECT")
 

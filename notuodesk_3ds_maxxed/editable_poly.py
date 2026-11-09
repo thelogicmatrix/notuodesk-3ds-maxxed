@@ -452,10 +452,7 @@ def run(operator, context, how, operation_settings=None):
                     return bpy.ops.max.target_weld("INVOKE_DEFAULT")
                 if action == "QUICK_SLICE":
                     return bpy.ops.max.poly_quick_slice("INVOKE_DEFAULT")
-                # Integration hook: main's Cut/SwiftLoop owns picking and Object return.
-                if hasattr(bpy.types, "MAX_OT_cut"):
-                    return bpy.ops.max.cut("INVOKE_DEFAULT")
-                return bpy.ops.max.poly_native_cut("INVOKE_DEFAULT")
+                return bpy.ops.max.cut("INVOKE_DEFAULT")
     if context.mode == "OBJECT":
         if action not in OBJECT_ACTIONS:
             return {"CANCELLED"}
