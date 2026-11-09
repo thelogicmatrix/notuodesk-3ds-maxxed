@@ -322,11 +322,11 @@ class MAX_OT_create(Operator):
             if self.state != "WAIT":
                 self._cancel_object()
                 self.state = "WAIT"
+                if event.type == "ESC":
+                    return self._finish(context)
                 self._status(context)
                 return {"RUNNING_MODAL"}
-            if event.type == "ESC" or region_under_mouse(context, event.mouse_x, event.mouse_y)[1]:
-                return self._finish(context)
-            return {"PASS_THROUGH"}
+            return self._finish(context)
 
         if self.state == "WAIT":
             if event.type == "LEFTMOUSE" and event.value == "PRESS":

@@ -469,15 +469,9 @@ class MAX_OT_edit_poly(Operator):
             elif o == "REMOVE_WITH_VERTS":
                 ops.dissolve_mode(use_verts=True)
             elif o == "LOOP":
-                if hasattr(ops, "select_edge_loop_multi"):
-                    ops.select_edge_loop_multi()
-                else:
-                    ops.loop_multi_select(ring=False)
+                ops.loop_multi_select(ring=False)
             elif o == "RING":
-                if hasattr(ops, "select_edge_ring_multi"):
-                    ops.select_edge_ring_multi()
-                else:
-                    ops.loop_multi_select(ring=True)
+                ops.loop_multi_select(ring=True)
             elif o == "WELD":
                 ops.remove_doubles(how)
             elif o == "TARGET_WELD":
@@ -511,9 +505,9 @@ class MAX_OT_edit_poly(Operator):
             elif o == "SLICE_PLANE":
                 ops.bisect(how)
             elif o == "CUT":
-                ops.knife_tool(how)
+                return bpy.ops.max.cut("INVOKE_DEFAULT")
             elif o == "SWIFT_LOOP":
-                ops.loopcut_slide(how)
+                return bpy.ops.max.swift_loop("INVOKE_DEFAULT")
             elif o == "HIDE_SEL":
                 ops.hide(unselected=False)
             elif o == "HIDE_UNSEL":

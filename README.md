@@ -30,6 +30,7 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 | Parametric primitives | Length/Width/Height/Segs stay editable in **Parameters** until you convert to Editable Poly or enter sub-object mode |
 | Modifier List and stack | About 60 modifiers under their Max names (see below). Newest is on top, with a visibility toggle per modifier |
 | Editable Poly | Selection, Edit Vertices/Edges/Borders/Polygons/Elements and Edit Geometry rollouts |
+| Cut and SwiftLoop | Hover previews and click-to-commit cuts and loops. Right-click ends the tool |
 | Quad menus | Right-click (display / tools / transform) and Ctrl+right-click (modeling) |
 | Status bar | "1 Object Selected", X/Y/Z type-in, Grid, Auto Key, Set Key |
 | Look | Max dark UI, cyan selection outline, red sub-object selection, blue vertices, random object colors, names like Box001 |
@@ -144,6 +145,7 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 | O | Adaptive Degradation (lighter viewport for heavy scenes) |
 | Shift+E, Ctrl+Shift+E, Ctrl+Shift+C | Extrude, Connect, Chamfer |
 | Alt+C / Alt+L / Alt+R | Cut / Loop / Ring |
+| Alt+1 | SwiftLoop |
 | Backspace / Ctrl+Backspace | Remove / Remove with vertices |
 | Ctrl+PgUp / Ctrl+PgDn | Grow / Shrink |
 | PgUp / PgDn | Select parent / child |
@@ -151,7 +153,24 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 
 You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, labels, random colors) under **Preferences › Add-ons › NotuoDesk 3ds Maxxed**.
 
+## Cut and SwiftLoop
+
+**Cut (Alt+C):** click a vertex, edge or polygon, then move the mouse and click to commit each segment. The cursor changes over vertices, edges and polygons. Right-click ends the current chain. Right-click again, or press Esc, to leave Cut. Each segment has its own Undo step. Cut works at object level and every sub-object level.
+
+**SwiftLoop (Alt+1):** hover over an edge to preview the loop, then click once to insert it. Keep clicking for more loops. Right-click or Esc leaves the tool.
+
+- **Shift+click:** insert a loop with surface flow.
+- **Ctrl+click:** select a loop and enter Edge level.
+- **Alt+drag:** slide a selected loop. **Ctrl+Alt+drag** also evens the distances from the bounding loop.
+- **Ctrl+Shift+click:** remove a loop and its unused vertices.
+
+The Edit Geometry buttons and quad menus use the same tools. No Enter or Q is needed to commit or leave them. The previous toolbar tool stays selected. Right-click during primitive creation cancels the unfinished primitive. Right-click again stops creating. Esc stops immediately.
+
 ## Known differences from 3ds Max
+
+- Cut adds supporting triangles for endpoints inside a polygon. Concave polygons are triangulated before an interior endpoint is added.
+- Cut uses three Blender cursor shapes instead of Max's cursor artwork. Its Undo groups one committed segment per step. Max's exact Undo grouping has not been confirmed.
+- SwiftLoop follows quad rings and stops at triangles, n-gons and hidden faces. Shift uses cubic interpolation of surface normals, so its flow can differ from Max's proprietary result. Sliding needs a regular loop with two bounding edges at each vertex.
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.

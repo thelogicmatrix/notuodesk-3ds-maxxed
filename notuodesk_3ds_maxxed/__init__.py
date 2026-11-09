@@ -26,6 +26,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import cut_loop
 
 
 _prefs_cache = [None]
@@ -131,6 +132,7 @@ HOTKEY_CHEATSHEET = (
     ("Shift+E", "Extrude (Edit Poly)"),
     ("Ctrl+Shift+E / C", "Connect / Chamfer"),
     ("Alt+C", "Cut"),
+    ("Alt+1", "SwiftLoop"),
     ("Alt+L / Alt+R", "Loop / Ring"),
     ("Backspace", "Remove"),
     ("Ctrl+PgUp/PgDn", "Grow / Shrink"),
@@ -143,6 +145,7 @@ _classes = (
     (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
+    + cut_loop.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
@@ -195,6 +198,7 @@ def register():
 
 
 def unregister():
+    cut_loop.cancel_active()
     _prefs_cache[0] = None
     keymap.unregister_keymaps()
     overlay.unregister()
