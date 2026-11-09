@@ -1,5 +1,6 @@
 """Supported Max dialogs. Scene writes happen only inside explicit transactions."""
 from pathlib import Path
+import importlib
 
 import bpy
 from bpy.app.handlers import persistent
@@ -14,6 +15,16 @@ CLONE_MODES = [("COPY", "Copy", "Independent object data"),
                ("INSTANCE", "Instance", "Shared object data"),
                ("REFERENCE", "Reference", REFERENCE_LIMIT)]
 _transactions = set()
+_read_transform = None
+_write_transform = None
+
+
+def configure_transform(*, reader=None, writer=None):
+    """Bind the same read/write callbacks as the persistent status Type-In."""
+    global _read_transform, _write_transform
+    if (reader is None) != (writer is None):
+        raise ValueError("Bind both transform callbacks together")
+    _read_transform, _write_transform = reader, writer
 
 
 def radio(layout, data, name, choices):
@@ -41,7 +52,7 @@ def _depth(obj):
 
 def _write_matrices(context, matrices):
     for obj in sorted(matrices, key=_depth):
-        if _alive(obj):
+        if _alive(obj) and obj.matrix_world != matrices[obj]:
             obj.matrix_world = matrices[obj]
             context.view_layer.update()
 
@@ -57,17 +68,49 @@ def active_tool(context):
     return "MOVE"
 
 
-def coordinate_basis(context, obj, system):
-    """World and Parent have origins. Local uses the object's current axes."""
+def transform_owner(context):
+    """Use the incoming transform service when its settings are installed."""
+    if not hasattr(context.scene, "max_rotate"):
+        return None
+    try:
+        return importlib.import_module(".max_rotate", __package__)
+    except ModuleNotFoundError as exc:
+        if exc.name != __package__ + ".max_rotate":
+            raise
+        return None
+
+
+def reference_name(context, tool):
+    owner = transform_owner(context)
+    return owner.reference_name(context, tool) if owner else "WORLD"
+
+
+def coordinate_basis(context, obj, system, tool="MOVE"):
+    """Rotation-only reference axes and the shared coordinate origin."""
+    owner = transform_owner(context)
+    if owner and system == owner.reference_name(context, tool):
+        area = next((a for a in context.screen.areas if a.type == "VIEW_3D"), None) if context.screen else None
+        view = getattr(context, "region_data", None) or (area.spaces.active.region_3d if area else None)
+        basis = owner.reference_basis(context, obj, view, operation=tool).to_4x4()
+        basis.translation = owner._coordinate_center(context, obj, operation=tool)
+        return basis
     if system == "WORLD":
         return Matrix.Identity(4)
     if system == "PARENT":
-        return obj.parent.matrix_world.copy() if obj.parent else Matrix.Identity(4)
+        if obj.parent:
+            basis = obj.parent.matrix_world.to_quaternion().to_matrix().to_4x4()
+            basis.translation = obj.parent.matrix_world.translation
+            return basis
+        return Matrix.Identity(4)
     if system == "LOCAL":
-        return obj.matrix_world.to_quaternion().to_matrix().to_4x4()
+        basis = obj.matrix_world.to_quaternion().to_matrix().to_4x4()
+        basis.translation = obj.matrix_world.translation
+        return basis
     if system in {"VIEW", "SCREEN"}:
         area = next((a for a in context.screen.areas if a.type == "VIEW_3D"), None) if context.screen else None
         if area:
+            if system == "VIEW" and area.spaces.active.region_3d.is_perspective:
+                return Matrix.Identity(4)
             return area.spaces.active.region_3d.view_rotation.to_matrix().to_4x4()
         raise ValueError("Screen coordinates require a viewport")
     raise ValueError("Unsupported reference coordinate system")
@@ -75,10 +118,12 @@ def coordinate_basis(context, obj, system):
 
 class TransformDraft:
     """Always calculate previews from the starting world matrices."""
-    def __init__(self, context, objects=None, system="WORLD"):
+    def __init__(self, context, objects=None, system=None, tool="MOVE", callbacks=False):
         if context.mode != "OBJECT":
             raise ValueError("Type-In supports object transforms. Finish sub-object editing first")
         self.context = context
+        self.reader = _read_transform if callbacks else None
+        self.writer = _write_transform if callbacks else None
         self.objects = list(context.selected_objects if objects is None else objects)
         if not self.objects:
             raise ValueError("Select an object first")
@@ -90,7 +135,11 @@ class TransformDraft:
                 raise ValueError("Constrained objects need their controller edited directly")
         context.view_layer.update()
         self.matrices = {obj: obj.matrix_world.copy() for obj in self.objects}
-        self.bases = {obj: coordinate_basis(context, obj, system) for obj in self.objects}
+        self.start = {obj: matrix.copy() for obj, matrix in self.matrices.items()}
+        self.system = system or reference_name(context, tool)
+        self.tool = tool
+        self.bases = {obj: coordinate_basis(context, obj, self.system, tool) for obj in self.objects}
+        self._capture_readout(tool)
         self.closed = False
         _transactions.add(self)
 
@@ -98,16 +147,65 @@ class TransformDraft:
         if self.closed or not all(_alive(obj) for obj in self.objects):
             raise ValueError("The source selection is no longer available")
 
+    def reframe(self, system, tool):
+        """Keep the current preview, but read new fields in the selected frame."""
+        self._validate()
+        self.start = {obj: obj.matrix_world.copy() for obj in self.objects}
+        self.bases = {obj: coordinate_basis(self.context, obj, system, tool) for obj in self.objects}
+        self.system, self.tool = system, tool
+        self._capture_readout(tool)
+
+    def _capture_readout(self, tool):
+        self.readout = None
+        if self.reader:
+            kind, values, unit = self.reader(self.context, False)
+            if kind != tool or values is None:
+                raise ValueError("The shared transform has no absolute readout for this selection")
+            self.readout = tuple(values)
+        elif tool == "ROTATE" and transform_owner(self.context):
+            self.readout = tuple(transform_owner(self.context).typein_values(self.context))
+
+    def values(self, tool):
+        obj = self.context.active_object
+        if obj not in self.start:
+            obj = self.objects[0]
+        if self.readout is not None:
+            return self.readout
+        location, rotation, scale = (self.bases[obj].inverted_safe() @ self.start[obj]).decompose()
+        return location if tool == "MOVE" else rotation.to_euler("XYZ") if tool == "ROTATE" else scale * 100
+
     def type_in(self, tool, group, values):
         self._validate()
         if tool not in {"MOVE", "ROTATE", "SCALE"} or group not in {"ABSOLUTE", "OFFSET"}:
             raise ValueError("Unsupported transform")
+        if tool != self.tool:
+            self.reframe(self.system, tool)
+        neutral = self.values(tool) if group == "ABSOLUTE" else ((100, 100, 100) if tool == "SCALE" else (0, 0, 0))
+        if all(abs(a-b) < 1e-6 for a, b in zip(values, neutral)):
+            _write_matrices(self.context, self.start)
+            return
+        if self.writer:
+            _write_matrices(self.context, self.start)
+            if not self.writer(self.context, tuple(values), group == "OFFSET"):
+                _write_matrices(self.context, self.start)
+                raise ValueError("The shared transform rejected these values")
+            return
+        owner = transform_owner(self.context)
+        if tool == "ROTATE" and owner:
+            _write_matrices(self.context, self.start)
+            session = owner.typein_apply(self.context, values, absolute=group == "ABSOLUTE")
+            session.finish()
+            return
         matrices = {}
-        for obj, original in self.matrices.items():
+        for obj, original in self.start.items():
             basis = self.bases[obj]
             position, rotation, scale = (basis.inverted_safe() @ original).decompose()
             if tool == "MOVE":
                 position = Vector(values) if group == "ABSOLUTE" else position + Vector(values)
+                matrix = original.copy()
+                matrix.translation = basis @ position
+                matrices[obj] = matrix
+                continue
             elif tool == "ROTATE":
                 value = Euler(values, "XYZ").to_quaternion()
                 rotation = value if group == "ABSOLUTE" else value @ rotation
@@ -290,6 +388,29 @@ class MAX_OT_clone_dialog(bpy.types.Operator):
 
 SYSTEMS = [(v, n, "") for v, n in (("WORLD", "World"), ("LOCAL", "Local"),
             ("PARENT", "Parent"), ("VIEW", "View"), ("SCREEN", "Screen"))]
+TYPEIN_SYSTEMS = [(*item, i) for i, item in enumerate(SYSTEMS + [
+    ("PICK", "Pick", ""), ("GRID", "Grid", ""), ("WORKING", "Working", ""),
+    ("GIMBAL", "Gimbal", ""), ("LOCAL_ALIGNED", "Local Aligned", "")])]
+
+
+def _reference_items(self, context):
+    return TYPEIN_SYSTEMS if context and transform_owner(context) else TYPEIN_SYSTEMS[:5]
+
+
+def _get_reference(self):
+    owner = transform_owner(bpy.context)
+    name = owner.reference_name(bpy.context, self.tool) if owner else self.get("_reference", "WORLD")
+    return next(i for i, item in enumerate(TYPEIN_SYSTEMS) if item[0] == name)
+
+
+def _set_reference(self, value):
+    name = TYPEIN_SYSTEMS[value][0]
+    owner = transform_owner(bpy.context)
+    if owner:
+        attr = {"MOVE": "move_reference", "ROTATE": "reference", "SCALE": "scale_reference"}[self.tool]
+        setattr(owner.settings(bpy.context), attr, name)
+    else:
+        self["_reference"] = name
 
 
 class MAX_OT_typein_dialog(bpy.types.Operator):
@@ -298,12 +419,15 @@ class MAX_OT_typein_dialog(bpy.types.Operator):
     bl_label = "Transform Type-In"
     bl_options = {"REGISTER", "UNDO"}
     tool: EnumProperty(items=[(v, v.title(), "") for v in ("MOVE", "ROTATE", "SCALE")])
-    system: EnumProperty(name="Reference Coordinate System", items=SYSTEMS, default="WORLD")
+    system: EnumProperty(name="Reference Coordinate System", items=_reference_items,
+                         get=_get_reference, set=_set_reference, options={"SKIP_SAVE"})
     group: EnumProperty(items=[("ABSOLUTE", "Absolute", ""), ("OFFSET", "Offset", "")])
-    absolute: FloatVectorProperty(name="Absolute", size=3)
-    offset: FloatVectorProperty(name="Offset", size=3)
+    absolute: FloatVectorProperty(name="Absolute", size=3, subtype="TRANSLATION", unit="LENGTH")
+    offset: FloatVectorProperty(name="Offset", size=3, subtype="TRANSLATION", unit="LENGTH")
     absolute_angle: FloatVectorProperty(name="Absolute", size=3, subtype="EULER")
     offset_angle: FloatVectorProperty(name="Offset", size=3, subtype="EULER")
+    absolute_scale: FloatVectorProperty(name="Absolute (%)", size=3, default=(100, 100, 100))
+    offset_scale: FloatVectorProperty(name="Offset (%)", size=3, default=(100, 100, 100))
     preview: BoolProperty(name="Preview", default=False)
 
     def invoke(self, context, event):
@@ -311,16 +435,21 @@ class MAX_OT_typein_dialog(bpy.types.Operator):
         obj = context.active_object
         if not obj:
             return {"CANCELLED"}
-        location, rotation, scale = obj.matrix_world.decompose()
-        self.absolute = location if self.tool == "MOVE" else Vector(scale) * 100
-        self.absolute_angle = rotation.to_euler("XYZ")
-        self.offset = (100, 100, 100) if self.tool == "SCALE" else (0, 0, 0)
         try:
-            self._tx = TransformDraft(context, system=self.system)
+            self._tx = TransformDraft(context, system=self.system, tool=self.tool, callbacks=True)
+            self._refresh_fields()
         except ValueError as exc:
             self.report({"WARNING"}, str(exc))
             return {"CANCELLED"}
         return context.window_manager.invoke_props_dialog(self, width=430)
+
+    def _field(self, group):
+        return group.lower() + {"MOVE": "", "ROTATE": "_angle", "SCALE": "_scale"}[self.tool]
+
+    def _refresh_fields(self):
+        setattr(self, self._field("ABSOLUTE"), self._tx.values(self.tool))
+        setattr(self, self._field("OFFSET"), (100, 100, 100) if self.tool == "SCALE" else (0, 0, 0))
+        self._frame = self.system
 
     def draw(self, context):
         self.layout.label(text=self.tool.title() + " Transform Type-In")
@@ -328,7 +457,7 @@ class MAX_OT_typein_dialog(bpy.types.Operator):
         for group, label in (("ABSOLUTE", "Absolute"), ("OFFSET", "Offset")):
             box = self.layout.box()
             radio(box, self, "group", [(group, label + ": " + self.system.title())])
-            prop = group.lower() + ("_angle" if self.tool == "ROTATE" else "")
+            prop = self._field(group)
             for i, axis in enumerate("XYZ"):
                 box.prop(self, prop, index=i, text=axis + (" (%)" if self.tool == "SCALE" else ""))
         self.layout.prop(self, "preview")
@@ -337,15 +466,15 @@ class MAX_OT_typein_dialog(bpy.types.Operator):
         tx = getattr(self, "_tx", None)
         if tx and not tx.closed:
             try:
-                tx.bases = {obj: coordinate_basis(context, obj, self.system) for obj in tx.objects}
-                # Local preview axes are always derived from the starting pose.
-                if self.system == "LOCAL":
-                    tx.bases = {obj: matrix.to_quaternion().to_matrix().to_4x4() for obj, matrix in tx.matrices.items()}
+                if self.system != self._frame:
+                    tx.reframe(self.system, self.tool)
+                    self._refresh_fields()
+                    return True
                 if self.preview:
-                    prop = self.group.lower() + ("_angle" if self.tool == "ROTATE" else "")
+                    prop = self._field(self.group)
                     tx.type_in(self.tool, self.group, getattr(self, prop))
                 else:
-                    _write_matrices(context, tx.matrices)
+                    _write_matrices(context, tx.start)
             except ValueError as exc:
                 self.report({"WARNING"}, str(exc))
         return True
@@ -357,9 +486,12 @@ class MAX_OT_typein_dialog(bpy.types.Operator):
     def execute(self, context):
         tx = None
         try:
-            tx = getattr(self, "_tx", None) or TransformDraft(context, system=self.system)
-            self.check(context)
-            prop = self.group.lower() + ("_angle" if self.tool == "ROTATE" else "")
+            tx = getattr(self, "_tx", None)
+            if tx:
+                self.check(context)
+            else:
+                tx = TransformDraft(context, system=self.system, tool=self.tool, callbacks=True)
+            prop = self._field(self.group)
             tx.type_in(self.tool, self.group, getattr(self, prop))
             tx.accept()
         except (ValueError, RuntimeError) as exc:
@@ -668,6 +800,7 @@ def install():
 def uninstall():
     global _installed
     cancel_transactions()
+    configure_transform()
     if _installed:
         bpy.app.handlers.load_pre.remove(cancel_transactions)
         bpy.app.handlers.save_pre.remove(cancel_transactions)
