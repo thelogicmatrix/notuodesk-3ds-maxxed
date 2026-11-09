@@ -43,6 +43,7 @@ from . import editable_poly
 from . import snaps
 from . import symmetry
 from . import max_rotate, max_gizmos
+from . import mode_feedback
 
 
 _prefs_cache = [None]
@@ -180,7 +181,7 @@ HOTKEY_CHEATSHEET = (
 
 
 _classes = (
-    snaps.classes + (MaxxedPreferences,) + max_icons.classes + editable_poly.classes + prims.classes + keyboard_entry.classes + freezing.classes + plane_plus.classes + operators.classes + create.classes + vray.classes + max_import.classes
+    snaps.classes + mode_feedback.classes + (MaxxedPreferences,) + max_icons.classes + editable_poly.classes + prims.classes + keyboard_entry.classes + freezing.classes + plane_plus.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes + line_tool.classes
     + cut_loop.classes
@@ -225,9 +226,9 @@ def register():
             bpy.utils.register_class(cls)
     shift_clone.register_macros()
     wm = bpy.types.WindowManager
-    wm.max_cmd_tab = EnumProperty(name="Command Panel", items=max_icons.enum_items(ui_panel.TABS), default="CREATE")
+    wm.max_cmd_tab = EnumProperty(name="Command Panel", items=max_icons.enum_items(ui_panel.TABS), default="CREATE", update=mode_feedback.command_tab_changed)
     wm.max_create_cat = EnumProperty(name="Category", items=max_icons.enum_items(ui_panel.CREATE_CATS), default="GEOMETRY")
-    wm.max_sublevel = IntProperty(default=0)
+    wm.max_sublevel = IntProperty(default=0, update=operators.sublevel_changed)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""),
                                     ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", ""), ("JOKERMARTINI", "JokerMartini", ""), ("COMPOUND", "Compound Objects", "")])
     editable_poly.register_props()
@@ -241,6 +242,7 @@ def register():
     max_rotate.register()
     max_gizmos.register()
     ui_panel.register_props()
+    mode_feedback.register()
     vray.register_props()
     mtl_editor.register_props()
     turbosmooth.register_props()
@@ -267,6 +269,7 @@ def register():
 
 def unregister():
     symmetry.unregister()
+    mode_feedback.unregister()
     cursor_policy.unregister()
     cut_loop.cancel_active()
     viewcube.unregister()

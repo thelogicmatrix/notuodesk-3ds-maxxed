@@ -3,6 +3,7 @@
 import math
 
 import bpy
+import bmesh
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 from bpy.types import Operator
 from mathutils import Euler, Matrix, Quaternion
@@ -64,6 +65,52 @@ def mesh_select_mode(context):
 
 LEVEL_NAMES = {0: "Object", 1: "Vertex", 2: "Edge", 3: "Border", 4: "Polygon", 5: "Element"}
 _MESH_MODE = {1: "VERT", 2: "EDGE", 3: "EDGE", 4: "FACE", 5: "FACE"}
+_LEVEL_LAYER = ".max_sublevel_"
+_syncing_sublevel = False
+
+
+def stored_mesh_level(obj):
+    """Layer names survive EditMesh undo and saving, even on an empty mesh."""
+    mesh = obj.data
+    # load_post runs before Blender has recreated its edit BMesh.
+    layers = bmesh.from_edit_mesh(mesh).verts.layers.int if mesh.is_editmode else mesh.attributes
+    return next((lev for lev in _MESH_MODE if layers.get(_LEVEL_LAYER + str(lev)) is not None), 0)
+
+
+def sublevel_changed(wm, context):
+    if _syncing_sublevel or context.mode != "EDIT_MESH":
+        return
+    lvl = wm.max_sublevel
+    if lvl not in _MESH_MODE or _MESH_MODE[lvl] != mesh_select_mode(context):
+        return
+    for obj in context.objects_in_mode_unique_data:
+        bm = bmesh.from_edit_mesh(obj.data)
+        layers = bm.verts.layers.int
+        name = _LEVEL_LAYER + str(lvl)
+        if layers.get(name) is not None:
+            continue
+        for old in list(layers.keys()):
+            if old.startswith(_LEVEL_LAYER):
+                layers.remove(layers[old])
+        layers.new(name)
+        bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+
+
+def sync_sublevel(context):
+    """WindowManager is a compatibility mirror, never the mesh-level authority."""
+    global _syncing_sublevel
+    if not context.window_manager:
+        return
+    lvl = current_level(context)
+    if context.window_manager.max_sublevel != lvl:
+        _syncing_sublevel = True
+        try:
+            context.window_manager.max_sublevel = lvl
+        finally:
+            _syncing_sublevel = False
+    if context.mode == "EDIT_MESH" and context.edit_object.data.is_editmode:
+        # Native selection-mode changes also become saved, undoable level state.
+        sublevel_changed(context.window_manager, context)
 
 
 def current_level(context):
@@ -71,8 +118,9 @@ def current_level(context):
     if context.mode != "EDIT_MESH":
         return 0 if context.mode == "OBJECT" else wm.max_sublevel
     mode = mesh_select_mode(context)
-    if wm.max_sublevel in _MESH_MODE and _MESH_MODE[wm.max_sublevel] == mode:
-        return wm.max_sublevel
+    stored = stored_mesh_level(context.edit_object)
+    if stored in _MESH_MODE and _MESH_MODE[stored] == mode:
+        return stored
     return {"VERT": 1, "EDGE": 2, "FACE": 4}[mode]
 
 
@@ -100,11 +148,17 @@ class MAX_OT_subobject(Operator):
             obj = symmetry.leave(context)
         wm = context.window_manager
         lvl = self.level
+        from . import mode_feedback
+        tool = mode_feedback.active_tool(context)
+        if lvl:
+            wm.max_cmd_tab = "MODIFY"
+            obj.max_feedback_expanded = True
 
         if obj.type == "MESH":
             if lvl == 0 or (context.mode == "EDIT_MESH" and current_level(context) == lvl):
                 bpy.ops.object.mode_set(mode="OBJECT")
                 wm.max_sublevel = 0
+                mode_feedback.restore_tool(context, tool)
                 return {"FINISHED"}
             if context.mode != "EDIT_MESH":
                 if obj.max_prim.kind:     # editing a primitive turns it into an Editable Poly
@@ -117,6 +171,7 @@ class MAX_OT_subobject(Operator):
                 bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.select_mode(type=_MESH_MODE[lvl], use_extend=False, use_expand=False)
             wm.max_sublevel = lvl
+            mode_feedback.restore_tool(context, tool)
             if lvl == 3:
                 self.report({"INFO"}, "Border: click an open edge, then Alt+L / 'Loop' selects the whole border")
             elif lvl == 5:
@@ -594,6 +649,12 @@ class MAX_OT_object_cmd(Operator):
         return ""
 
     def invoke(self, context, event):
+        if self.cmd == "LINK":
+            override = viewport_override(context)
+            if override:
+                with context.temp_override(**override):
+                    bpy.ops.wm.tool_set_by_id(name="max.select_link")
+                return {"FINISHED"}
         return self.run(context, "INVOKE_DEFAULT")
 
     def execute(self, context):
@@ -1102,6 +1163,8 @@ class MAX_OT_modifier_set_active(Operator):
         if context.mode.startswith("EDIT"):
             bpy.ops.object.mode_set(mode="OBJECT")
         mod = ob.modifiers.get(self.name) if ob else None
+        if ob and ob.mode == "EDIT":
+            bpy.ops.max.subobject(level=0)
         from . import poly_tools
         if mod is not None and poly_tools.is_font_pivot(mod):
             return {"CANCELLED"}

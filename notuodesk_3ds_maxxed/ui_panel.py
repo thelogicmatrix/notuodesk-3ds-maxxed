@@ -76,7 +76,7 @@ def _stack_get(ob):
 
 def _stack_set(ob, value):
     if 0 <= value < len(ob.modifiers) and not poly_tools.is_font_pivot(ob.modifiers[value]):
-        ob.modifiers.active = ob.modifiers[value]
+        bpy.ops.max.modifier_set_active(name=ob.modifiers[value].name)
 
 
 class MAX_UL_stack(UIList):
@@ -167,9 +167,10 @@ class MAX_PT_command_panel(Panel):
             if not symmetry.draw_stack(col, context, ob):
                 col.template_list("MAX_UL_stack", "", ob, "modifiers", ob, "max_stack_index",
                                   rows=3, maxrows=8, sort_lock=True)
-            base = col.row(align=True)
-            no_active = _stack_get(ob) < 0
-            base.operator("max.modifier_set_active", text=base_name(ob), depress=no_active).name = ""
+            from . import mode_feedback
+            mode_feedback.draw_stack_levels(col, context, ob, base_name(ob),
+                max_icons.ui("editable_poly" if ob.type == "MESH" else "shapes",
+                             "MESH_DATA" if ob.type == "MESH" else "OBJECT_DATA"))
 
             # stack tool icons
             active = ob.modifiers.active if _stack_get(ob) >= 0 else None

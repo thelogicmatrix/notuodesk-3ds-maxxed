@@ -45,7 +45,8 @@ def button(layout, action, text=None):
             from .target_weld import is_active
             row.operator("max.edit_poly", text=label, depress=is_active(bpy.context)).op = action
         else:
-            row.operator("max.edit_poly", text=label).op = action
+            from .mode_feedback import tool_pressed
+            row.operator("max.edit_poly", text=label, depress=tool_pressed(bpy.context, action)).op = action
     if action in ep.CADDIES:
         sub = row.row(align=True)
         sub.operator_context = "INVOKE_DEFAULT"
@@ -108,28 +109,8 @@ def selection(layout, context):
     radios(row, p, "preview")
     if level == 3:
         button(col, "OPEN_EDGES")
-    if level == 0:
-        text = "Whole Object Selected"
-    else:
-        bm = bmesh.from_edit_mesh(context.active_object.data)
-        seq = bm.verts if level == 1 else bm.edges if level in (2, 3) else bm.faces
-        count = sum(1 for item in seq if item.select)
-        if level == 5:
-            # Count connected selected elements, not individual polygons.
-            remaining = {f for f in bm.faces if f.select}
-            count = 0
-            while remaining:
-                todo = [remaining.pop()]
-                count += 1
-                while todo:
-                    for edge in todo.pop().edges:
-                        for face in edge.link_faces:
-                            if face in remaining:
-                                remaining.remove(face)
-                                todo.append(face)
-        noun = {1: "Vertices", 2: "Edges", 3: "Edges", 4: "Polygons", 5: "Elements"}[level]
-        text = f"{count} {noun} Selected"
-    layout.label(text=text)
+    from .mode_feedback import rollout_selection_text
+    layout.label(text=rollout_selection_text(context))
 
 
 def soft_selection(layout, context):

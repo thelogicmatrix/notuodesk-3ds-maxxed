@@ -114,7 +114,9 @@ class ReviewRegressions(unittest.TestCase):
         print('R8 PASS reference systems and user-facing gizmo controls', flush=True)
 
     def test_R8_reference_clone_is_one_way(self):
-        clone = r.begin_clone(bpy.context)
+        # This checks the standalone fallback. Integrated tools use shift_clone,
+        # whose Reference sharing contract has its own suite.
+        clone = r._ClonePreview(bpy.context)
         copy = bpy.context.active_object
         clone.finish(mode='REFERENCE')
         self.assertNotEqual(copy.data, self.ob.data, 'Reference needs independent downstream edits')

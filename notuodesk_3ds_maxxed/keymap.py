@@ -45,6 +45,7 @@ VIEWPORT = [
     K("max.subobject", "FOUR", level=4),
     K("max.subobject", "FIVE", level=5),
     K("max.subobject", "SIX", level=0),
+    K("max.subobject", "B", ctrl=True, level=0),
     # Views
     K("max.set_view", "T", view="TOP"),
     K("max.set_view", "B", view="BOTTOM"),
@@ -62,6 +63,7 @@ VIEWPORT = [
     K("max.viewcube_action", "V", ctrl=True, alt=True, action="TOGGLE"),
     K("max.viewcube_action", "H", ctrl=True, alt=True, action="HOME"),
     # Display toggles
+    K("max.selection_brackets", "J"),
     K("max.toggle", "F3", what="WIREFRAME"),
     K("max.toggle", "F4", what="EDGED_FACES"),
     K("max.toggle", "X", alt=True, what="SEE_THROUGH"),

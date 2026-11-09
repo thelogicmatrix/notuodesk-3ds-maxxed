@@ -1,7 +1,7 @@
 """Quad menus, Modifier List, top menus, the Main Toolbar and the status bar."""
 
 import bpy
-from . import max_icons
+from . import max_icons, mode_feedback
 from bpy.types import Menu
 
 # (Max name, "BLENDER_TYPE[:option]") grouped like the 3ds Max Modifier List
@@ -148,6 +148,7 @@ class MAX_MT_quad(Menu):
 
         if edit:
             _header(right, "tools 1")
+            right.menu("MAX_MT_sublevels", text="Sub-objects")
             for op, text in (("REPEAT", "Repeat Last"), ("SWIFT_LOOP", "SwiftLoop"), ("CUT", "Cut"),
                              ("CONNECT", "Connect"), ("EXTRUDE", "Extrude"), ("CHAMFER", "Chamfer"),
                              ("WELD", "Weld"), ("TARGET_WELD", "Target Weld"), ("BRIDGE", "Bridge")):
@@ -181,9 +182,9 @@ class MAX_MT_quad(Menu):
             left.operator("max.object_cmd", text="See-Through").cmd = "SEE_THROUGH"
 
         _header(right, "transform")
-        right.operator("max.select_transform", text="Move").kind = "MOVE"
-        right.operator("max.select_transform", text="Rotate").kind = "ROTATE"
-        right.operator("max.select_transform", text="Scale").kind = "SCALE"
+        right.operator("max.select_transform", text="Move", depress=mode_feedback.tool_pressed(context, "MOVE")).kind = "MOVE"
+        right.operator("max.select_transform", text="Rotate", depress=mode_feedback.tool_pressed(context, "ROTATE")).kind = "ROTATE"
+        right.operator("max.select_transform", text="Scale", depress=mode_feedback.tool_pressed(context, "SCALE")).kind = "SCALE"
         right.operator("wm.tool_set_by_id", text="Select").name = "builtin.select_box"
         if not edit:
             right.operator("object.select_grouped", text="Select Similar").type = "TYPE"
@@ -205,8 +206,7 @@ class MAX_MT_quad_modeling(Menu):
     def draw(self, context):
         left, right = _quad(self.layout)
         _header(left, "modeling")
-        for lvl, name in ((1, "Vertex"), (2, "Edge"), (3, "Border"), (4, "Polygon"), (5, "Element"), (0, "Top-level")):
-            left.operator("max.subobject", text=name).level = lvl
+        mode_feedback.draw_sublevel_menu(left, context, (1, 2, 3, 4, 5, 0))
         _header(right, "tools")
         if context.mode == "EDIT_MESH":
             for op in ("EXTRUDE", "BEVEL", "OUTLINE", "INSET", "CHAMFER", "CONNECT", "BRIDGE", "CUT",
@@ -225,8 +225,7 @@ class MAX_MT_sublevels(Menu):
     bl_idname = "MAX_MT_sublevels"
 
     def draw(self, context):
-        for lvl, name in ((0, "Top-level"), (1, "Vertex"), (2, "Edge"), (3, "Border"), (4, "Polygon"), (5, "Element")):
-            self.layout.operator("max.subobject", text=name).level = lvl
+        mode_feedback.draw_sublevel_menu(self.layout, context)
 
 
 class MAX_MT_convert(Menu):
@@ -533,10 +532,12 @@ def draw_main_toolbar(self, context):
     row.operator("ed.undo", text="", **max_icons.ui("undo", "LOOP_BACK"))
     row.operator("ed.redo", text="", **max_icons.ui("redo", "LOOP_FORWARDS"))
     row = lay.row(align=True)
-    row.operator("max.object_cmd", text="", **max_icons.ui("link", "LINKED")).cmd = "LINK"
+    row.enabled = context.mode == "OBJECT"
+    row.operator("wm.tool_set_by_id", text="", depress=mode_feedback.tool_pressed(context, "LINK"), **max_icons.ui("link", "LINKED")).name = "max.select_link"
     row.operator("max.object_cmd", text="", **max_icons.ui("unlink", "UNLINKED")).cmd = "UNLINK"
 
     row = lay.row(align=True)
+    row.operator("wm.tool_set_by_id", text="", depress=mode_feedback.tool_pressed(context, "SELECT"), **max_icons.ui("select_object", "RESTRICT_SELECT_OFF")).name = "builtin.select_box"
     row.operator("max.select_by_name", text="", **max_icons.ui("select_by_name", "VIEWZOOM"))
     row.operator("max.icon_tool", text="", **max_icons.ui("region_rect", "SELECT_SET"),
                  depress=tool == "builtin.select_box").tool = "RECT"
@@ -549,9 +550,7 @@ def draw_main_toolbar(self, context):
     row.scale_x = 1.1
     for idname, icon, custom in (("builtin.move", "OBJECT_ORIGIN", "move"), ("builtin.rotate", "ORIENTATION_GIMBAL", "rotate"),
                                  ("builtin.scale", "FULLSCREEN_ENTER", "scale")):
-        kind = {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]
-        row.operator("max.select_transform", text="", **max_icons.ui(custom, icon),
-                     depress=(tool in {idname, idname.replace("builtin.", "max.snap_"), idname.replace("builtin.", "max.")})).kind = kind
+        row.operator("max.select_transform", text="", depress=mode_feedback.tool_pressed(context, {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]), **max_icons.ui(custom, icon)).kind = {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]
 
     slot = context.scene.transform_orientation_slots[0]
     from . import max_rotate
@@ -591,10 +590,8 @@ def draw_statusbar(self, context):
     if p is not None and not p.show_statusbar:
         return
     lay = self.layout
-    n = len(context.selected_objects) if context.mode == "OBJECT" else 0
     row = lay.row(align=True)
-    row.label(text=f"{n} Object{'s' if n != 1 else ''} Selected" if context.mode == "OBJECT"
-              else context.mode.replace("_", " ").title())
+    row.label(text=mode_feedback.selection_text(context))
     ob = context.active_object
     if ob is not None and context.mode == "OBJECT":
         row = lay.row(align=True)
@@ -623,6 +620,10 @@ classes = tuple(CATEGORY_MENUS) + (
 )
 
 
+def max_statusbar_draw(self, context):
+    return mode_feedback.draw_status(self, context, _orig_topbar["status"], draw_statusbar)
+
+
 def register_draw():
     tb = bpy.types.TOPBAR_HT_upper_bar
     _orig_topbar["left"] = tb.draw_left
@@ -632,7 +633,8 @@ def register_draw():
     hd = bpy.types.VIEW3D_HT_header
     _orig_topbar["v3d"] = hd.draw
     hd.draw = view3d_header_draw
-    bpy.types.STATUSBAR_HT_header.append(draw_statusbar)
+    _orig_topbar["status"] = bpy.types.STATUSBAR_HT_header.draw
+    bpy.types.STATUSBAR_HT_header.draw = max_statusbar_draw
 
 
 def unregister_draw():
@@ -642,4 +644,5 @@ def unregister_draw():
         tb.draw_right = _orig_topbar["right"]
     if "v3d" in _orig_topbar:
         bpy.types.VIEW3D_HT_header.draw = _orig_topbar["v3d"]
-    bpy.types.STATUSBAR_HT_header.remove(draw_statusbar)
+    if "status" in _orig_topbar:
+        bpy.types.STATUSBAR_HT_header.draw = _orig_topbar["status"]

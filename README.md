@@ -20,6 +20,10 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 
 The 3ds Max workspace hides Blender's 3D cursor in every viewport, including new viewports and saved layouts. It keeps the active scene's cursor at the world origin. Shift+right-click cannot place or drag it. Shapes, helpers, lights, cameras and V-Ray objects start at the origin without reading the cursor. Primitive mouse creation still uses the point you click on the construction grid.
 
+Mode feedback follows the current tool and selection level. Select Object and Move, Rotate, Scale and Select and Link press their Main Toolbar buttons. The expanded Editable Poly stack marks the active level in yellow and puts its icon beside the base entry. The Selection rollout and quad menu show the same level. Border and Element remain distinct after Undo, Redo and saving and reopening the file. Click the active level, the base entry, press 6 or Ctrl+B to return to Object. Switching Command Panel tabs also leaves sub-object mode. Move, Rotate and Scale stay active when changing mesh levels. In quad view, the feedback cursor appears only in the viewport under the mouse.
+
+Selected objects have white edged faces and white wireframe selection. Press J for optional white selection brackets in shaded views. Brackets start off, as in Max 2026. Sub-object mode removes the object brackets and uses red vertices, edges or polygons with blue unselected vertices. The status bar shows the selection count and a prompt for the current tool. Hovering a selectable object changes the cursor. Select and Link stays active while you drag children onto a parent, with a dashed link line.
+
 | 3ds Max | In Blender |
 |---|---|
 | Menu bar: File, Edit, Tools, Group, Views, Create, Modifiers, Animation, Graph Editors, Rendering, Customize, Scripting, Help | Replaces Blender's top menus. Blender's own menus are still there as sub-menus |
@@ -443,6 +447,8 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 ## Known differences from 3ds Max
 
 - Symmetry uses Blender's exact Boolean and mesh-merge operations. Cut-aware welding uses a coordinate-relative numerical tolerance, limited by Weld Threshold. This is not Autodesk's private vertex-tracking implementation. Unmatched radial boundaries can stay open with Mirror Symmetry off. Blender supplies the spinners and transform gizmos. A helper collection remains visible in the Outliner. Pick Object samples the reference transform once. Radial starts at Count 2, Z and Mirror Symmetry off. Autodesk's 2026 help states X as the general default axis but does not separately explain the switch to Radial. These Radial startup values remain unverified against Max.
+- Blender does not expose Max's native cursor artwork or Nitrous selection-preview silhouette. The add-on draws transform/link cursor symbols and yellow hovered mesh edges. Blender draws the native blue selection outline and sub-object dots. Small antialias fringes can remain around the white wireframe overlay. Helper and un-bevelled spline Link targets use their projected origins because Blender's scene ray cast has no pick surface there.
+- Blender themes colour list selections globally. The yellow stack-level selection uses that shared list colour. The base entry and toolbar buttons use blue. Symmetry Mirror uses its helper state for the stack, selection count and transform prompt. Edit Poly edits the base mesh.
 
 - Shapes, helpers, lights, cameras and V-Ray objects use the world origin instead of interactive placement. Target lights and cameras keep a preset target offset.
 - The cursor policy checks new viewports and scene switches every 0.2 seconds. Other workspaces keep their cursor display settings. A scene shared with the 3ds Max workspace shares its cursor location too.
