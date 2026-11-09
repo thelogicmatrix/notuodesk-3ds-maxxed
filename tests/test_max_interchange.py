@@ -280,17 +280,18 @@ class InterchangeTests(unittest.TestCase):
             bpy.data.objects.remove(imported, do_unlink=True)
         print("VERIFIED subdivision: editable or applied evaluated vertices match within 2e-5, source unchanged", flush=True)
 
-    def evaluated_geometry(self, ob):
+    def evaluated_geometry(self, ob, matrix_world=None):
         bpy.context.view_layer.update()
         evaluated = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
         mesh = evaluated.to_mesh()
         try:
-            return [evaluated.matrix_world @ v.co for v in mesh.vertices], len(mesh.polygons)
+            matrix = evaluated.matrix_world if matrix_world is None else matrix_world
+            return [matrix @ v.co for v in mesh.vertices], len(mesh.polygons)
         finally:
             evaluated.to_mesh_clear()
 
-    def assert_geometry_matches(self, before, ob):
-        vertices, faces = self.evaluated_geometry(ob)
+    def assert_geometry_matches(self, before, ob, matrix_world=None):
+        vertices, faces = self.evaluated_geometry(ob, matrix_world)
         self.assertEqual(faces, before[1])
         self.assertEqual(len(vertices), len(before[0]))
         # FBX may reorder vertices. Compare positions in both directions instead of indices.
@@ -336,6 +337,99 @@ class InterchangeTests(unittest.TestCase):
                 bpy.data.objects.remove(imported_safe, do_unlink=True)
         print("VERIFIED TurboSmooth then Shell: both export operators bake matching evaluated vertices within 2e-5", flush=True)
 
+    def test_collection_instance_subdivision_roundtrip(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for linked, nested, trailing_shell in ((True, False, True), (False, False, True), (False, True, True),
+                                                   (True, False, False), (False, False, False), (False, True, False)):
+                with self.subTest(export=export.idname(), source_in_scene=linked, nested=nested, shell=trailing_shell):
+                    for ob in list(bpy.data.objects):
+                        bpy.data.objects.remove(ob, do_unlink=True)
+                    source = self.cube("InstanceBox")
+                    collection = bpy.data.collections.new("InstanceSource")
+                    collection.objects.link(source)
+                    for owner in list(source.users_collection):
+                        if owner != collection:
+                            owner.objects.unlink(source)
+                    if linked:
+                        bpy.context.scene.collection.children.link(collection)
+                    sub = source.modifiers.new("TurboSmooth", "SUBSURF")
+                    sub.levels = sub.render_levels = 2
+                    if trailing_shell:
+                        shell = source.modifiers.new("Shell", "SOLIDIFY")
+                        shell.thickness = 0.4
+                    if nested:
+                        outer = bpy.data.collections.new("OuterSource")
+                        outer.children.link(collection)
+                        collection = outer
+                    instance = bpy.data.objects.new("Instance001", None)
+                    instance.instance_type = "COLLECTION"
+                    instance.instance_collection = collection
+                    instance.location = (3, -2, 1)
+                    instance_position = instance.location.copy()
+                    bpy.context.collection.objects.link(instance)
+                    bpy.context.view_layer.update()
+                    for ob in bpy.context.view_layer.objects:
+                        ob.select_set(ob == instance)
+                    bpy.context.view_layer.update()
+                    graph = bpy.context.evaluated_depsgraph_get()
+                    instance_matrix = next(i.matrix_world.copy() for i in graph.object_instances
+                                           if i.is_instance and i.object.original == source)
+                    before = self.evaluated_geometry(source, instance_matrix)
+                    path = str(pathlib.Path(self.tmp.name) / "instance.fbx")
+                    self.assertEqual(export(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+                    self.assertEqual([m.type for m in source.modifiers],
+                                     ["SUBSURF", "SOLIDIFY"] if trailing_shell else ["SUBSURF"])
+                    self.assertEqual(sub.levels, 2)
+                    if trailing_shell:
+                        self.assertAlmostEqual(shell.thickness, 0.4)
+                    self.assertEqual(instance.instance_collection, collection)
+                    self.assert_geometry_matches(before, source, matrix_world=instance_matrix)
+                    for ob in list(bpy.data.objects):
+                        bpy.data.objects.remove(ob, do_unlink=True)
+                    self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=False), {"FINISHED"})
+                    # Scene export also includes the linked source at its original position.
+                    imported = next(ob for ob in bpy.context.scene.objects if ob.type == "MESH"
+                                    and (ob.matrix_world.translation - instance_position).length < 2e-5)
+                    self.assert_geometry_matches(before, imported)
+                    self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 0 if trailing_shell else 1)
+                    print(f"VERIFIED collection instance: {export.idname()}, source_in_scene={linked}, "
+                          f"nested={nested}, trailing_shell={trailing_shell}, evaluated geometry within 2e-5", flush=True)
+
+    def test_converted_curve_and_text_subdivision_bakes_shape(self):
+        for export in (bpy.ops.max.export_selected_fbx, bpy.ops.max.export_max_fbx):
+            for kind in ("CURVE", "FONT"):
+                for trailing_shell in (False, True):
+                    with self.subTest(export=export.idname(), type=kind, shell=trailing_shell):
+                        for ob in list(bpy.data.objects):
+                            bpy.data.objects.remove(ob, do_unlink=True)
+                        if kind == "CURVE":
+                            bpy.ops.curve.primitive_bezier_circle_add()
+                        else:
+                            bpy.ops.object.text_add()
+                            bpy.context.object.data.body = "Max"
+                        ob = bpy.context.object
+                        ob.name = "Converted001"
+                        ob.data.extrude = 0.2
+                        sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
+                        sub.levels = sub.render_levels = 1
+                        if trailing_shell:
+                            shell = ob.modifiers.new("Shell", "SOLIDIFY")
+                            shell.thickness = 0.4
+                        before = self.evaluated_geometry(ob)
+                        path = str(pathlib.Path(self.tmp.name) / "converted.fbx")
+                        self.assertEqual(export(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+                        self.assertEqual(ob.type, kind)
+                        self.assertEqual(sub.levels, 1)
+                        self.assertEqual(len(ob.modifiers), 2 if trailing_shell else 1)
+                        self.assert_geometry_matches(before, ob)
+                        bpy.data.objects.remove(ob, do_unlink=True)
+                        self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=False), {"FINISHED"})
+                        imported = bpy.context.scene.objects["Converted001"]
+                        self.assert_geometry_matches(before, imported)
+                        self.assertFalse(any(m.type == "SUBSURF" for m in imported.modifiers))
+                        print(f"VERIFIED converted {kind}: {export.idname()}, trailing_shell={trailing_shell}, "
+                              "evaluated geometry within 2e-5", flush=True)
+
     def test_subdivision_with_disabled_trailing_modifier_stays_editable(self):
         ob = self.cube()
         sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
@@ -370,6 +464,35 @@ class InterchangeTests(unittest.TestCase):
         self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 1)
         self.assert_geometry_matches(before, imported)
         print("VERIFIED unselected unsafe stack does not force selected subdivision to bake", flush=True)
+
+    def test_selected_subdivision_ignores_unselected_unsafe_instance(self):
+        source = self.cube("ExcludedInstanceSource")
+        source.modifiers.new("TurboSmooth", "SUBSURF")
+        source.modifiers.new("Shell", "SOLIDIFY")
+        collection = bpy.data.collections.new("ExcludedSource")
+        collection.objects.link(source)
+        for owner in list(source.users_collection):
+            if owner != collection:
+                owner.objects.unlink(source)
+        instance = bpy.data.objects.new("ExcludedInstance", None)
+        instance.instance_type = "COLLECTION"
+        instance.instance_collection = collection
+        bpy.context.collection.objects.link(instance)
+        ob = self.cube()
+        sub = ob.modifiers.new("TurboSmooth", "SUBSURF")
+        sub.levels = sub.render_levels = 1
+        before = self.evaluated_geometry(ob)
+        self.assertEqual(list(bpy.context.selected_objects), [ob])
+        path = str(pathlib.Path(self.tmp.name) / "selected-instance-scope.fbx")
+        self.assertEqual(bpy.ops.max.export_selected_fbx(filepath=path, subdivision="KEEP", animation=False), {"FINISHED"})
+        for ob in list(bpy.data.objects):
+            bpy.data.objects.remove(ob, do_unlink=True)
+        self.assertEqual(bpy.ops.max.import_max_fbx(filepath=path, animation=False), {"FINISHED"})
+        self.assertEqual(set(bpy.context.scene.objects.keys()), {"Box001"})
+        imported = bpy.context.scene.objects["Box001"]
+        self.assertEqual(sum(m.type == "SUBSURF" for m in imported.modifiers), 1)
+        self.assert_geometry_matches(before, imported)
+        print("VERIFIED unselected unsafe collection instance does not force selected subdivision to bake", flush=True)
 
     def test_failed_export_restores_units(self):
         self.cube()

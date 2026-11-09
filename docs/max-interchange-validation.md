@@ -1,6 +1,6 @@
 ﻿# Max interchange validation
 
-Checked on 2026-11-09 in Blender 5.0.1, with io_scene_max 1.9.2 (release `37db107`). All input scenes and the reference FBX were copied into `sb-max-interchange/inputs` first. No scene files are included in this repo.
+Rechecked on 2026-11-10 in Blender 5.0.1, with io_scene_max 1.9.2 (release `37db107`). All input scenes and the reference FBX were copied into `sb-max-interchange/inputs` first. No scene files are included in this repo.
 
 The isolated profile uses `sb-max-interchange/scripts`, `sb-max-interchange/config` and `sb-max-interchange/ext`. The add-on package is a junction to this worktree. The reader is installed only in that sandbox. The tests use factory startup and never save preferences.
 
@@ -58,7 +58,7 @@ The comparison matches objects by name, matrices element by element, mesh vertic
 ## Exporter regression tests
 
 ```text
-Ran 15 tests in 0.452s
+Ran 18 tests in 1.919s
 OK
 VERIFIED baked animation endpoints across FBX unit conversion
 VERIFIED media embedded byte-for-byte and material name preserved
@@ -79,6 +79,24 @@ The tests inspect FBX `UnitScaleFactor`, Z-up metadata, settings for geometry/mo
 The fix-round tests first reproduced both review findings. The image-only material made `bpy.ops.max.relink_textures` return `CANCELLED`. TurboSmooth followed by Shell failed the evaluated vertex comparison despite matching face counts. Geometry checks now compare world-space vertex positions in both directions within 0.00002 Blender units, independently of FBX vertex order, plus vertex and face counts. Both subdivision choices, the Shell stack through both export operators, a mixed export with another editable mesh, disabled trailing modifiers, and an excluded unsafe stack pass. Source meshes and modifiers stay unchanged. The public relink operator finds the matching PNG without `max_bitmap`, updates the existing image path, and loads its pixels.
 
 Fix-round evidence is in `sb-max-interchange/outputs/fix-round-red.log`, `fix-round-final.log`, `fix-round-reference/` and `fix-round-max-scenes.json`. The reference FBX comparison was rerun with the same results above. The repeated scene audit passed all 17 existing sandbox copies with finite transforms and uniform hierarchy unit conversion.
+
+Fix round 2 checks the same objects as native FBX, using the active view layer or selection and the dependency graph instances belonging to those exported instancers. This includes nested collection sources outside the scene hierarchy. Converted Curve, Surface, Text and Metaball objects cannot keep subdivision attributes because FBX already evaluates their modifiers during mesh conversion. Any exported converted object with enabled Catmull-Clark subdivision now triggers the same whole-export baking fallback, even if subdivision is its final modifier.
+
+The two new geometry regressions failed before production changes. Instanced TurboSmooth followed by Shell differed by 0.20612430572509766 Blender units through both public export operators. Curve and Text objects received subdivision twice, producing four times the expected face count, both with final subdivision and with trailing Shell. These cases now match evaluated world-space vertices in both directions within 0.00002 Blender units, with matching vertex and face counts. The instance cases cover linked sources, sources outside the scene, and nested collections. Safe instances still import with one editable subdivision modifier. Source objects and stacks stay unchanged. A third new test confirms an unselected unsafe collection instance does not force Export Selected to bake.
+
+Representative output from `fix-round-2-final.log`:
+
+```text
+VERIFIED collection instance: MAX_OT_export_selected_fbx, source_in_scene=False, nested=True, trailing_shell=True, evaluated geometry within 2e-5
+VERIFIED collection instance: MAX_OT_export_max_fbx, source_in_scene=False, nested=True, trailing_shell=False, evaluated geometry within 2e-5
+VERIFIED converted CURVE: MAX_OT_export_selected_fbx, trailing_shell=False, evaluated geometry within 2e-5
+VERIFIED converted FONT: MAX_OT_export_max_fbx, trailing_shell=True, evaluated geometry within 2e-5
+VERIFIED unselected unsafe collection instance does not force selected subdivision to bake
+Ran 18 tests in 1.919s
+OK
+```
+
+Fix-round-2 evidence is in `sb-max-interchange/outputs/fix-round-2-red.log`, `fix-round-2-final.log`, `fix-round-2-reference.log`, `fix-round-2-reference/`, `fix-round-2-max-scenes.log` and `fix-round-2-max-scenes.json`. All 15 existing tests and the three additions pass. The copied 3World reference comparison has the same results shown above. The 17-scene audit JSON is unchanged from fix round 1. Only sandbox copies were opened. Surface and Metaball conversion use the same guarded path but do not have dedicated round-trip fixtures.
 
 Blender 5.0.1's bundled FBX light importer assigns `lamp.cycles.cast_shadow`, a removed property. The camera/light test disables Cycles only inside the isolated test around re-import, then restores it. The shipped wrapper does not disable Cycles or patch Blender. Exporting lights works, but importing a file containing lights with Cycles enabled remains a Blender limitation.
 
@@ -101,7 +119,7 @@ Full JSON and logs are in the sandbox's `outputs` directory. `max-scenes.json` i
 
 Autodesk documents a default system unit of one inch. FBX writes the selected System Units into `UnitScaleFactor`, with geometry converted separately. The exporter restores Blender's scene units afterward. It uses Y-forward and Z-up, which is the identity axis conversion for Blender. Import reads FBX axis metadata and applies no extra manual rotation. FBX animation import uses a zero frame offset.
 
-Apply to Mesh is the default subdivision choice. Keep Editable writes the last Catmull-Clark modifier as FBX Smoothness, preview/render levels and supported crease data only when it is the final enabled modifier. Enabled means visible in either the viewport or render, matching the native FBX exporter. If any exported mesh has another enabled modifier after that subdivision, the wrapper applies subdivision for the entire export and reports a warning. Blender's subdivision export switch is global, so other exported meshes also bake in that case. Disabled trailing modifiers do not prevent editable export. The dialog explains the fallback. Both modes pass evaluated-geometry comparisons in a Blender round trip. Autodesk documents exporting a control mesh plus TurboSmooth attributes, but a Max import of Blender's attributes was not run. Other modifier settings, Max plug-in materials, constraints, rigs and procedural texture graphs do not have general parity. Curves use Blender FBX's mesh conversion.
+Apply to Mesh is the default subdivision choice. Keep Editable writes the last Catmull-Clark modifier as FBX Smoothness, preview/render levels and supported crease data only on meshes where it is the final enabled modifier. Enabled means visible in either the viewport or render, matching the native FBX exporter. The check includes exported collection instance sources. If any exported mesh has another enabled modifier after subdivision, or an exported non-mesh object already evaluates subdivision during conversion, the wrapper applies subdivision for the entire export and reports a warning. Blender's subdivision export switch is global, so other exported meshes also bake in that case. Disabled trailing modifiers do not prevent editable mesh export. The dialog explains the fallback. Both modes pass evaluated-geometry comparisons in a Blender round trip. Autodesk documents exporting a control mesh plus TurboSmooth attributes, but a Max import of Blender's attributes was not run. Other modifier settings, Max plug-in materials, constraints, rigs and procedural texture graphs do not have general parity. Curves use Blender FBX's mesh conversion.
 
 Blender 5.0.1 supports face smoothing-group bitflags. On versions without that exporter enum, the add-on falls back to face smoothing plus explicit normals. Blender 4.2 was not run, and reconstructed Max group numbers are not guaranteed. Export Selected includes selected objects only, so parent links survive between exported objects. An unselected ancestor is not added automatically.
 

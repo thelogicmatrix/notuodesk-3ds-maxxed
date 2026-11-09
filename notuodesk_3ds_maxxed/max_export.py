@@ -44,8 +44,8 @@ class _MaxExportBase(ExportHelper):
                         description="Match System Unit Setup in 3ds Max. FBX carries this unit scale")
     subdivision: EnumProperty(name="TurboSmooth / Subdivision", items=(
         ("APPLY", "Apply to Mesh", "Export evaluated geometry for a matching shape"),
-        ("KEEP", "Keep Editable", "Keep final enabled Catmull-Clark modifiers editable. "
-         "If subdivision precedes another enabled modifier, apply subdivision for the entire export")),
+        ("KEEP", "Keep Editable", "Keep final enabled Catmull-Clark modifiers editable on meshes. "
+         "Converted objects or subdivision before another enabled modifier apply subdivision for the entire export")),
         default="APPLY")
     embed_media: BoolProperty(name="Embed Media", default=False,
                              description="Embed image files used by supported FBX materials")
@@ -57,7 +57,7 @@ class _MaxExportBase(ExportHelper):
         for prop in ("units", "subdivision", "embed_media", "animation"):
             lay.prop(self, prop)
         if self.subdivision == "KEEP":
-            lay.label(text="Editable only as final enabled modifier", icon="INFO")
+            lay.label(text="Editable only on meshes, as final modifier", icon="INFO")
             lay.label(text="Otherwise apply for the entire export")
 
     def invoke(self, context, event):
@@ -80,19 +80,29 @@ class _MaxExportBase(ExportHelper):
         meters = old_scale if old_system != "NONE" else 1.0
         settings = fbx_settings(selected, self.subdivision, self.embed_media, self.animation)
         if settings["use_subsurf"]:
+            # Match native FBX's view-layer/selection scope and its depsgraph instances.
+            objects = set(context.selected_objects if selected else context.view_layer.objects)
+            instancers = {ob for ob in objects if ob.is_instancer}
+            if instancers:
+                objects.update(instance.instance_object.original
+                               for instance in context.evaluated_depsgraph_get().object_instances
+                               if instance.is_instance and instance.parent
+                               and instance.parent.original in instancers)
             unsafe = []
-            for ob in context.selected_objects if selected else context.scene.objects:
-                if ob.type != "MESH":
+            for ob in objects:
+                if ob.type not in {"MESH", "CURVE", "SURFACE", "FONT", "META"}:
                     continue
                 enabled = [m for m in ob.modifiers if m.show_render or m.show_viewport]
                 subsurf = [m for m in enabled if m.type == "SUBSURF" and m.subdivision_type == "CATMULL_CLARK"]
-                if subsurf and subsurf[-1] != enabled[-1]:
+                # Non-mesh conversion already evaluates subdivision. FBX must not add it again.
+                if subsurf and (ob.type != "MESH" or subsurf[-1] != enabled[-1]):
                     unsafe.append(ob.name)
             if unsafe:
                 # Native FBX has one subdivision switch for the entire export.
                 settings["use_subsurf"] = False
-                self.report({"WARNING"}, "Applied subdivision for the entire export to preserve modifier order. "
-                            f"Subdivision is not the final enabled modifier on: {', '.join(unsafe)}")
+                self.report({"WARNING"}, "Applied subdivision for the entire export to preserve evaluated geometry. "
+                            "Editable subdivision requires a mesh with subdivision as its final enabled modifier: "
+                            f"{', '.join(sorted(unsafe))}")
         try:
             # Native FBX writes System Units into UnitScaleFactor, separately from geometry.
             scene_units.system = "METRIC"
