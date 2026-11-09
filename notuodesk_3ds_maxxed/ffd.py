@@ -7,6 +7,17 @@ from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
 
 _targets = {}
+OWNER_KEY = 'max_ffd_owner'
+
+
+def is_ffd(mod):
+    return mod is not None and mod.type == 'LATTICE'
+
+
+def draw(layout, ob, mod, editing_cage=False):
+    """Keep the old host callable while the final panel remains uninstalled."""
+    from .modifier_ui import _draw_ffd
+    return _draw_ffd(layout, ob, mod)
 
 
 def bind_modifier(ob, mod):

@@ -7,6 +7,16 @@ from .gn_mods import G
 _targets = {}
 
 
+def is_turbosmooth(mod):
+    return mod is not None and mod.type == 'SUBSURF'
+
+
+def draw(layout, ob, mod):
+    """Draw the accepted adapter for the explicit legacy-host stack entry."""
+    from .modifier_ui import _draw_ts
+    return _draw_ts(layout, ob, mod)
+
+
 def bind_modifier(ob, mod):
     _targets[ob.as_pointer()] = mod
 

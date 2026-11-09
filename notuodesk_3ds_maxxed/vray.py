@@ -103,7 +103,11 @@ def draw_camera(layout, context):
     if obj is None or obj.type != 'CAMERA':
         layout.label(text='Select a camera')
         return
-    settings = obj.data.max_vray
+    draw_vray_camera(layout, obj.data)
+
+
+def draw_vray_camera(layout, camera):
+    settings = camera.max_vray
     layout.prop(settings, 'enabled')
     column = layout.column(align=True)
     column.enabled = settings.enabled
@@ -113,6 +117,17 @@ def draw_camera(layout, context):
         row.enabled = settings.exposure
         row.prop(settings, field)
     layout.label(text='Backend exposure equivalent. No native V-Ray camera model.')
+
+
+def draw_vraymtl(layout, material):
+    shader = _shader(material)
+    if shader is None:
+        layout.label(text='No Principled material equivalent')
+        return
+    layout.label(text='Principled material equivalent')
+    for field in ('Base Color', 'Metallic', 'Roughness', 'IOR', 'Transmission Weight'):
+        layout.prop(shader.inputs[field], 'default_value', text=field)
+    layout.prop(material, 'max_vray_glossiness', text='Reflection Glossiness')
 
 
 def draw_capabilities(layout, context):

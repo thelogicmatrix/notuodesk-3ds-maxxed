@@ -101,6 +101,7 @@ apply_theme = apply
 restore_theme = restore
 apply_prefs = apply
 restore_prefs = restore
+reset_theme = restore
 classes = ()
 
 

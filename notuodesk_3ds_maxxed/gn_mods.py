@@ -81,6 +81,18 @@ class G:
         return self.ng
 
 
+def is_melt(modifier):
+    return identify(modifier) == 'Melt'
+
+
+def keyframe_input(modifier, name, frame):
+    identifier = next((key for key, label in inputs(modifier) if label == name), None)
+    if identifier is None:
+        return False
+    owner, path = input_ref(modifier, identifier)
+    return owner.keyframe_insert(data_path=path, frame=frame)
+
+
 def _sockets(modifier):
     group = getattr(modifier, 'node_group', None)
     if group is None:
