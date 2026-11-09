@@ -66,6 +66,16 @@ Create-menu object icons use the same set. Missing artwork falls back to Blender
 icons. The set includes artwork for all 11 supported Extended Primitives.
 Material sample slots still show their real material previews.
 
+## Shift-drag cloning
+
+With Move (W), Rotate (E) or Scale (R) active, hold Shift and drag a gizmo handle or the selected geometry. The original stays put. Release to open **Clone Options** with **Copy**, **Instance**, **Reference**, **Number of Copies** and **Name**. Extra copies repeat the same move, rotation or scale. The dialog remembers your choices during the Blender session.
+
+**Copy** gives each clone its own mesh. **Instance** shares the mesh. **Reference** shares the mesh and keeps a separate modifier stack. The **Controller** choices become available when the selection includes a parent and its child. Copy duplicates animation actions. Instance links child transform channels to the original with drivers.
+
+In Editable Poly, Shift-drag extends open **Edges** and **Borders** without a dialog. **Vertex**, **Polygon** and **Element** selections open **Clone Part of Mesh**. Choose **Clone To Object**, with a name, or **Clone To Element**. Right-click or Esc cancels a drag. Cancel in either dialog removes the preview. Undo removes the whole clone operation. Ctrl+V still clones in place.
+
+Only meshes with selected geometry contribute clones in multi-object Edit Mode. Undo, leaving Edit Mode, deleting a source or preview, and disabling the add-on cancel interrupted clones safely. The release dialogs open after the drag operator has finished.
+
 ## Compact Material Editor (M)
 
 <img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
@@ -206,6 +216,7 @@ Spline objects have **Rendering** and **Interpolation** rollouts in Create and M
 | S / A | Snaps / Angle Snap |
 | N / K | Auto Key / Set Key |
 | Ctrl+V / Ctrl+C | Clone / Camera from view |
+| Shift+drag with W / E / R | Clone with Move / Rotate / Scale |
 | M / 8 / F10 | Material Editor / Environment / Render Setup |
 | Shift+Q / F9 | Render |
 | F12 / Ctrl+X | Transform Type-In / Expert Mode |
@@ -263,7 +274,9 @@ Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments*
 - The icons are original GPL artwork with Max's visual vocabulary, not Autodesk's icon artwork. Icons are supplied for toolbar and stack controls that this version does not draw, including Pin Stack, Show End Result, Configure Modifier Sets, Bind to Space Warp, Window/Crossing, Spinner Snap, Layer Explorer and Ribbon. This does not add those controls. The modifier's edit-mode toggle has a mesh-and-pencil icon. The Modifier List menu has a list-and-dropdown icon. Blender still draws its own material preview-type buttons and viewport shading and overlay buttons.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
-- Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
+- Reference clones share Blender data in both directions. They do not have Max's one-way reference stack. Controller Instance uses one-way drivers from the original children, rather than Max's shared controller objects.
+- Shift-clone dialogs use Blender's dialog frame and controls. Gizmo hit areas are calculated in screen space. Gimbal and custom normal orientations can differ from Blender's native handle picking.
+- Disabling the add-on removes clone previews immediately. An open clone dialog stays until you dismiss it.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 - Keyboard Entry uses the existing viewport construction planes. It has no custom grid objects or AutoGrid. GeoSphere keeps Blender's icosphere tessellation.
 - Keyboard Entry uses Blender's numeric widgets and unit formatting. Spinner arrows and unit spacing differ from Max.

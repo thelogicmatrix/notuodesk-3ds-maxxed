@@ -34,6 +34,7 @@ from . import poly_tools
 from . import freezing, plane_plus
 from . import cursor_policy
 from . import max_icons
+from . import shift_clone
 
 
 _prefs_cache = [None]
@@ -163,6 +164,7 @@ _classes = (
     + cut_loop.classes
     + hsx_import.classes
     + poly_tools.classes
+    + shift_clone.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
@@ -191,7 +193,9 @@ def _unlock_quads_once():
 def register():
     max_icons.register()
     for cls in _classes:
-        bpy.utils.register_class(cls)
+        if not shift_clone.retained_class(cls):
+            bpy.utils.register_class(cls)
+    shift_clone.register_macros()
     wm = bpy.types.WindowManager
     wm.max_cmd_tab = EnumProperty(name="Command Panel", items=max_icons.enum_items(ui_panel.TABS), default="CREATE")
     wm.max_create_cat = EnumProperty(name="Category", items=max_icons.enum_items(ui_panel.CREATE_CATS), default="GEOMETRY")
@@ -226,6 +230,7 @@ def unregister():
     cursor_policy.unregister()
     cut_loop.cancel_active()
     _prefs_cache[0] = None
+    shift_clone.unregister()
     keymap.unregister_keymaps()
     overlay.unregister()
     max_import.unregister_menus()
@@ -246,5 +251,6 @@ def unregister():
         if hasattr(wm, prop):
             delattr(wm, prop)
     for cls in reversed(_classes):
-        bpy.utils.unregister_class(cls)
+        if not shift_clone.defer_unregister(cls):
+            bpy.utils.unregister_class(cls)
     max_icons.unregister()
