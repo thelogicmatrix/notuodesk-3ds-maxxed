@@ -183,7 +183,8 @@ def register():
     wm.max_cmd_tab = EnumProperty(name="Command Panel", items=ui_panel.TABS, default="CREATE")
     wm.max_create_cat = EnumProperty(name="Category", items=ui_panel.CREATE_CATS, default="GEOMETRY")
     wm.max_sublevel = IntProperty(default=0)
-    wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""), ("VRAY", "V-Ray", "")])
+    wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""),
+                                    ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", "")])
     prims.register_props()
     keyboard_entry.register_props()
     ui_panel.register_props()

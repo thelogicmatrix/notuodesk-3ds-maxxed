@@ -15,6 +15,7 @@ from .operators import max_name
 
 from .prims import PRIMITIVES, set_params
 from . import keyboard_entry
+from . import extended_primitives
 
 MAX_COLORS = [
     (0.88, 0.34, 0.78), (0.53, 0.89, 0.34), (0.34, 0.53, 0.89), (0.89, 0.73, 0.34),
@@ -182,6 +183,9 @@ class MAX_OT_create(Operator):
 
     @classmethod
     def description(cls, context, props):
+        if props.kind in extended_primitives.STAGES:
+            steps = ", then ".join(s.replace("_", " ") for s in extended_primitives.STAGES[props.kind])
+            return f"{PRIMITIVES[props.kind][0]}: drag the base" + (f", then {steps}" if steps else "") + ". Right-click to stop creating"
         label, _, style, height = PRIMITIVES[props.kind]
         height = keyboard_entry.has_height(props.kind, keyboard_entry.method(context, props.kind))
         steps = "drag the base, release, then move the mouse for height and click" if height else "drag to size"
@@ -209,6 +213,7 @@ class MAX_OT_create(Operator):
             "WAIT": f"Create {label}: click-drag in a viewport.  Right-click / Esc: stop",
             "BASE": f"{label}: drag to size the base, release mouse",
             "HEIGHT": f"{label}: move the mouse to set height, click to finish",
+            "PARAMETER": f"{label}: move to set {getattr(self, 'stage_prop', '').replace('_', ' ')}, click to accept",
         }[self.state]
         try:
             context.workspace.status_text_set(msg)
@@ -252,15 +257,25 @@ class MAX_OT_create(Operator):
             p = Vector([round(c) for c in p])   # snap to home grid units
         self.p0 = p
         label = PRIMITIVES[self.kind][0]
-        self.obj = new_object(context, max_name(label), build_unit_mesh(self.kind, self.segments))
+        extended = self.kind in extended_primitives.PRIMITIVES
+        mesh = bpy.data.meshes.new(label) if extended else build_unit_mesh(self.kind, self.segments)
+        self.obj = new_object(context, max_name(label), mesh)
+        if extended:
+            set_params(self.obj, self.kind)
         rot = Matrix((self.u, self.v, self.n)).transposed().to_4x4()
         self.obj.matrix_world = Matrix.Translation(p) @ rot
         self.obj.scale = (1e-4, 1e-4, 1e-4)
         self.height = 0.0
         self.size = (0.0, 0.0)
+        if extended:
+            self.obj.scale = (1, 1, 1)
+            self.stage_index = -1
         return True
 
     def _update_base(self, context, event):
+        if self.kind in extended_primitives.PRIMITIVES:
+            self._extended_base(context, event)
+            return
         p = ray_plane(self.region, self.rv3d, self._co(event), self.p0, self.n)
         if p is None:
             return
@@ -292,6 +307,10 @@ class MAX_OT_create(Operator):
     def _bake(self, context):
         """Apply scale into the mesh so the object ends with scale 1 (Max-style parameters)."""
         ob = self.obj
+        if self.kind in extended_primitives.PRIMITIVES:
+            bpy.ops.ed.undo_push(message=f"Create {PRIMITIVES[self.kind][0]}")
+            self.obj = None
+            return
         s = ob.scale.copy()
         ob.scale = (1, 1, 1)
         k = self.kind
@@ -305,6 +324,75 @@ class MAX_OT_create(Operator):
             set_params(ob, k, radius1=s.x)
         bpy.ops.ed.undo_push(message=f"Create {PRIMITIVES[self.kind][0]}")
         self.obj = None
+
+    def _extended_base(self, context, event):
+        p = ray_plane(self.region, self.rv3d, self._co(event), self.p0, self.n)
+        if p is None:
+            return
+        if context.scene.tool_settings.use_snap:
+            p = Vector([round(c) for c in p])
+        d = p-self.p0
+        du, dv = d.dot(self.u), d.dot(self.v)
+        w, l = max(abs(du), 1e-4), max(abs(dv), 1e-4)
+        r = max(d.length, 1e-4)
+        self.size = (w, l) if PRIMITIVES[self.kind][2] == "RECT" else (r, r)
+        values = dict(radius1=r)
+        if self.kind == "CHAMFERBOX":
+            values = dict(width=w, length=l, height=1e-4, fillet=0)
+            self.obj.location = self.p0+(self.u*du+self.v*dv)/2
+        elif self.kind in {"L_EXT", "C_EXT"}:
+            values = dict(front_length=w, back_length=w, side_length=l, height=1e-4,
+                          side_width=w*.2, front_width=l*.2, back_width=l*.2)
+            self.obj.location = self.p0+self.u*min(du,0)+self.v*min(dv,0)
+        elif self.kind == "PRISM":
+            side = math.sqrt((w/2)**2+l*l)
+            values = dict(side1=w, side2=side, side3=side, height=1e-4)
+            self.obj.location = self.p0+self.u*du/2+self.v*min(dv,0)
+        elif self.kind == "TORUS_KNOT":
+            values["radius2"] = r*.1
+        elif self.kind != "HEDRA":
+            values.update(height=1e-4, cap_height=r*.25)
+        set_params(self.obj,self.kind,**values)
+        self._redraw(context)
+
+    def _next_creation_stage(self, context, event):
+        """Advance through any number of named parameter stages."""
+        self.stage_index += 1
+        stages = extended_primitives.STAGES[self.kind]
+        if self.stage_index == len(stages):
+            self._bake(context)
+            self.state = "WAIT"
+        else:
+            self.stage_prop = stages[self.stage_index]
+            self.release_co = self._co(event)
+            self.state = "PARAMETER"
+        self._status(context)
+
+    def _update_creation_stage(self, context, event):
+        from .prims import _guard, rebuild
+        co = self._co(event)
+        base = self.obj.location
+        a = view3d_utils.region_2d_to_location_3d(self.region,self.rv3d,self.release_co,base)
+        b = view3d_utils.region_2d_to_location_3d(self.region,self.rv3d,self.release_co+Vector((0,1)),base)
+        delta = co-self.release_co
+        value = delta.y*(b-a).length
+        if self.stage_prop in {"fillet", "cap_height"}:
+            value = (delta.y-delta.x)*(b-a).length
+        if context.scene.tool_settings.use_snap:
+            value = round(value)
+        _guard[0] = True
+        try:
+            p = self.obj.max_prim
+            if self.stage_prop == "wall_width":
+                limit = min(p.front_length,p.side_length)*.499
+                p.side_width = p.front_width = p.back_width = min(max(abs(value),1e-4),limit)
+            else:
+                setattr(p,self.stage_prop, (value if abs(value)>1e-4 else 1e-4)
+                        if self.stage_prop == "height" else max(value,0))
+        finally:
+            _guard[0] = False
+        rebuild(self.obj)
+        self._redraw(context)
 
     # -- modal ----------------------------------------------------------------
     def modal(self, context, event):
@@ -340,6 +428,8 @@ class MAX_OT_create(Operator):
                 if max(self.size) < 1e-3:          # a click without a drag creates nothing
                     self._cancel_object()
                     self.state = "WAIT"
+                elif self.kind in extended_primitives.STAGES:
+                    self._next_creation_stage(context,event)
                 elif keyboard_entry.has_height(self.kind, self.creation_method):
                     self.release_co = self._co(event)
                     self.state = "HEIGHT"
@@ -348,6 +438,15 @@ class MAX_OT_create(Operator):
                     self.state = "WAIT"
                 self._status(context)
             return {"RUNNING_MODAL"} if event.type != "TIMER" else {"PASS_THROUGH"}
+
+        if self.state == "PARAMETER":
+            if event.type == "MOUSEMOVE":
+                self._update_creation_stage(context,event)
+            elif event.type == "LEFTMOUSE" and event.value == "PRESS":
+                self._next_creation_stage(context,event)
+            elif event.type in {"WHEELUPMOUSE", "WHEELDOWNMOUSE", "MIDDLEMOUSE"}:
+                return {"PASS_THROUGH"}
+            return {"RUNNING_MODAL"}
 
         if self.state == "HEIGHT":
             if event.type == "MOUSEMOVE":

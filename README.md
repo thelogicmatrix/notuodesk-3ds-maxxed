@@ -75,6 +75,18 @@ Press **M**, or choose **Rendering › Material Editor**. It opens as a narrow f
 
 <br clear="right">
 
+## Extended Primitives
+
+Choose **Create > Geometry > Extended Primitives** in the Command Panel. It has Hedra, ChamferBox, OilTank, Spindle, Gengon, Prism, Torus Knot, ChamferCyl, Capsule, L-Ext and C-Ext.
+
+Drag the footprint, release, then click to set height. ChamferBox, ChamferCyl and Gengon have a final Fillet step. OilTank and Spindle finish with Cap Height. L-Ext and C-Ext finish with wall width. Hedra needs only the radius drag. Torus Knot uses its second step for Cross Section Radius. Prism starts with an isosceles triangle. The tool stays active for the next object until you right-click.
+
+The objects keep their parameters in **Create > Parameters** and **Modify > Parameters**, including segment counts, Smooth and Generate Mapping Coords. Editing or collapsing an object makes it an Editable Poly, as with Standard Primitives. OilTank, Spindle and Capsule have Overall/Centers height options. Torus Knot has Knot/Circle base curves, winding numbers, warp, eccentricity, twist and lumps.
+
+Object Type follows Max's button order. Parameters use compact labelled fields. Prism limits impossible side lengths to a valid triangle and shows the corrected lengths in Parameters.
+
+Parameter names and segment defaults follow [Autodesk's Extended Primitives reference](https://help.autodesk.com/cloudhelp/2015/ENU/3DSMax/files/GUID-BF868DCF-12E3-431C-A73B-C16C0FD67C98.htm). Types whose Max constructor starts with zero dimensions start at one Blender unit here. ChamferBox, Capsule, Hedra and Prism keep their documented nonzero dimensions. Click-drag creation replaces these dimensions with the size you draw.
+
 ## Opening 3ds Max files
 
 ![A 3ds Max 2015 character opened with File › Open 3ds Max File](docs/open-max-file.png)
@@ -192,6 +204,9 @@ Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments*
 - SwiftLoop follows quad rings and stops at triangles, n-gons and hidden faces. Shift uses cubic interpolation of surface normals, so its flow can differ from Max's proprietary result. Sliding needs a regular loop with two bounding edges at each vertex.
 - Imported hotkeys call Blender equivalents. Relax uses vertex smoothing, including Paint Deform Relax. Edit Poly enters mesh editing through the add-on's existing Edit Poly command. Unassignments affect only this add-on's keys. Unknown actions stay in the imported list but get no binding.
 - Settings dialogs expose a subset of Max's caddy controls. Edge and vertex Extrude use Blender's topology and omit Max's Extrusion Base Width. Vertex extrusion adds connected vertices and edges, rather than Max's polygon base. Surface normals are equal-weight averages in mesh space. An extrusion without an adjacent surface normal leaves the mesh unchanged. Tessellate Edge Tension maps inversely to Blender's subdivision smoothness over 0 to 1. It does not reproduce Max's full tension range. Extrusion Height starts at 0.1 and Edge Tension at 1.0, since the reference does not specify their initial values.
+- Extended Primitives do not include RingWave or Hose. Creation uses the default Corners, Center or Isosceles method. Alternate creation methods and Slice controls are not included.
+- Hedra uses reflection-generated polyhedra. Star1, Star2 and axis scaling approximate Max's shapes. Its facet topology and the other primitives' triangulation can differ from Max. OilTank and Spindle use Blender's bevel for Blend.
+- Generate Mapping Coords on Extended Primitives uses box projection. It does not reproduce Max's UV layouts. Torus Knot uses whole-number winding, twist, warp and lump counts, and Smooth is an on/off setting. Real-World Map Size and mapping offset/tiling controls are not included.
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.

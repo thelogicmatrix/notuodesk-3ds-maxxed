@@ -87,7 +87,7 @@ class MAX_UL_stack(UIList):
 
 
 SUBTYPES = {
-    "GEOMETRY": (("STANDARD", "Standard Primitives"), ("VRAY", "V-Ray")),
+    "GEOMETRY": (("STANDARD", "Standard Primitives"), ("EXTENDED", "Extended Primitives"), ("VRAY", "V-Ray")),
     "LIGHTS": (("STANDARD", "Standard"), ("VRAY", "V-Ray")),
     "CAMERAS": (("STANDARD", "Standard"), ("VRAY", "V-Ray")),
     "SHAPES": (("STANDARD", "Splines"),),
@@ -189,6 +189,9 @@ def _split_col(layout):
 
 
 def draw_prim_params(layout, ob):
+    if ob.max_prim.kind in prims.extended_primitives.PRIMITIVES:
+        prims.extended_primitives.draw(layout, ob)
+        return
     p = ob.max_prim
     col = _split_col(layout)
     for field in prims.UI_FIELDS[p.kind]:
@@ -348,7 +351,12 @@ def create_object_type(layout, context):
     elif vray_sub and cat == "CAMERAS":
         g.operator("max.vray_camera", text="VRayPhysicalCamera")
     elif cat == "GEOMETRY":
-        for k, (label, icon, _, _) in prims.PRIMITIVES.items():
+        kinds = (prims.extended_primitives.DISPLAY_ORDER if wm.max_create_sub == "EXTENDED"
+                 else prims.PRIMITIVES)
+        for k in kinds:
+            if (k in prims.extended_primitives.PRIMITIVES) != (wm.max_create_sub == "EXTENDED"):
+                continue
+            label = prims.PRIMITIVES[k][0]
             g.operator("max.create", text=label, depress=(create.MAX_OT_create.active_kind == k)).kind = k
     elif cat == "SHAPES":
         for k, label, icon in create.SHAPES:
