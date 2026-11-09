@@ -140,27 +140,45 @@ class MAX_OT_unfreeze_by_name(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def _hit_frozen(context, region, co):
+def _hit_frozen(context, area, region, co):
+    layer = context.view_layer
+    frozen = [(ob, ob.hide_select) for ob in layer.objects
+              if ob.max_frozen or (ob.hide_select and "max_frozen_color" in ob)]
+    if not frozen:
+        return None
+    selection = [(ob, ob.select_get()) for ob in layer.objects]
+    active = layer.objects.active
+    picked = None
+    try:
+        for ob, _ in frozen:
+            ob.hide_select = False
+        for ob, selected in selection:
+            if selected:
+                ob.select_set(False)
+        layer.objects.active = None
+        # Native picking includes wire edges, curve and helper display lines,
+        # and light/camera icons in the viewport that received the click.
+        with context.temp_override(window=context.window, area=area, region=region):
+            bpy.ops.view3d.select(location=(round(co[0]), round(co[1])),
+                                 deselect_all=True, object=True)
+        picked = layer.objects.active
+    finally:
+        for ob, selected in selection:
+            if ob.select_get() != selected:
+                ob.select_set(selected)
+        layer.objects.active = active
+        for ob, locked in frozen:
+            ob.hide_select = locked
+    if picked is not None:
+        return picked if any(ob == picked for ob, _ in frozen) else None
+    # PlanePlus draws its image over a wire mesh. Keep its visible image face
+    # pickable too, just as its normal face-selection operator does.
     origin = view3d_utils.region_2d_to_origin_3d(region, region.data, co)
     direction = view3d_utils.region_2d_to_vector_3d(region, region.data, co)
     hit, _, _, _, ob, _ = context.scene.ray_cast(context.evaluated_depsgraph_get(), origin, direction)
-    if hit and (ob.original.max_frozen or "max_frozen_color" in ob.original):
+    if hit and ob.original.max_prim.kind == "PLANEPLUS" and any(ob.original == item for item, _ in frozen):
         return ob.original
-    # Lights, cameras, helpers and wire-only objects have no raycast surface.
-    # Pick near their origin without changing selection or selection locks.
-    nearest, distance = None, (12 * context.preferences.system.ui_scale) ** 2
-    for ob in context.visible_objects:
-        if not (ob.max_frozen or "max_frozen_color" in ob):
-            continue
-        if ob.type == "MESH" and ob.data.polygons:
-            continue
-        point = view3d_utils.location_3d_to_region_2d(region, region.data, ob.matrix_world.translation)
-        if point is None:
-            continue
-        d = (point.x - co[0]) ** 2 + (point.y - co[1]) ** 2
-        if d < distance:
-            nearest, distance = ob, d
-    return nearest
+    return None
 
 
 class MAX_OT_unfreeze_by_hit(bpy.types.Operator):
@@ -183,7 +201,7 @@ class MAX_OT_unfreeze_by_hit(bpy.types.Operator):
             area, region = region_under_mouse(context, event.mouse_x, event.mouse_y)
             if region:
                 co = (event.mouse_x - region.x, event.mouse_y - region.y)
-                ob = _hit_frozen(context, region, co)
+                ob = _hit_frozen(context, area, region, co)
                 if ob:
                     unfreeze(ob, context.scene)
                     bpy.ops.ed.undo_push(message="Unfreeze by Hit")
