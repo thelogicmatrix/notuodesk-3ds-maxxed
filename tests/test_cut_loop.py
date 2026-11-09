@@ -1,8 +1,10 @@
 """Run: blender -b --factory-startup --python tests/test_cut_loop.py"""
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import bmesh
+import bpy
 from mathutils import Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -19,6 +21,65 @@ def plane():
 
 def project(co):
     return co.xy
+
+
+class Picker(tools._SurfaceTool):
+    """Use deterministic orthographic rays with the real picking code and BVH."""
+    def _project(self, co):
+        return co.xy * 100 + Vector((200, 200))
+
+    def _ray(self, mouse):
+        co = (mouse - Vector((200, 200))) / 100
+        return Vector((co.x, co.y, 10)), Vector((0, 0, -1))
+
+
+bm = bmesh.new()
+front = bm.faces.new([bm.verts.new((x, y, 1)) for x, y in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+back = bm.faces.new([bm.verts.new((x, y, 0)) for x, y in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+front.hide_set(True)
+area = next(a for a in bpy.context.screen.areas if a.type == 'VIEW_3D')
+region = next(r for r in area.regions if r.type == 'WINDOW')
+picker = Picker()
+picker.bm = bm
+picker.region = region
+for is_cut in (True, False):
+    picker.is_cut = is_cut
+    picker.bvh = None
+    event = SimpleNamespace(mouse_x=region.x + 220, mouse_y=region.y + 210)
+    hit = picker._pick(bpy.context, event)
+    assert hit is not None, ('Cut' if is_cut else 'SwiftLoop', 'hidden front face blocked visible back face')
+    assert hit[0] == ('FACE' if is_cut else 'EDGE'), hit
+    assert hit[1] in ([back] if is_cut else back.edges)
+    assert abs(hit[2].z) < 1e-5, hit
+    back.hide_set(True)
+    picker.bvh = None
+    assert picker._pick(bpy.context, event) is None
+    back.hide_set(False)
+print('PASS Cut and SwiftLoop pick visible back face through hidden front face, all-hidden mesh misses')
+bm.free()
+
+
+for kind, co, face_count in (('EDGE', (1, 0, 0), 2), ('FACE', (.2, .3, 0), 4)):
+    bm, vs = plane()
+    loose = bm.verts.new(co)
+    elem = bm.edges.get((vs[1], vs[2])) if kind == 'EDGE' else next(iter(bm.faces))
+    end = tools.cut_segment(bm, vs[0], (kind, elem, Vector(co)), project)
+    assert end != loose, (kind, 'cut reused unrelated loose vertex')
+    assert len(loose.link_edges) == 0
+    assert bm.edges.get((vs[0], end))
+    assert (len(bm.verts), len(bm.faces)) == (6, face_count)
+    assert all(f.calc_area() > 0 for f in bm.faces)
+    print('PASS Cut ' + kind.lower() + ' endpoint ignores coincident loose vertex, creates connected segment')
+    bm.free()
+
+
+bm, vs = plane()
+loose = bm.verts.new(vs[1].co)
+for kind, elem in (('EDGE', bm.edges.get((vs[1], vs[2]))), ('FACE', next(iter(bm.faces)))):
+    assert tools.resolve_hit(bm, (kind, elem, vs[1].co.copy())) == vs[1]
+assert len(bm.verts) == 5 and len(loose.link_edges) == 0
+print('PASS Cut reuses the picked edge or face vertex instead of a coincident loose vertex')
+bm.free()
 
 
 bm, vs = plane()
@@ -118,7 +179,6 @@ print('PASS SwiftLoop two open loops: edges=7 then 10')
 bm.free()
 print('PASS all Cut and SwiftLoop geometry checks')
 
-import bpy
 import addon_utils
 addon_utils.enable('notuodesk_3ds_maxxed', default_set=True)
 assert bpy.ops.max.cut.get_rna_type().identifier == 'MAX_OT_cut'

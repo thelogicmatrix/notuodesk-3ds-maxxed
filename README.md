@@ -166,6 +166,8 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 The Edit Geometry buttons and quad menus use the same tools. No Enter or Q is needed to commit or leave them. The previous toolbar tool stays selected. Right-click during primitive creation cancels the unfinished primitive. Right-click again stops creating. Esc stops immediately.
 
+Cut and SwiftLoop pick visible polygons behind hidden polygons. Cut keeps endpoint vertices on the picked edge or polygon, even when an unrelated vertex occupies the same position.
+
 ## Known differences from 3ds Max
 
 - Cut adds supporting triangles for endpoints inside a polygon. Concave polygons are triangulated before an interior endpoint is added.

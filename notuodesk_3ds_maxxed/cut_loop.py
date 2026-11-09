@@ -31,9 +31,6 @@ def resolve_hit(bm, hit):
     kind, elem, co = hit
     if kind == 'VERT' and elem.is_valid:
         return elem
-    existing = next((v for v in bm.verts if (v.co - co).length < EPS), None)
-    if existing is not None:
-        return existing
     if kind == 'EDGE' and elem.is_valid:
         a, b = elem.verts
         t = (co - a.co).dot(b.co - a.co) / max((b.co - a.co).length_squared, EPS * EPS)
@@ -51,6 +48,9 @@ def resolve_hit(bm, hit):
         if nearest[2] is None or nearest[3] > 1e-4:
             raise ValueError('Cut point is no longer on the surface')
         elem = bm.faces[nearest[2]]
+    existing = next((v for v in elem.verts if (v.co - co).length < EPS), None)
+    if existing is not None:
+        return existing
     # A fan is valid only inside a convex polygon. Triangulate concave polygons
     # first, then add the endpoint to the triangle that contains it.
     if any((l.vert.co - l.link_loop_prev.vert.co).cross(l.link_loop_next.vert.co - l.vert.co).dot(elem.normal) < -EPS
@@ -333,18 +333,19 @@ class _SurfaceTool:
             return None
         bm = self.bm
         if self.bvh is None:
-            bm.faces.ensure_lookup_table()
+            bm.verts.index_update()
             bm.normal_update()
-            self.bvh = BVHTree.FromBMesh(bm)
+            self.bvh_faces = [face for face in bm.faces if not face.hide]
+            self.bvh = BVHTree.FromPolygons(
+                [v.co for v in bm.verts],
+                [[v.index for v in face.verts] for face in self.bvh_faces])
         mouse = Vector((event.mouse_x - region.x, event.mouse_y - region.y))
         origin, direction = self._ray(mouse)
         co, normal, index, distance = self.bvh.ray_cast(origin, direction)
         if index is None:
             # Permit picking silhouettes and boundary vertices just outside a face.
             return self._near_boundary(bm, mouse)
-        face = bm.faces[index]
-        if face.hide:
-            return None
+        face = self.bvh_faces[index]
         vertices = [(self._project(v.co), v) for v in face.verts]
         vertices = [(p, v) for p, v in vertices if p is not None]
         close = [(p - mouse).length for p, v in vertices]
