@@ -60,7 +60,7 @@ def active_tool(context):
     if caddy is not None and not caddy.session.closed:
         return caddy.session.action
     for op in getattr(context.window, 'modal_operators', ()):
-        if op.bl_idname in COMMAND_MODALS:
+        if op and op.bl_idname in COMMAND_MODALS:
             return COMMAND_MODALS[op.bl_idname]
     workspace = context.workspace
     if workspace:
@@ -157,7 +157,7 @@ def draw_status(self, context, original, max_draw):
     if not context.workspace or context.workspace.name != '3ds Max':
         return original(self, context)
     # Native modal instructions still take priority over idle tool prompts.
-    if any(op.bl_idname not in PASSIVE_MODALS for op in getattr(context.window, 'modal_operators', ())):
+    if any(op and op.bl_idname not in PASSIVE_MODALS for op in getattr(context.window, 'modal_operators', ())):
         return original(self, context)
     if active_tool(context) not in {'SELECT', 'MOVE', 'ROTATE', 'SCALE', 'LINK'}:
         return original(self, context)
@@ -433,7 +433,7 @@ class MAX_OT_feedback_pointer(Operator):
         self.hit = None
         # Other modals, popup menus and native transforms own their cursors.
         others = [op for op in getattr(self.window, 'modal_operators', ())
-                  if op.bl_idname not in PASSIVE_MODALS]
+                  if op and op.bl_idname not in PASSIVE_MODALS]
         if self.window.workspace.name == '3ds Max' and not others:
             area = next((a for a in self.window.screen.areas if a.type == 'VIEW_3D' and
                          a.x <= event.mouse_x < a.x+a.width and a.y <= event.mouse_y < a.y+a.height), None)

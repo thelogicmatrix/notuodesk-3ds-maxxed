@@ -28,6 +28,29 @@ class ModeFeedbackTests(unittest.TestCase):
         finally:
             mf._pointers.pop(key, None)
 
+    def test_null_modal_entry_keeps_actual_tool(self):
+        from types import SimpleNamespace
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        ctx = SimpleNamespace(mode='OBJECT',
+            window=SimpleNamespace(as_pointer=lambda: 0, modal_operators=[None]),
+            workspace=SimpleNamespace(tools=SimpleNamespace(
+                from_space_view3d_mode=lambda *args, **kw: SimpleNamespace(idname='max.rotate'))))
+        self.assertEqual(mf.active_tool(ctx), 'ROTATE')
+
+    def test_null_modal_entry_keeps_status_prompt(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from notuodesk_3ds_maxxed import mode_feedback as mf
+        labels = []
+        layout = SimpleNamespace(label=lambda **kw: labels.append(kw['text']), separator_spacer=lambda: None)
+        ctx = SimpleNamespace(workspace=SimpleNamespace(name='3ds Max'),
+                              window=SimpleNamespace(modal_operators=[None]))
+        with patch.object(mf, 'active_tool', return_value='ROTATE'), \
+             patch.object(mf, 'prompt_text', return_value='Rotate prompt'):
+            mf.draw_status(SimpleNamespace(layout=layout), ctx,
+                           lambda *_: self.fail('null modal suppressed feedback'), lambda *_: None)
+        self.assertEqual(labels, ['Rotate prompt'])
+
     def test_base_stack_click_leaves_subobject(self):
         bpy.ops.max.subobject(level=2)
         bpy.ops.max.modifier_set_active(name='')
