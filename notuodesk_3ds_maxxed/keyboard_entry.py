@@ -170,6 +170,8 @@ class MAX_OT_keyboard_create(bpy.types.Operator):
         u, v, n = active_frame(context)
         position = u * values.x + v * values.y + n * values.z
         ob.matrix_world = Matrix.Translation(position) @ Matrix((u, v, n)).transposed().to_4x4()
+        from .poly_tools import finalize_new_object
+        finalize_new_object(context, ob)
         return {"FINISHED"}
 
 

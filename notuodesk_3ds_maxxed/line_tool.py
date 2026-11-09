@@ -193,6 +193,8 @@ def finish_line(context, close=False):
     if ob is None or len(ob.data.splines[0].bezier_points) < 2:
         return False
     ob.data.splines[0].use_cyclic_u = close
+    from .poly_tools import finalize_new_object
+    finalize_new_object(context, ob)
     del ob["max_line_pending"]
     context.window_manager.max_line.pending = None
     return True

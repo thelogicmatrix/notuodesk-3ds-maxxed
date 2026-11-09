@@ -308,6 +308,8 @@ class MAX_OT_create(Operator):
         """Apply scale into the mesh so the object ends with scale 1 (Max-style parameters)."""
         ob = self.obj
         if self.kind in extended_primitives.PRIMITIVES:
+            from .poly_tools import finalize_new_object
+            finalize_new_object(context, ob)
             bpy.ops.ed.undo_push(message=f"Create {PRIMITIVES[self.kind][0]}")
             self.obj = None
             return
