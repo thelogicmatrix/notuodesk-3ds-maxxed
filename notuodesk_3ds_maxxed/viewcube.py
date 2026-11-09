@@ -2,6 +2,7 @@
 
 import math
 import os
+import sys
 import time
 
 import bpy
@@ -172,6 +173,12 @@ def _prefs():
 
 
 def visible(context):
+    # Auxiliary canvases must not share the viewport's offscreen GPU buffer.
+    editors = sys.modules.get(__package__ + '.max_editor_windows')
+    if editors and context.area:
+        host = editors._hosts.get(context.window.as_pointer()) if context.window else None
+        if (host and host.area == context.area) or context.area.as_pointer() in editors._docked:
+            return False
     p = _prefs()
     return bool(_enabled and p and p.show_viewcube and context.workspace
                 and context.workspace.name == '3ds Max' and context.region_data

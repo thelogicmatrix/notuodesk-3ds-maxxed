@@ -13,6 +13,33 @@ from notuodesk_3ds_maxxed import viewcube
 
 
 class ViewCubeTests(unittest.TestCase):
+    def test_owned_editor_and_dock_exclude_viewcube_before_first_draw(self):
+        from types import SimpleNamespace
+        from notuodesk_3ds_maxxed import get_prefs, max_editor_windows as editors
+        workspace = bpy.context.workspace
+        original_name = workspace.name
+        original_visible = get_prefs().show_viewcube
+        window = bpy.context.window
+        try:
+            workspace.name = '3ds Max'
+            get_prefs().show_viewcube = True
+            with bpy.context.temp_override(window=window, area=self.area, region=self.region):
+                self.assertTrue(viewcube.visible(bpy.context))
+                # Ownership exists before deferred editor configuration runs.
+                host = SimpleNamespace(area=self.area, ready=False)
+                editors._hosts[window.as_pointer()] = host
+                self.assertFalse(viewcube.visible(bpy.context))
+                editors._hosts.pop(window.as_pointer())
+                editors._docked[self.area.as_pointer()] = host
+                self.assertFalse(viewcube.visible(bpy.context))
+                editors._docked.pop(self.area.as_pointer())
+                self.assertTrue(viewcube.visible(bpy.context))
+        finally:
+            editors._hosts.pop(window.as_pointer(), None)
+            editors._docked.pop(self.area.as_pointer(), None)
+            get_prefs().show_viewcube = original_visible
+            workspace.name = original_name
+
     @classmethod
     def setUpClass(cls):
         addon_utils.enable('notuodesk_3ds_maxxed', default_set=True)
