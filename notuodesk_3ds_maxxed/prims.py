@@ -62,6 +62,7 @@ def _lathe(mesh, profile, sides, phase=0):
                         (lower[i], lower[j], upper[0]) if len(upper) == 1 else
                         (lower[i], lower[j], upper[j], upper[i]))
             mesh.faces.new(vertices)
+    return rings
 
 
 def _standard_mesh(p):
@@ -172,6 +173,20 @@ def _surface_key(mesh, offset):
     return (sorted(coords), sorted(tuple(sorted(coords[i] for i in face.vertices)) for face in mesh.polygons))
 
 
+def _historical_round_mesh(p):
+    """Compare saved round bases with polygon caps instead of triangle fans."""
+    mesh = bmesh.new()
+    segments = max(1, p.height_segs)
+    top = p.radius2 if p.kind == 'CONE' else p.radius1
+    profile = [(p.radius1 + (top - p.radius1) * i / segments, p.height * i / segments)
+               for i in range(segments + 1)]
+    rings = _lathe(mesh, profile, max(3, p.sides), math.pi / 2)
+    for ring in (rings[0], rings[-1]):
+        if len(ring) > 1:
+            mesh.faces.new(ring)
+    return mesh
+
+
 def adopt_legacy(ob):
     """Trust a saved base only when its geometry matches its saved parameters."""
     if ob.type != 'MESH' or ob.mode != 'OBJECT' or not ob.max_prim.kind:
@@ -189,8 +204,15 @@ def adopt_legacy(ob):
         generated = _build(ob)
         temporary = bpy.data.meshes.new('Base migration comparison')
         generated.to_mesh(temporary)
-        if _surface_key(mesh, Vector(ob.get('max_pivot_offset', (0, 0, 0)))) != _surface_key(temporary, Vector()):
-            return False
+        saved = _surface_key(mesh, Vector(ob.get('max_pivot_offset', (0, 0, 0))))
+        if saved != _surface_key(temporary, Vector()):
+            if ob.max_prim.kind not in {'CONE', 'CYLINDER'}:
+                return False
+            generated.free()
+            generated = _historical_round_mesh(ob.max_prim)
+            generated.to_mesh(temporary)
+            if saved != _surface_key(temporary, Vector()):
+                return False
         _remember(ob, mesh)
         return True
     except (ValueError, ZeroDivisionError):

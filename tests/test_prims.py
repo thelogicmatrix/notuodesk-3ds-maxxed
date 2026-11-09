@@ -7,6 +7,8 @@ import addon_utils
 import bpy
 from mathutils import Matrix, Vector
 
+HISTORICAL_FIXTURE = Path(__file__).resolve().parent / 'fixtures/pre-rewrite-primitives.blend'
+
 
 class PrimitiveContractTests(unittest.TestCase):
     @classmethod
@@ -77,6 +79,48 @@ class PrimitiveContractTests(unittest.TestCase):
         ob.data.vertices[0].co.x = 23
         self.assertFalse(self.prims.adopt_legacy(ob))
         self.assertEqual(ob.data.vertices[0].co.x, 23)
+
+    def historical_objects(self):
+        with bpy.data.libraries.load(str(HISTORICAL_FIXTURE)) as (source, target):
+            target.objects = source.objects
+        objects = {ob.max_prim.kind: ob for ob in target.objects if ob.type == 'MESH'}
+        self.assertTrue({'CONE', 'CYLINDER'} <= objects.keys())
+        return objects
+
+    def test_historical_cone_and_cylinder_remain_editable(self):
+        # An exact new-tessellation match must not reject genuine saved base objects.
+        objects = self.historical_objects()
+        for kind in ('CONE', 'CYLINDER'):
+            with self.subTest(kind=kind):
+                ob = objects[kind]
+                bpy.context.collection.objects.link(ob)
+                self.assertEqual(ob.max_prim.radius1, 2)
+                self.assertEqual(ob.max_prim.radius2, .5)
+                self.assertEqual(ob.max_prim.height, 3)
+                before = [tuple(v.co) for v in ob.data.vertices]
+                self.assertTrue(self.prims.adopt_legacy(ob), kind)
+                self.assertEqual([tuple(v.co) for v in ob.data.vertices], before)
+                ob.max_prim.height = 7
+                self.assertEqual(ob.max_prim.kind, kind)
+                self.assertAlmostEqual(max(v.co.z for v in ob.data.vertices), 7)
+                self.assertAlmostEqual(min(v.co.z for v in ob.data.vertices), 0)
+                self.assertEqual(ob.max_prim.radius1, 2)
+                self.assertEqual(ob.max_prim.radius2, .5)
+                print('F3 PASS historical', kind, 'adopts unchanged and height remains editable', flush=True)
+
+    def test_historical_same_count_edits_are_preserved(self):
+        objects = self.historical_objects()
+        for kind in ('CONE', 'CYLINDER'):
+            with self.subTest(kind=kind):
+                ob = objects[kind]
+                bpy.context.collection.objects.link(ob)
+                ob.data.vertices[0].co.x += .25
+                before = [tuple(v.co) for v in ob.data.vertices]
+                self.assertFalse(self.prims.adopt_legacy(ob), kind)
+                ob.max_prim.height = 7
+                self.assertEqual(ob.max_prim.kind, '')
+                self.assertEqual([tuple(v.co) for v in ob.data.vertices], before)
+                print('F3 PASS edited historical', kind, 'refuses adoption and preserves geometry', flush=True)
 
 
 result = unittest.TextTestRunner(verbosity=2, stream=sys.stdout).run(
