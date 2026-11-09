@@ -216,7 +216,11 @@ class _MaxExportBase(ExportHelper):
         scene_units = context.scene.unit_settings
         old_system, old_scale = scene_units.system, scene_units.scale_length
         meters = old_scale if old_system != "NONE" else 1.0
-        settings = fbx_settings(selected, self.embed_media, self.animation)
+        try:
+            settings = fbx_settings(selected, self.embed_media, self.animation)
+        except (AttributeError, KeyError, RuntimeError) as exc:
+            self.report({"WARNING"}, "FBX export is unavailable in this Blender installation")
+            return {"CANCELLED"}
         roots = tuple(context.selected_objects if selected else context.view_layer.objects)
         objects = _export_objects(context, roots)
         try:
