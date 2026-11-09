@@ -21,6 +21,8 @@ VIEWPORT = [
     K("wm.tool_set_by_id", "W", name="builtin.move"),
     K("wm.tool_set_by_id", "E", name="builtin.rotate"),
     K("wm.tool_set_by_id", "R", name="builtin.scale"),
+    K("max.shift_drag_clone", "LEFT_SHIFT", shift=True),
+    K("max.shift_drag_clone", "RIGHT_SHIFT", shift=True),
     # Selection
     K("max.select_all", "A", ctrl=True, action="SELECT"),
     K("max.select_all", "D", ctrl=True, action="DESELECT"),

@@ -26,6 +26,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import shift_clone
 
 
 _prefs_cache = [None]
@@ -143,6 +144,7 @@ _classes = (
     (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
+    + shift_clone.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
@@ -171,6 +173,7 @@ def _unlock_quads_once():
 def register():
     for cls in _classes:
         bpy.utils.register_class(cls)
+    shift_clone.register_macros()
     wm = bpy.types.WindowManager
     wm.max_cmd_tab = EnumProperty(name="Command Panel", items=ui_panel.TABS, default="CREATE")
     wm.max_create_cat = EnumProperty(name="Category", items=ui_panel.CREATE_CATS, default="GEOMETRY")
@@ -196,6 +199,7 @@ def register():
 
 def unregister():
     _prefs_cache[0] = None
+    shift_clone.unregister()
     keymap.unregister_keymaps()
     overlay.unregister()
     max_import.unregister_menus()

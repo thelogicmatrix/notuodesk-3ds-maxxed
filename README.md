@@ -34,6 +34,14 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 | Status bar | "1 Object Selected", X/Y/Z type-in, Grid, Auto Key, Set Key |
 | Look | Max dark UI, cyan selection outline, red sub-object selection, blue vertices, random object colors, names like Box001 |
 
+## Shift-drag cloning
+
+With Move (W), Rotate (E) or Scale (R) active, hold Shift and drag a gizmo handle or the selected geometry. The original stays put. Release to open **Clone Options** with **Copy**, **Instance**, **Reference**, **Number of Copies** and **Name**. Extra copies repeat the same move, rotation or scale. The dialog remembers your choices during the Blender session.
+
+**Copy** gives each clone its own mesh. **Instance** shares the mesh. **Reference** shares the mesh and keeps a separate modifier stack. The **Controller** choices become available when the selection includes a parent and its child. Copy duplicates animation actions. Instance links child transform channels to the original with drivers.
+
+In Editable Poly, Shift-drag extends open **Edges** and **Borders** without a dialog. **Vertex**, **Polygon** and **Element** selections open **Clone Part of Mesh**. Choose **Clone To Object**, with a name, or **Clone To Element**. Right-click or Esc cancels a drag. Cancel in either dialog removes the preview. Undo removes the whole clone operation. Ctrl+V still clones in place.
+
 ## Compact Material Editor (M)
 
 <img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
@@ -138,6 +146,7 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 | S / A | Snaps / Angle Snap |
 | N / K | Auto Key / Set Key |
 | Ctrl+V / Ctrl+C | Clone / Camera from view |
+| Shift+drag with W / E / R | Clone with Move / Rotate / Scale |
 | M / 8 / F10 | Material Editor / Environment / Render Setup |
 | Shift+Q / F9 | Render |
 | F12 / Ctrl+X | Transform Type-In / Expert Mode |
@@ -155,7 +164,8 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
-- Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
+- Reference clones share Blender data in both directions. They do not have Max's one-way reference stack. Controller Instance uses one-way drivers from the original children, rather than Max's shared controller objects.
+- Shift-clone dialogs use Blender's dialog frame and controls. Gizmo hit areas are calculated in screen space. Gimbal and custom normal orientations can differ from Blender's native handle picking.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 
 ## Updating
