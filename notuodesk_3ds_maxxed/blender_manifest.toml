@@ -1,17 +1,14 @@
 schema_version = "1.0.0"
-
 id = "notuodesk_3ds_maxxed"
 version = "1.8.0"
 name = "NotuoDesk 3ds Maxxed"
-tagline = "Makes Blender look and work like 3ds Max"
-maintainer = "NotuoDesk"
+tagline = "Max-style modeling, scene tools and hotkeys for Blender"
+maintainer = "Nathan Wong"
 type = "add-on"
-
+tags = ["User Interface", "3D View", "Modeling", "Import-Export"]
 blender_version_min = "4.2.0"
-
 license = ["SPDX:GPL-3.0-or-later"]
-tags = ["3D View", "User Interface"]
+copyright = ["2026 Nathan Wong", "2026 NotuoDesk (retcon26)"]
 
 [permissions]
-files = "Backs up your preferences so they can be restored"
-network = "Checks GitHub for add-on updates"
+files = "Import scenes, textures and hotkeys and export scene files"
