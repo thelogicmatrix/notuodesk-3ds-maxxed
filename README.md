@@ -220,19 +220,24 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
-- Editable Poly Constraints work with Select and Move (W), its gizmo and free
-  drag. Edge slides vertices along their original connected edges. Edge and
-  Border selections slide along adjoining unselected edges. Face projects each
-  vertex onto the object's original surface. Normal moves along the original
-  averaged vertex normals. Each object saves its own setting. None restores
-  ordinary Move. Right-click or Esc cancels, and each move is one undo step.
+- Editable Poly Constraints work with Select and Move (W), Rotate (E) and Scale
+  (R), their gizmos and free drag. Edge chooses original connected edges by
+  transform direction before clamping to their endpoints. A straight drag keeps
+  its rail. A deliberate direction change can choose another rail. Edge and
+  Border selections slide along adjoining unselected edges. Face stays on each
+  vertex's original incident polygons, without crossing to other islands or
+  walking across adjacent polygons. Normal uses original geometric vertex
+  normals. Opposing normals still permit a Push-style move. Each object saves
+  its own setting. None restores ordinary transforms. Right-click or Esc
+  cancels, and each transform is one undo step.
   Constraints take priority over target snapping and restore the snap settings
-  after each drag. The solver uses BMesh edge rails, a frozen surface BVH and
-  normal offsets rather than Blender's modal Slide or Shrink/Fatten tools.
-  Edge rails stop at their original endpoints. Face uses the nearest original
-  surface, so closely spaced or disconnected faces can attract the projection.
-  Constrained Move currently affects the explicit selection, without Soft
-  Selection or Preserve UVs correction. Rotate and Scale do not use Constraints.
+  after each drag. Rotate and Scale project each vertex's requested displacement
+  onto the same frozen edges, polygons or normals. The solver uses BMesh and
+  shares repeated Edge calculations on dense selections. It affects the explicit
+  selection, without Soft Selection or Preserve UVs correction. Native Blender
+  G and tools selected directly from Blender's toolbar bypass these Max tools.
+  The rebuilt Max tools use the same geometry hook. See
+  [transform integration](docs/poly-constraints-integration.md) for merge details.
 - Editable Poly's By Vertex click filter, Ignore Backfacing, hover Preview
   Selection and Preserve UVs channel settings are disabled.
   By Angle expands the current face selection with a separate button.

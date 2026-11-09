@@ -179,8 +179,8 @@ class MAX_MT_quad(Menu):
 
         _header(right, "transform")
         right.operator("max.poly_move_tool", text="Move")
-        right.operator("wm.tool_set_by_id", text="Rotate").name = "builtin.rotate"
-        right.operator("wm.tool_set_by_id", text="Scale").name = "builtin.scale"
+        right.operator("max.poly_transform_tool", text="Rotate").kind = "ROTATE"
+        right.operator("max.poly_transform_tool", text="Scale").kind = "SCALE"
         right.operator("wm.tool_set_by_id", text="Select").name = "builtin.select_box"
         if not edit:
             right.operator("object.select_grouped", text="Select Similar").type = "TYPE"
@@ -317,8 +317,8 @@ class MAX_MT_edit(Menu):
         lay.operator("max.clone", text="Clone")
         lay.separator()
         lay.operator("max.poly_move_tool", text="Move")
-        lay.operator("wm.tool_set_by_id", text="Rotate").name = "builtin.rotate"
-        lay.operator("wm.tool_set_by_id", text="Scale").name = "builtin.scale"
+        lay.operator("max.poly_transform_tool", text="Rotate").kind = "ROTATE"
+        lay.operator("max.poly_transform_tool", text="Scale").kind = "SCALE"
         lay.operator("max.transform_typein", text="Transform Type-In...")
         lay.separator()
         lay.operator("max.select_all", text="Select All").action = "SELECT"
@@ -533,7 +533,9 @@ def draw_main_toolbar(self, context):
         if idname == "builtin.move":
             row.operator("max.poly_move_tool", text="", icon=icon, depress=tool in {idname, "max.poly_move"})
         else:
-            row.operator("wm.tool_set_by_id", text="", icon=icon, depress=(tool == idname)).name = idname
+            kind = "ROTATE" if idname == "builtin.rotate" else "SCALE"
+            row.operator("max.poly_transform_tool", text="", icon=icon,
+                         depress=tool in {idname, "max.poly_" + kind.lower()}).kind = kind
 
     slot = context.scene.transform_orientation_slots[0]
     sub = lay.row(align=True)

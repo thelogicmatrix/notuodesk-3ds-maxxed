@@ -19,8 +19,8 @@ VIEWPORT = [
     # Main toolbar tools
     K("wm.tool_set_by_id", "Q", name="builtin.select_box"),
     K("max.poly_move_tool", "W"),
-    K("wm.tool_set_by_id", "E", name="builtin.rotate"),
-    K("wm.tool_set_by_id", "R", name="builtin.scale"),
+    K("max.poly_transform_tool", "E", kind="ROTATE"),
+    K("max.poly_transform_tool", "R", kind="SCALE"),
     # Selection
     K("max.select_all", "A", ctrl=True, action="SELECT"),
     K("max.select_all", "D", ctrl=True, action="DESELECT"),
