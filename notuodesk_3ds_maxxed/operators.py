@@ -468,16 +468,11 @@ class MAX_OT_edit_poly(Operator):
                 ops.dissolve_mode(use_verts=False)
             elif o == "REMOVE_WITH_VERTS":
                 ops.dissolve_mode(use_verts=True)
+            # hasattr() on bpy.ops is always True, so call the real operator directly
             elif o == "LOOP":
-                if hasattr(ops, "select_edge_loop_multi"):
-                    ops.select_edge_loop_multi()
-                else:
-                    ops.loop_multi_select(ring=False)
+                ops.loop_multi_select(ring=False)
             elif o == "RING":
-                if hasattr(ops, "select_edge_ring_multi"):
-                    ops.select_edge_ring_multi()
-                else:
-                    ops.loop_multi_select(ring=True)
+                ops.loop_multi_select(ring=True)
             elif o == "WELD":
                 ops.remove_doubles(how)
             elif o == "TARGET_WELD":
