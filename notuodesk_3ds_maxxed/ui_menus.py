@@ -345,7 +345,6 @@ class MAX_MT_tools(Menu):
         lay.operator("max.object_cmd", text="Align...").cmd = "ALIGN"
         lay.operator("object.duplicate_move", text="Snapshot")
         lay.separator()
-        lay.operator("view3d.snap_cursor_to_selected", text="Grid to Selection")
         lay.operator("max.object_cmd", text="Reset XForm").cmd = "RESET_XFORM"
 
 

@@ -29,6 +29,7 @@ from . import hsx_import
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
 from . import cut_loop
 from . import keyboard_entry
+from . import cursor_policy
 
 
 _prefs_cache = [None]
@@ -195,6 +196,7 @@ def register():
     ui_menus.register_draw()
     max_import.register_menus()
     overlay.register()
+    cursor_policy.register()
     p = get_prefs()
     if p is None or p.use_keymap:
         keymap.register_keymaps()
@@ -205,6 +207,7 @@ def register():
 
 
 def unregister():
+    cursor_policy.unregister()
     cut_loop.cancel_active()
     _prefs_cache[0] = None
     keymap.unregister_keymaps()

@@ -18,6 +18,8 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 
 ## What you get
 
+The 3ds Max workspace hides Blender's 3D cursor in every viewport, including new viewports and saved layouts. It keeps the active scene's cursor at the world origin. Shift+right-click cannot place or drag it. Shapes, helpers, lights, cameras and V-Ray objects start at the origin without reading the cursor. Primitive mouse creation still uses the point you click on the construction grid.
+
 | 3ds Max | In Blender |
 |---|---|
 | Menu bar: File, Edit, Tools, Group, Views, Create, Modifiers, Animation, Graph Editors, Rendering, Customize, Scripting, Help | Replaces Blender's top menus. Blender's own menus are still there as sub-menus |
@@ -198,6 +200,9 @@ Use **Customize › Import 3ds Max Hotkeys (.hsx)...** to load your Max shortcut
 Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments**, starting at 1 with no intermediate ring. Chamfer starts at **Amount** 1.0. Edge and vertex Extrude settings move the new geometry along averaged adjacent surface normals. Tessellate offers **Edge** and **Face** types. Export Selected opens Blender's FBX exporter with **Selected Objects** on. rapidTools fastBridge and RappaTools3 Inset, Relax and MePoly use the add-on's Bridge, Inset, Relax and Convert to Editable Poly. rapidQCap and fastEdgeLoopRegularizer work when the add-on's Quad Cap and Loop Regularize operators are installed.
 
 ## Known differences from 3ds Max
+
+- Shapes, helpers, lights, cameras and V-Ray objects use the world origin instead of interactive placement. Target lights and cameras keep a preset target offset.
+- The cursor policy checks new viewports and scene switches every 0.2 seconds. Other workspaces keep their cursor display settings. A scene shared with the 3ds Max workspace shares its cursor location too.
 
 - Cut adds supporting triangles for endpoints inside a polygon. Concave polygons are triangulated before an interior endpoint is added.
 - Cut uses three Blender cursor shapes instead of Max's cursor artwork. Its Undo groups one committed segment per step. Max's exact Undo grouping has not been confirmed.
