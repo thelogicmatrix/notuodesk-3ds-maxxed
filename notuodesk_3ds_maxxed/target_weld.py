@@ -20,7 +20,10 @@ def teardown(*args):
 
 def release(key):
     state = _resources.pop(key, None)
-    _active.pop(key, None)
+    operator = _active.pop(key, None)
+    if operator is not None:
+        from . import snaps
+        snaps.clear_preview(operator.region)
     if state is None:
         return
     bpy.types.SpaceView3D.draw_handler_remove(state.handler, "WINDOW")
@@ -164,6 +167,19 @@ class MAX_OT_target_weld(Operator):
         return view3d_utils.location_3d_to_region_2d(self.region, self.region.data, self.obj.matrix_world @ co)
 
     def pick(self):
+        from . import snaps
+        from .create import construction_frame, ray_plane
+        context = bpy.context
+        _, _, normal = construction_frame(self.region.data)
+        base = self.obj.matrix_world @ (self.source.co if self.source is not None and self.level == 1 else Vector())
+        raw = ray_plane(self.region, self.region.data, self.mouse, base, normal)
+        mouse = self.mouse
+        if raw is not None:
+            point = snaps.snap_point(context, self.region, self.region.data, mouse, raw,
+                                     (base, normal), base=base if self.source is not None else None)
+            projected = view3d_utils.location_3d_to_region_2d(self.region, self.region.data, point)
+            if projected is not None:
+                mouse = projected
         best, distance = None, 14.0
         seq = self.bm.verts if self.level == 1 else self.bm.edges
         for item in seq:
@@ -178,9 +194,9 @@ class MAX_OT_target_weld(Operator):
                 if a is None or b is None:
                     continue
                 delta = b-a
-                t = max(0, min(1, (self.mouse-a).dot(delta)/delta.length_squared)) if delta.length_squared else 0
+                t = max(0, min(1, (mouse-a).dot(delta)/delta.length_squared)) if delta.length_squared else 0
                 point = a+delta*t
-            d = (point-self.mouse).length
+            d = (point-mouse).length
             if d < distance:
                 best, distance = item, d
         return best
@@ -246,6 +262,9 @@ class MAX_OT_target_weld(Operator):
                 inside = False
         if not inside:
             return {"PASS_THROUGH"}
+        from . import snaps
+        if snaps.override_event(self, context, event, dragging=False):
+            return {"RUNNING_MODAL"}
         if event.type in {"RIGHTMOUSE", "ESC"} and event.value == "PRESS":
             return self.finish()
         if event.type not in {"MOUSEMOVE", "LEFTMOUSE"}:
@@ -259,6 +278,8 @@ class MAX_OT_target_weld(Operator):
         self.window.cursor_modal_set("CROSSHAIR" if target is not None and not reason else "DEFAULT")
         self.workspace.status_text_set("Target Weld: " + (reason or ("click target. Right-click to finish" if self.source else "click source. Right-click to finish")))
         if event.type == "LEFTMOUSE" and event.value == "PRESS" and target is not None and not reason:
+            snaps.consume_override(context)
+            snaps.clear_preview(self.region)
             if self.source is None:
                 self.source = target
             else:

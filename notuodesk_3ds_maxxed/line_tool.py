@@ -189,6 +189,8 @@ def add_point(context, co, kind=None):
 
 
 def finish_line(context, close=False):
+    from . import snaps
+    snaps.clear_preview()
     ob = pending(context)
     if ob is None or len(ob.data.splines[0].bezier_points) < 2:
         return False
@@ -201,6 +203,8 @@ def finish_line(context, close=False):
 
 
 def discard_line(context):
+    from . import snaps
+    snaps.clear_preview()
     ob = pending(context)
     if ob is not None:
         cu = ob.data
@@ -299,6 +303,8 @@ class MAX_OT_line(Operator):
             area.tag_redraw()
 
     def stop(self, context):
+        from . import snaps
+        snaps.clear_preview(self.region)
         if not finish_line(context):
             discard_line(context)
         self.preview = None
@@ -315,6 +321,8 @@ class MAX_OT_line(Operator):
         self.stop(context)
 
     def finish_current(self, context, close=False):
+        from . import snaps
+        snaps.clear_preview(self.region)
         if finish_line(context, close):
             bpy.ops.ed.undo_push(message="Create Line")
         else:
@@ -335,11 +343,12 @@ class MAX_OT_line(Operator):
         p = create.ray_plane(region, region.data, co, Vector((0, 0, 0)), self.normal)
         if p is None:
             return None
-        if context.scene.tool_settings.use_snap:
-            step = area.spaces.active.overlay.grid_scale
-            step = step if step > 0 else 1.0
-            p = self.u * (round(p.dot(self.u) / step) * step) + self.v * (round(p.dot(self.v) / step) * step)
+        from . import snaps
         ob = pending(context)
+        anchor = ob.matrix_world @ ob.data.splines[0].bezier_points[-1].co if ob else None
+        p = snaps.snap_point(context, region, region.data, co, p,
+                             (Vector((0, 0, 0)), self.normal),
+                             exclude=(ob,) if ob else (), base=anchor)
         if constrain and event.shift and ob is not None:
             anchor = ob.matrix_world @ ob.data.splines[0].bezier_points[-1].co
             d = p - anchor
@@ -379,6 +388,9 @@ class MAX_OT_line(Operator):
             return {"FINISHED"}
         if self.prompt:
             return {"PASS_THROUGH"}
+        from . import snaps
+        if snaps.override_event(self, context, event, dragging=self.dragging):
+            return {"RUNNING_MODAL"}
         if event.type in {"RIGHTMOUSE", "ESC"} and event.value == "PRESS":
             if pending(context) is not None:
                 self.finish_current(context)
@@ -411,6 +423,8 @@ class MAX_OT_line(Operator):
                     bpy.ops.max.line_close("INVOKE_DEFAULT")
                     return {"RUNNING_MODAL"}
                 add_point(context, p)
+                snaps.consume_override(context)
+                snaps.clear_preview(self.region)
                 self.press = Vector((event.mouse_x, event.mouse_y))
                 self.dragging = True
             elif self.dragging and event.type in {"MOUSEMOVE", "LEFTMOUSE"}:

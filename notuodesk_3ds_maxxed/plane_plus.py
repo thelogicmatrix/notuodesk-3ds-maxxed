@@ -232,12 +232,16 @@ class MAX_OT_plane_plus(bpy.types.Operator):
 
     def modal(self, context, event):
         from .create import construction_frame, ray_plane, region_under_mouse
+        from . import snaps
+        if snaps.override_event(self, context, event, dragging=self.obj is not None):
+            return {"RUNNING_MODAL"}
         if event.type in {"RIGHTMOUSE", "ESC"}:
             if self.obj:
                 mesh = self.obj.data
                 bpy.data.objects.remove(self.obj, do_unlink=True)
                 if mesh.users == 0:
                     bpy.data.meshes.remove(mesh)
+            snaps.clear_preview(getattr(self, "region", None))
             MAX_OT_plane_plus.active = False
             context.workspace.status_text_set(None)
             return {"FINISHED"}
@@ -253,7 +257,10 @@ class MAX_OT_plane_plus(bpy.types.Operator):
             point = ray_plane(region, region.data, co, Vector((0, 0, 0)), self.normal)
             if point is None:
                 return {"RUNNING_MODAL"}
+            point = snaps.snap_point(context, region, region.data, co, point,
+                                     (Vector((0, 0, 0)), self.normal))
             self.start = point
+            snaps.consume_override(context)
             self.at_origin = event.alt
             self.obj = new_plane(context)
             self.obj.max_plane_plus.orientation = "VERTICAL" if self.vertical else "HORIZONTAL"
@@ -275,6 +282,9 @@ class MAX_OT_plane_plus(bpy.types.Operator):
             r = self.region
             point = ray_plane(r, r.data, (event.mouse_x - r.x, event.mouse_y - r.y), self.start, self.normal)
             if point is not None:
+                point = snaps.snap_point(context, r, r.data,
+                                         (event.mouse_x-r.x, event.mouse_y-r.y), point,
+                                         (self.start, self.normal), exclude=(self.obj,), base=self.start)
                 delta = point - self.start
                 du, dv = delta.dot(self.u), delta.dot(self.v)
                 width, length = abs(du), abs(dv)
@@ -288,6 +298,8 @@ class MAX_OT_plane_plus(bpy.types.Operator):
                 p.aspect = p.width / p.length
                 p.uniform = True
                 self.obj = None
+                snaps.consume_override(context)
+                snaps.clear_preview(self.region)
                 bpy.ops.ed.undo_push(message="Create PlanePlus")
             return {"RUNNING_MODAL"}
         return {"PASS_THROUGH"} if self.obj is None else {"RUNNING_MODAL"}

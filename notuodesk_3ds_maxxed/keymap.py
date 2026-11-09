@@ -17,7 +17,7 @@ def K(idname, key, value="PRESS", ctrl=False, shift=False, alt=False, **props):
 # Blender's mode keymaps (Object Mode, Mesh, ...) are checked before "3D View").
 VIEWPORT = [
     # No 3D cursor in Max: swallow Blender's Shift+right-click place and drag
-    # Integrator: replace this PRESS entry with max.snap_quad when merging snaps.
+    # Snap override owns PRESS. Keep CLICK_DRAG blocked to protect the cursor.
     # Do not keep both PRESS bindings. Keep CLICK_DRAG to block cursor fallback.
     K("max.snap_quad", "RIGHTMOUSE", shift=True),
     K("max.block_cursor", "RIGHTMOUSE", "CLICK_DRAG", shift=True),

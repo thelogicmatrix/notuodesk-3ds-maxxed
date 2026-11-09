@@ -582,6 +582,15 @@ def pick_spline(context, event, excluded):
     if region is None:
         return None
     mouse = Vector((event.mouse_x - region.x, event.mouse_y - region.y))
+    from . import snaps
+    _, _, normal = create.construction_frame(region.data)
+    raw = create.ray_plane(region, region.data, mouse, Vector(), normal)
+    if raw is not None:
+        point = snaps.snap_point(context, region, region.data, mouse, raw,
+                                 (Vector(), normal), exclude=excluded)
+        projected = view3d_utils.location_3d_to_region_2d(region, region.data, point)
+        if projected is not None:
+            mouse = projected
     best, distance = None, 14.0
     for ob in context.visible_objects:
         if ob in excluded or not valid_spline(ob) or ob.hide_select:
@@ -660,6 +669,8 @@ class MAX_OT_loft_pick(Operator):
         return {'RUNNING_MODAL'}
 
     def _finish(self):
+        from . import snaps
+        snaps.clear_preview()
         self._window.cursor_modal_restore()
         self._workspace.status_text_set(None)
 
@@ -667,6 +678,9 @@ class MAX_OT_loft_pick(Operator):
         self._finish()
 
     def modal(self, context, event):
+        from . import snaps
+        if snaps.override_event(self, context, event, dragging=False):
+            return {'RUNNING_MODAL'}
         if event.type in {'RIGHTMOUSE', 'ESC'} and event.value == 'PRESS':
             self._finish()
             return {'CANCELLED'}
@@ -679,6 +693,7 @@ class MAX_OT_loft_pick(Operator):
             if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
                 if picked:
                     self.object_name = picked.name
+                    snaps.consume_override(context)
                     self._finish()
                     return self.execute(context)
                 return {'RUNNING_MODAL'}

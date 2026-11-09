@@ -495,3 +495,9 @@ blender --command extension build --source-dir notuodesk_3ds_maxxed --output-dir
 ## License
 
 GPL-3.0-or-later (required for Blender add-ons). See [LICENSE](LICENSE).
+
+## Constraints integration hook
+
+`snaps.MAX_OT_snap_transform.invoke` has one hook point before clone creation and geometry snapshots. When Edit Poly Constraints lands, delegate Move to `poly_constraints.invoke_move(context, event, constraint_axis=self.constraint_axis, from_gizmo=self.from_gizmo)`. Return its result when it is not None. Leave Rotate and Scale on the shared snap transform. Constraints must preserve Shift-clone transactions when it takes over Move. The native Move selector is the other caller owned by that branch.
+
+All interactive standard and extended primitive measurements, Line points and PlanePlus placement and endpoints use `snaps.snap_point`. Grid Points attracts only within Snap Radius. Typed Keyboard Entry values stay exact. Line's Shift angle constraint and PlanePlus's Shift square constraint apply after picking. PlanePlus keeps its explicit pivot instead of AutoPivot. Loft and Target Weld use the picked location to identify existing source geometry. They never move source objects or create a weld target at an empty grid point. Shift-drag on the snap tools uses the existing Clone Options or Clone Part of Mesh transaction.

@@ -926,22 +926,26 @@ def _ensure_button_listeners():
 def draw_toolbar(layout, context):
     if context.window.as_pointer() not in _button_guards and not bpy.app.timers.is_registered(_ensure_button_listeners):
         bpy.app.timers.register(_ensure_button_listeners, first_interval=.01)
+    from . import max_icons
     s, ts = settings(context), context.scene.tool_settings
     row = layout.row(align=True)
+    art = {"2D": "snap_2d", "2_5D": "snap_25d", "3D": "snap_3d"}[s.mode] if ts.use_snap else "snap_off"
     row.operator("max.snap_toggle", text=dict((k, n) for k, n, _ in MODES)[s.mode],
-                 icon="SNAP_ON", depress=ts.use_snap).kind = "SNAP"
+                 depress=ts.use_snap, **max_icons.ui(art, "SNAP_ON")).kind = "SNAP"
     row.menu("MAX_MT_snap_modes", text="", icon="DOWNARROW_HLT")
     for kind, icon, value in (("ANGLE_SNAP", "DRIVER_ROTATIONAL_DIFFERENCE", s.angle_snap),
                               ("PERCENT_SNAP", "MOD_PHYSICS", s.percent_snap),
                               ("SPINNER_SNAP", "ARROW_LEFTRIGHT", s.spinner_snap)):
-        row.operator("max.snap_toggle", text="", icon=icon, depress=value).kind = kind
+        art = {"ANGLE_SNAP": "angle_snap", "PERCENT_SNAP": "percent_snap", "SPINNER_SNAP": "spinner_snap"}[kind]
+        row.operator("max.snap_toggle", text="", depress=value, **max_icons.ui(art, icon)).kind = kind
 
 
 class MAX_OT_snap_transform(bpy.types.Operator):
     """Drag a snap base to a target. Release commits, right-click cancels"""
     bl_idname = "max.snap_transform"
     bl_label = "Snap Transform"
-    bl_options = {"REGISTER", "UNDO", "BLOCKING"}
+    # Push once on ordinary completion. A clone's dialog owns its undo step.
+    bl_options = {"REGISTER", "BLOCKING"}
     kind: EnumProperty(items=[("MOVE", "Move", ""), ("ROTATE", "Rotate", ""), ("SCALE", "Scale", "")])
     constraint_axis: BoolVectorProperty(size=3, default=(False, False, False), options={"SKIP_SAVE"})
     from_gizmo: BoolProperty(default=False, options={"SKIP_SAVE"})
@@ -951,6 +955,8 @@ class MAX_OT_snap_transform(bpy.types.Operator):
         return context.area and context.area.type == "VIEW_3D" and context.mode in {"OBJECT", "EDIT_MESH"}
 
     def invoke(self, context, event):
+        # Edit Poly Constraints hook: delegate MOVE here, before clone creation
+        # or geometry snapshots. See README "Constraints integration hook".
         from .create import construction_frame
         self.region = context.region
         self.rv3d = context.region_data
@@ -962,6 +968,11 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                                     event.mouse_prev_press_y - self.region.y))
         self.u, self.v, self.n = construction_frame(self.rv3d)
         self.plane = (Vector((0, 0, 0)), self.n)
+        self.clone_tx = None
+        if event.shift and not event.ctrl and not event.alt:
+            from . import shift_clone
+            self.clone_tx = shift_clone.ObjectClone(context) if context.mode == "OBJECT" else shift_clone.MeshClones(context)
+            shift_clone._active[context.window.as_pointer()] = (self.clone_tx, context.window_manager, None)
         self.objects = list(context.objects_in_mode_unique_data) if context.mode == "EDIT_MESH" else list(context.selected_objects)
         self.meshes = []
         self.matrices = []
@@ -990,9 +1001,9 @@ class MAX_OT_snap_transform(bpy.types.Operator):
             view_n = self.rv3d.view_rotation @ Vector((0, 0, 1))
             self.base = self._ray(self.start_co, center, view_n) if self.kind == "MOVE" else center.copy()
             if self.base is None:
-                return {"CANCELLED"}
+                return self._finish(context, True)
         else:
-            return {"CANCELLED"}
+            return self._finish(context, True)
         self.orientation = orientation_basis(context)
         self.axis = None
         self.constraint_normal = None
@@ -1006,7 +1017,7 @@ class MAX_OT_snap_transform(bpy.types.Operator):
             self.drag_n = self.constraint_normal
         self.drag_origin = self._ray(self.start_co, self.base, self.drag_n)
         if self.drag_origin is None:
-            return {"CANCELLED"}
+            return self._finish(context, True)
         context.window_manager.modal_handler_add(self)
         context.workspace.status_text_set("Snap base picked. Drag to target. X/Y/Z: axis. Right-click: cancel")
         return {"RUNNING_MODAL"}
@@ -1094,15 +1105,30 @@ class MAX_OT_snap_transform(bpy.types.Operator):
 
     def _finish(self, context, cancel=False):
         if cancel:
-            self._apply(context, Matrix.Identity(4))
+            tx = getattr(self, "clone_tx", None)
+            if tx is None or tx.valid():
+                self._apply(context, Matrix.Identity(4))
         else:
             consume_override(context)
         clear_preview(self.region)
+        tx = getattr(self, "clone_tx", None)
+        if tx is not None:
+            from . import shift_clone
+            shift_clone.finish_snap_clone(context, tx, cancel=cancel)
+            self.clone_tx = None
+        elif not cancel:
+            bpy.ops.ed.undo_push(message="Snap " + self.kind.title())
         context.workspace.status_text_set(None)
         context.area.tag_redraw()
         return {"CANCELLED"} if cancel else {"FINISHED"}
 
+    def cancel(self, context):
+        self._finish(context, True)
+
     def modal(self, context, event):
+        tx = getattr(self, "clone_tx", None)
+        if tx is not None and not tx.valid():
+            return self._finish(context, True)
         co = Vector((event.mouse_region_x, event.mouse_region_y))
         if override_event(self, context, event):
             return {"RUNNING_MODAL"}
@@ -1153,7 +1179,8 @@ def _make_tool(name, label, kind, mode):
         "bl_description": "Drag a snap base to its target. Right-click cancels",
         "bl_context_mode": mode,
         "bl_icon": {"MOVE": "ops.transform.translate", "ROTATE": "ops.transform.rotate", "SCALE": "ops.transform.resize"}[kind],
-        "bl_keymap": (("max.snap_transform", {"type": "LEFTMOUSE", "value": "CLICK_DRAG"}, {"properties": [("kind", kind)]}),
+        "bl_keymap": (("max.snap_transform", {"type": "LEFTMOUSE", "value": "CLICK_DRAG", "shift": True}, {"properties": [("kind", kind)]}),
+                      ("max.snap_transform", {"type": "LEFTMOUSE", "value": "CLICK_DRAG"}, {"properties": [("kind", kind)]}),
                       ("view3d.select", {"type": "LEFTMOUSE", "value": "CLICK"}, {"properties": [("deselect_all", True)]})),
     })
 
@@ -1223,9 +1250,15 @@ class MAX_GGT_snap_transform(bpy.types.GizmoGroup):
         for gizmo, operation, i, plane in self.handles:
             gizmo.hide = operation != kind
             normal = basis.col[i].normalized()
+            view_normal = context.region_data.view_rotation @ Vector((0, 0, 1))
+            if not plane and operation in {"MOVE", "SCALE"}:
+                gizmo.hide = gizmo.hide or abs(normal.dot(view_normal)) > .99
             if plane:
                 axes = [basis.col[j] for j in range(3) if j != i]
                 normal = axes[0].cross(axes[1]).normalized()
+                # An edge-on plane has no draggable screen area. Let the
+                # visible axis handle receive the press instead.
+                gizmo.hide = gizmo.hide or abs(normal.dot(view_normal)) < .08
             matrix = normal.to_track_quat("Z", "Y").to_matrix().to_4x4()
             matrix.translation = center
             gizmo.matrix_basis = matrix

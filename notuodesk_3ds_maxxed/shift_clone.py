@@ -598,6 +598,22 @@ class MAX_OT_extend_edges(Operator):
         return {'FINISHED'}
 
 
+def finish_snap_clone(context, tx, *, cancel=False):
+    """Finish the same clone transaction after the shared magnetic transform."""
+    _active.pop(context.window.as_pointer(), None)
+    if cancel or not tx.changed():
+        tx.cancel()
+        return
+    token = str(id(tx))
+    _pending[token] = tx
+    if isinstance(tx, ObjectClone) or tx.level not in {2, 3}:
+        _defer_dialog(context, token)
+    else:
+        bpy.ops.max.extend_edges(token=token)
+        # The modal callback needs its own completed mesh undo state.
+        bpy.ops.ed.undo_push(message='Extend Edges')
+
+
 def _defer_dialog(context, token):
     # Capture the viewport, never the modal operator or its transient context.
     window, area, region = context.window, context.area, context.region
@@ -612,7 +628,7 @@ def _defer_dialog(context, token):
                     or area not in tuple(window.screen.areas)
                     or region not in tuple(area.regions) or area.type != 'VIEW_3D'):
                 _cancel_pending(token)
-            elif any(op and (op.bl_idname.startswith(('TRANSFORM_OT_', 'MAX_OT_shift_clone_'))
+            elif any(op and (op.bl_idname.startswith(('TRANSFORM_OT_', 'MAX_OT_shift_clone_', 'MAX_OT_snap_transform'))
                      or op.bl_idname == 'MAX_OT_shift_drag_clone') for op in window.modal_operators):
                 return 0.01
             elif not tx.valid():
@@ -715,7 +731,7 @@ class MAX_OT_shift_clone(Operator):
                 return {'RUNNING_MODAL'}
             return {'PASS_THROUGH'}
         if event.type == 'TIMER':
-            running = any(op and op.bl_idname.startswith(('TRANSFORM_OT_', 'MAX_OT_shift_clone_'))
+            running = any(op and op.bl_idname.startswith(('TRANSFORM_OT_', 'MAX_OT_shift_clone_', 'MAX_OT_snap_transform'))
                           for op in context.window.modal_operators)
             if not running:
                 self._stop(context)

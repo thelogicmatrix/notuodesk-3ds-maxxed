@@ -240,6 +240,7 @@ class MAX_OT_create(Operator):
         return {"FINISHED"}
 
     def _cancel_object(self):
+        snaps.clear_preview()
         if self.obj is not None:
             me = self.obj.data
             bpy.data.objects.remove(self.obj)
@@ -315,6 +316,8 @@ class MAX_OT_create(Operator):
     def _bake(self, context):
         """Apply scale into the mesh so the object ends with scale 1 (Max-style parameters)."""
         ob = self.obj
+        snaps.consume_override(context)
+        snaps.clear_preview()
         if self.kind in extended_primitives.PRIMITIVES:
             from .poly_tools import finalize_new_object
             finalize_new_object(context, ob)
@@ -343,8 +346,8 @@ class MAX_OT_create(Operator):
         p = ray_plane(self.region, self.rv3d, self._co(event), self.p0, self.n)
         if p is None:
             return
-        if context.scene.tool_settings.use_snap:
-            p = Vector([round(c) for c in p])
+        p = snaps.snap_point(context, self.region, self.rv3d, self._co(event), p,
+                             (self.p0, self.n), exclude=(self.obj,), base=self.p0)
         d = p-self.p0
         du, dv = d.dot(self.u), d.dot(self.v)
         w, l = max(abs(du), 1e-4), max(abs(dv), 1e-4)
@@ -392,8 +395,14 @@ class MAX_OT_create(Operator):
         value = delta.y*(b-a).length
         if self.stage_prop in {"fillet", "cap_height"}:
             value = (delta.y-delta.x)*(b-a).length
-        if context.scene.tool_settings.use_snap:
-            value = round(value)
+        # All current stages measure lengths. Match the gesture's measurement
+        # direction in pixels, including the diagonal fillet/cap gesture.
+        axis = self.n if self.stage_prop in {"height", "cap_height"} else self.u
+        gesture_scale = math.sqrt(2) if self.stage_prop in {"fillet", "cap_height"} else 1
+        point = snaps.snap_point(context, self.region, self.rv3d, co, base + axis * value,
+                                 (self.p0, self.n), exclude=(self.obj,), base=base,
+                                 axis=axis, pixels_per_unit=1 / max((b-a).length * gesture_scale, 1e-9))
+        value = (point-base).dot(axis)
         _guard[0] = True
         try:
             p = self.obj.max_prim
@@ -463,6 +472,8 @@ class MAX_OT_create(Operator):
             if event.type == "MOUSEMOVE":
                 self._update_creation_stage(context,event)
             elif event.type == "LEFTMOUSE" and event.value == "PRESS":
+                self._update_creation_stage(context,event)
+                snaps.consume_override(context)
                 self._next_creation_stage(context,event)
             elif event.type in {"WHEELUPMOUSE", "WHEELDOWNMOUSE", "MIDDLEMOUSE"}:
                 return {"PASS_THROUGH"}
