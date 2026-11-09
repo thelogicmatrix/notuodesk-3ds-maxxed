@@ -1,337 +1,286 @@
-"""3ds Max modifiers that Blender lacks, built as Geometry Nodes groups:
-Melt, Skew, Squeeze, Slice, Noise, Push, Spherify.
-
-Each group is created once per file (named "3dsMaxxed <Name>") and reused."""
-
-import math
-
+"""Editable deformation groups and the retained geometry construction contract."""
 import bpy
 
-PREFIX = "3dsMaxxed "
+PREFIX = '3dsMaxxed '
+classes = ()
 
-
-# ---------------------------------------------------------------------------
-# tiny node-building helpers
-# ---------------------------------------------------------------------------
 
 class G:
-    def __init__(self, name):
-        self.ng = bpy.data.node_groups.new(PREFIX + name, "GeometryNodeTree")
-        if hasattr(self.ng, "is_modifier"):
-            self.ng.is_modifier = True
-        self.nodes, self.links = self.ng.nodes, self.ng.links
-        self.ng.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-        self.ng.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
-        self.gi = self.nodes.new("NodeGroupInput")
-        self.go = self.nodes.new("NodeGroupOutput")
-        self.gi.location = (-900, 0)
-        self.go.location = (900, 0)
+    """Build a geometry group without coupling consumers to a modifier UI."""
 
-    def inp(self, name, kind="FLOAT", default=0.0, lo=None, hi=None, subtype=None, desc=""):
-        stype = {"FLOAT": "NodeSocketFloat", "INT": "NodeSocketInt", "BOOL": "NodeSocketBool",
-                 "VECTOR": "NodeSocketVector"}[kind]
-        s = self.ng.interface.new_socket(name, in_out="INPUT", socket_type=stype)
-        s.description = desc
-        try:
-            s.default_value = default
-            if lo is not None:
-                s.min_value = lo
-            if hi is not None:
-                s.max_value = hi
-            if subtype:
-                s.subtype = subtype
-        except (AttributeError, TypeError):
-            pass
+    def __init__(self, name):
+        self.ng = bpy.data.node_groups.new(PREFIX + name, 'GeometryNodeTree')
+        self.nodes, self.links = self.ng.nodes, self.ng.links
+        self.ng.interface.new_socket('Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+        self.ng.interface.new_socket('Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+        self.source = self.nodes.new('NodeGroupInput')
+        self.sink = self.nodes.new('NodeGroupOutput')
+
+    def inp(self, name, kind='FLOAT', default=0, lo=None, hi=None, subtype=None, description=''):
+        socket = self.ng.interface.new_socket(name, in_out='INPUT', socket_type={
+            'FLOAT': 'NodeSocketFloat', 'INT': 'NodeSocketInt',
+            'BOOL': 'NodeSocketBool', 'VECTOR': 'NodeSocketVector'}[kind])
+        socket.default_value = default
+        if lo is not None:
+            socket.min_value = lo
+        if hi is not None:
+            socket.max_value = hi
+        if subtype is not None:
+            socket.subtype = subtype
+        socket.description = description
         return name
 
     def g(self, name):
-        return self.gi.outputs[name]
+        return self.source.outputs[name]
 
-    def _set(self, node, i, v):
-        if v is None:
+    def _set(self, node, name, value):
+        if value is None:
             return
-        if isinstance(v, (int, float, tuple)):
-            node.inputs[i].default_value = v
+        target = node.inputs[name]
+        if isinstance(value, bpy.types.NodeSocket):
+            self.links.new(value, target)
         else:
-            self.links.new(v, node.inputs[i])
+            target.default_value = value
 
-    def m(self, op, a, b=None, c=None):
-        n = self.nodes.new("ShaderNodeMath")
-        n.operation = op
-        for i, v in enumerate((a, b, c)):
-            self._set(n, i, v)
-        return n.outputs[0]
+    def m(self, operation, a, b=None, c=None):
+        node = self.nodes.new('ShaderNodeMath')
+        node.operation = operation
+        for index, value in enumerate((a, b, c)):
+            self._set(node, index, value)
+        return node.outputs[0]
 
-    def vm(self, op, a, b=None, out=0):
-        n = self.nodes.new("ShaderNodeVectorMath")
-        n.operation = op
-        for i, v in enumerate((a, b)):
-            self._set(n, i, v)
-        return n.outputs[out]
+    def vm(self, operation, a, b=None, out=0, *, output=None):
+        node = self.nodes.new('ShaderNodeVectorMath')
+        node.operation = operation
+        self._set(node, 0, a)
+        self._set(node, 'Scale' if operation == 'SCALE' else 1, b)
+        return node.outputs[out if output is None else output]
 
-    def xyz(self, vec):
-        n = self.nodes.new("ShaderNodeSeparateXYZ")
-        self._set(n, 0, vec)
-        return n.outputs[0], n.outputs[1], n.outputs[2]
+    def xyz(self, value):
+        node = self.nodes.new('ShaderNodeSeparateXYZ')
+        self._set(node, 0, value)
+        return tuple(node.outputs[i] for i in range(3))
 
     def combine(self, x, y, z):
-        n = self.nodes.new("ShaderNodeCombineXYZ")
-        for i, v in enumerate((x, y, z)):
-            self._set(n, i, v)
-        return n.outputs[0]
+        node = self.nodes.new('ShaderNodeCombineXYZ')
+        for index, value in enumerate((x, y, z)):
+            self._set(node, index, value)
+        return node.outputs[0]
 
     def position(self):
-        return self.nodes.new("GeometryNodeInputPosition").outputs[0]
+        return self.nodes.new('GeometryNodeInputPosition').outputs[0]
 
-    def normal(self):
-        return self.nodes.new("GeometryNodeInputNormal").outputs[0]
+    def set_position(self, geometry, position=None, offset=None):
+        node = self.nodes.new('GeometryNodeSetPosition')
+        for key, value in (('Geometry', geometry), ('Position', position), ('Offset', offset)):
+            self._set(node, key, value)
+        return node.outputs['Geometry']
 
-    def bbox(self):
-        n = self.nodes.new("GeometryNodeBoundBox")
-        self.links.new(self.g("Geometry"), n.inputs[0])
-        return n.outputs["Min"], n.outputs["Max"]
-
-    def set_position(self, geo, position=None, offset=None):
-        n = self.nodes.new("GeometryNodeSetPosition")
-        self.links.new(geo, n.inputs["Geometry"])
-        if position is not None:
-            self.links.new(position, n.inputs["Position"])
-        if offset is not None:
-            self.links.new(offset, n.inputs["Offset"])
-        return n.outputs[0]
-
-    def out(self, geo):
-        self.links.new(geo, self.go.inputs[0])
+    def out(self, geometry):
+        self.links.new(geometry, self.sink.inputs['Geometry'])
         return self.ng
 
-    def height_factor(self):
-        """t = (z - minZ) / height, plus helpers used by most deformers."""
-        mn, mx = self.bbox()
-        mnx, mny, mnz = self.xyz(mn)
-        mxx, mxy, mxz = self.xyz(mx)
-        h = self.m("MAXIMUM", self.m("SUBTRACT", mxz, mnz), 1e-5)
-        px, py, pz = self.xyz(self.position())
-        t = self.m("DIVIDE", self.m("SUBTRACT", pz, mnz), h)
-        cx = self.m("MULTIPLY", self.m("ADD", mnx, mxx), 0.5)
-        cy = self.m("MULTIPLY", self.m("ADD", mny, mxy), 0.5)
-        return dict(t=t, h=h, mnz=mnz, px=px, py=py, pz=pz, cx=cx, cy=cy)
+
+def _sockets(modifier):
+    group = getattr(modifier, 'node_group', None)
+    if group is None:
+        return ()
+    return tuple(s for s in group.interface.items_tree
+                 if s.item_type == 'SOCKET' and s.in_out == 'INPUT'
+                 and s.socket_type != 'NodeSocketGeometry')
 
 
-# ---------------------------------------------------------------------------
-# modifiers
-# ---------------------------------------------------------------------------
-
-def build_melt():
-    """3ds Max Melt: the object sags toward its base and spreads out like a puddle.
-    Irregularity makes some parts melt faster than others, so it drips unevenly."""
-    g = G("Melt 2")
-    g.inp("Amount", default=0.5, lo=0.0, hi=1.0, subtype="FACTOR",
-          desc="How far the object has melted. Keyframe this to animate the melt")
-    g.inp("% of Melt Spread", default=0.19, lo=0.0, hi=1.0, subtype="FACTOR",
-          desc="How much the melted part spreads outward")
-    g.inp("Solidity", default=2.0, lo=0.05, hi=10.0,
-          desc="Ice 2.0, Glass 0.5, Jelly 0.4, Plastic 0.1. Lower = gooier")
-    g.inp("Irregularity", default=0.35, lo=0.0, hi=1.0, subtype="FACTOR",
-          desc="Uneven melting: some areas drip faster than others")
-    g.inp("Drip Size", default=1.0, lo=0.01, hi=100.0, desc="Size of the uneven melting pattern")
-    g.inp("Seed", default=0.0, desc="Random variation of the drips")
-    g.inp("Flip Axis", "BOOL", default=False, desc="Melt toward the top instead of the base")
-    v = g.height_factor()
-    t = v["t"]
-    flip = g.g("Flip Axis")
-    t = g.m("ADD", g.m("MULTIPLY", t, g.m("SUBTRACT", 1.0, flip)),
-            g.m("MULTIPLY", g.m("SUBTRACT", 1.0, t), flip))
-
-    # uneven melting: noise over the footprint (x, y) varies the local amount
-    tex = g.nodes.new("ShaderNodeTexNoise")
-    try:
-        tex.noise_dimensions = "4D"
-    except Exception:
-        pass
-    g.links.new(g.combine(v["px"], v["py"], 0.0), tex.inputs["Vector"])
-    if "W" in tex.inputs:
-        g.links.new(g.g("Seed"), tex.inputs["W"])
-    g.links.new(g.m("DIVIDE", 1.5, g.g("Drip Size")), tex.inputs["Scale"])
-    tex.inputs["Detail"].default_value = 1.5   # cheap: only the footprint is sampled
-    wobble = g.m("MULTIPLY", g.m("SUBTRACT", tex.outputs["Fac"], 0.5), g.m("MULTIPLY", g.g("Irregularity"), 2.0))
-    amount = g.m("MINIMUM", g.m("MAXIMUM",
-                 g.m("MULTIPLY", g.g("Amount"), g.m("ADD", 1.0, wobble)), 0.0), 1.0)
-
-    # sag: upper parts drop more. t' = t * (1 - amount * t^(1/solidity))
-    expo = g.m("DIVIDE", 1.0, g.g("Solidity"))
-    sag = g.m("MULTIPLY", amount, g.m("POWER", g.m("MAXIMUM", t, 0.0), expo))
-    t2 = g.m("MAXIMUM", g.m("MULTIPLY", t, g.m("SUBTRACT", 1.0, sag)), 0.0)
-    # spread: the closer to the ground after melting, the wider it gets (the puddle)
-    near = g.m("POWER", g.m("SUBTRACT", 1.0, t2), 2.0)
-    scale = g.m("ADD", 1.0, g.m("MULTIPLY", g.m("MULTIPLY", g.g("% of Melt Spread"), amount),
-                                  g.m("MULTIPLY", near, 3.0)))
-    nx = g.m("ADD", v["cx"], g.m("MULTIPLY", g.m("SUBTRACT", v["px"], v["cx"]), scale))
-    ny = g.m("ADD", v["cy"], g.m("MULTIPLY", g.m("SUBTRACT", v["py"], v["cy"]), scale))
-    t2f = g.m("ADD", g.m("MULTIPLY", t2, g.m("SUBTRACT", 1.0, flip)),
-              g.m("MULTIPLY", g.m("SUBTRACT", 1.0, t2), flip))
-    nz = g.m("ADD", v["mnz"], g.m("MULTIPLY", t2f, v["h"]))
-    return g.out(g.set_position(g.g("Geometry"), position=g.combine(nx, ny, nz)))
+def inputs(modifier):
+    return [(socket.identifier, socket.name) for socket in _sockets(modifier)]
 
 
-def build_skew():
-    g = G("Skew")
-    g.inp("Amount", default=0.5, desc="Skew distance at the top of the object")
-    g.inp("Direction", default=0.0, subtype="ANGLE", desc="Direction of the skew around the Z axis")
-    v = g.height_factor()
-    d = g.g("Direction")
-    off = g.m("MULTIPLY", g.g("Amount"), v["t"])
-    ox = g.m("MULTIPLY", off, g.m("COSINE", d))
-    oy = g.m("MULTIPLY", off, g.m("SINE", d))
-    return g.out(g.set_position(g.g("Geometry"), offset=g.combine(ox, oy, 0.0)))
+def input_ref(modifier, identifier):
+    """Return an RNA owner/path pair that also accepts keyframe_insert."""
+    # ID-property access remains valid in 4.2 and 5.0, including animation paths.
+    socket = next((s for s in _sockets(modifier) if s.identifier == identifier), None)
+    if socket is None:
+        raise KeyError(identifier)
+    if identifier not in modifier:
+        modifier[identifier] = socket.default_value
+    return modifier, '["' + bpy.utils.escape_identifier(identifier) + '"]'
 
 
-def build_squeeze():
-    g = G("Squeeze")
-    g.inp("Axial Bulge", default=0.5, lo=-1.0, hi=4.0, desc="Bulge outward around the middle")
-    g.inp("Curve", default=2.0, lo=0.1, hi=10.0, desc="Shape of the bulge")
-    g.inp("Radial Squeeze", default=0.0, lo=-1.0, hi=1.0, desc="Squash height (positive) or stretch (negative)")
-    v = g.height_factor()
-    bump = g.m("POWER", g.m("SINE", g.m("MULTIPLY", v["t"], math.pi)), g.g("Curve"))
-    scale = g.m("ADD", 1.0, g.m("MULTIPLY", g.g("Axial Bulge"), bump))
-    nx = g.m("ADD", v["cx"], g.m("MULTIPLY", g.m("SUBTRACT", v["px"], v["cx"]), scale))
-    ny = g.m("ADD", v["cy"], g.m("MULTIPLY", g.m("SUBTRACT", v["py"], v["cy"]), scale))
-    zs = g.m("SUBTRACT", 1.0, g.m("MULTIPLY", g.g("Radial Squeeze"), 0.5))
-    nz = g.m("ADD", v["mnz"], g.m("MULTIPLY", g.m("SUBTRACT", v["pz"], v["mnz"]), zs))
-    return g.out(g.set_position(g.g("Geometry"), position=g.combine(nx, ny, nz)))
+def set_input(modifier, name, value):
+    socket = next((s for s in _sockets(modifier) if s.name == name), None)
+    if socket is None:
+        return False
+    data, path = input_ref(modifier, socket.identifier)
+    if path == 'value':
+        data.value = value
+    else:
+        data[socket.identifier] = value
+    modifier.id_data.update_tag()
+    return True
 
 
-def build_slice():
-    g = G("Slice")
-    g.inp("Slice Height", default=0.5, lo=0.0, hi=1.0, subtype="FACTOR", desc="Where the slice plane sits")
-    g.inp("Remove Bottom", "BOOL", default=False, desc="Remove below the plane instead of above")
-    v = g.height_factor()
-    above = g.m("GREATER_THAN", v["t"], g.g("Slice Height"))
-    flip = g.g("Remove Bottom")
-    sel = g.m("ABSOLUTE", g.m("SUBTRACT", above, flip))
-    dn = g.nodes.new("GeometryNodeDeleteGeometry")
-    g.links.new(g.g("Geometry"), dn.inputs["Geometry"])
-    g.links.new(sel, dn.inputs["Selection"])
-    return g.out(dn.outputs[0])
+def value(modifier, name, default=None):
+    socket = next((s for s in _sockets(modifier) if s.name == name), None)
+    if socket is None:
+        return default
+    data, path = input_ref(modifier, socket.identifier)
+    return data.path_resolve(path)
 
 
-def build_noise():
-    g = G("Noise")
-    g.inp("Seed", default=0.0, desc="Random seed")
-    g.inp("Scale", default=1.0, lo=0.001, desc="Noise size")
-    g.inp("Strength", "VECTOR", default=(0.0, 0.0, 0.3), desc="Displacement per axis")
-    g.inp("Fractal Detail", default=2.0, lo=0.0, hi=15.0)
-    tex = g.nodes.new("ShaderNodeTexNoise")
-    try:
-        tex.noise_dimensions = "4D"
-    except Exception:
-        pass
-    g.links.new(g.position(), tex.inputs["Vector"])
-    if "W" in tex.inputs:
-        g.links.new(g.g("Seed"), tex.inputs["W"])
-    g.links.new(g.g("Scale"), tex.inputs["Scale"])
-    g.links.new(g.g("Fractal Detail"), tex.inputs["Detail"])
-    centered = g.vm("SUBTRACT", tex.outputs["Color"], (0.5, 0.5, 0.5))
-    off = g.vm("MULTIPLY", g.vm("MULTIPLY", centered, g.g("Strength")), (2.0, 2.0, 2.0))
-    return g.out(g.set_position(g.g("Geometry"), offset=off))
-
-
-def build_push():
-    g = G("Push")
-    g.inp("Push Value", default=0.1, desc="Move every vertex along its normal")
-    off = g.vm("SCALE", g.normal(), None)
-    n = off.node
-    g.links.new(g.g("Push Value"), n.inputs["Scale"])
-    return g.out(g.set_position(g.g("Geometry"), offset=off))
-
-
-def build_spherify():
-    g = G("Spherify")
-    g.inp("Percent", default=1.0, lo=0.0, hi=1.0, subtype="FACTOR")
-    mn, mx = g.bbox()
-    c = g.vm("SCALE", g.vm("ADD", mn, mx), None)
-    c.node.inputs["Scale"].default_value = 0.5
-    size = g.vm("LENGTH", g.vm("SUBTRACT", mx, mn), None, out=1)
-    radius = g.m("MULTIPLY", size, 0.35)
-    p = g.position()
-    d = g.vm("NORMALIZE", g.vm("SUBTRACT", p, c))
-    sphere_pt = g.vm("ADD", c, g.vm("MULTIPLY", d, g.combine(radius, radius, radius)))
-    mix = g.nodes.new("ShaderNodeMix")
-    mix.data_type = "VECTOR"
-    g.links.new(g.g("Percent"), mix.inputs[0])
-    g.links.new(p, mix.inputs[4])
-    g.links.new(sphere_pt, mix.inputs[5])
-    return g.out(g.set_position(g.g("Geometry"), position=mix.outputs[1]))
-
-
-BUILDERS = {
-    "MELT": ("Melt 2", build_melt),
-    "SKEW": ("Skew", build_skew),
-    "SQUEEZE": ("Squeeze", build_squeeze),
-    "SLICE": ("Slice", build_slice),
-    "NOISE": ("Noise", build_noise),
-    "PUSH": ("Push", build_push),
-    "SPHERIFY": ("Spherify", build_spherify),
+PARAMETERS = {
+    'Melt': (('Amount', 'FLOAT', .5), ('% of Melt Spread', 'FLOAT', .19),
+             ('Solidity', 'FLOAT', 2.), ('Irregularity', 'FLOAT', .35),
+             ('Drip Size', 'FLOAT', 1.), ('Seed', 'FLOAT', 0.), ('Flip Axis', 'BOOL', False)),
+    'Skew': (('Amount', 'FLOAT', .5), ('Direction', 'FLOAT', 0.)),
+    'Squeeze': (('Axial Bulge', 'FLOAT', .5), ('Curve', 'FLOAT', 2.), ('Radial Squeeze', 'FLOAT', 0.)),
+    'Slice': (('Slice Height', 'FLOAT', .5), ('Remove Bottom', 'BOOL', False)),
+    'Noise': (('Seed', 'FLOAT', 0.), ('Scale', 'FLOAT', 1.), ('Strength X', 'FLOAT', 0.),
+              ('Strength Y', 'FLOAT', 0.), ('Strength Z', 'FLOAT', .3), ('Fractal Detail', 'FLOAT', 2.)),
+    'Push': (('Push Value', 'FLOAT', .1),),
+    'Spherify': (('Percent', 'FLOAT', 1.),),
 }
+GROUP_NAMES = {kind: PREFIX + ('Melt 2' if kind == 'Melt' else kind) for kind in PARAMETERS}
 
 
-def get_group(key):
-    label, fn = BUILDERS[key]
-    ng = bpy.data.node_groups.get(PREFIX + label)
-    if ng is None:
-        ng = fn()
-    return ng
+def identify(modifier):
+    group = getattr(modifier, 'node_group', None)
+    if group is None:
+        return None
+    tagged = group.get('max_deformer')
+    if tagged in PARAMETERS:
+        return tagged
+    for kind, name in GROUP_NAMES.items():
+        if group.name == name or group.name.startswith(name + '.'):
+            return kind
+    return None
 
 
-def add(ob, key, name):
-    mod = ob.modifiers.new(name, "NODES")
-    mod.node_group = get_group(key)
+def _bounds(g):
+    node = g.nodes.new('GeometryNodeBoundBox')
+    g._set(node, 'Geometry', g.g('Geometry'))
+    low, high = node.outputs['Min'], node.outputs['Max']
+    return low, high, g.vm('SUBTRACT', high, low)
+
+
+def _noise(g, position, scale, seed, detail=2):
+    texture = g.nodes.new('ShaderNodeTexNoise')
+    texture.noise_dimensions = '4D'
+    g._set(texture, 'Vector', position)
+    g._set(texture, 'Scale', scale)
+    g._set(texture, 'W', seed)
+    g._set(texture, 'Detail', detail)
+    return texture.outputs['Color']
+
+
+def _slice(g, low, high, span):
+    """Intersect with two finite half spaces, preserving a real plane boundary."""
+    lx, ly, lz = g.xyz(low)
+    hx, hy, hz = g.xyz(high)
+    sx, sy, sz = g.xyz(span)
+    height = g.m('ADD', lz, g.m('MULTIPLY', sz, g.g('Slice Height')))
+    margin = g.m('ADD', g.vm('LENGTH', span, output=1), 1)
+    top = g.m('ADD', hz, margin)
+    bottom = g.m('SUBTRACT', lz, margin)
+    cx = g.m('MULTIPLY', g.m('ADD', lx, hx), .5)
+    cy = g.m('MULTIPLY', g.m('ADD', ly, hy), .5)
+    halves = []
+    for a, b in ((height, top), (bottom, height)):
+        cube = g.nodes.new('GeometryNodeMeshCube')
+        size = g.combine(g.m('ADD', sx, margin), g.m('ADD', sy, margin),
+                         g.m('MAXIMUM', g.m('SUBTRACT', b, a), .00001))
+        g._set(cube, 'Size', size)
+        move = g.nodes.new('GeometryNodeTransform')
+        g._set(move, 'Geometry', cube.outputs['Mesh'])
+        g._set(move, 'Translation', g.combine(cx, cy, g.m('MULTIPLY', g.m('ADD', a, b), .5)))
+        boolean = g.nodes.new('GeometryNodeMeshBoolean')
+        boolean.operation = 'INTERSECT'
+        # Intersect takes all operands through the multi-input mesh socket.
+        g.links.new(g.g('Geometry'), boolean.inputs[1])
+        g.links.new(move.outputs['Geometry'], boolean.inputs[1])
+        halves.append(boolean.outputs['Mesh'])
+    choice = g.nodes.new('GeometryNodeSwitch')
+    choice.input_type = 'GEOMETRY'
+    g._set(choice, 'Switch', g.g('Remove Bottom'))
+    g._set(choice, 'False', halves[1])
+    g._set(choice, 'True', halves[0])
+    return choice.outputs['Output']
+
+
+def build(kind):
+    if kind not in PARAMETERS:
+        raise ValueError('Unsupported deformer: ' + kind)
+    g = G('Melt 2' if kind == 'Melt' else kind)
+    g.ng['max_deformer'] = kind
+    g.ng['max_deformer_version'] = 1
+    for name, category, default in PARAMETERS[kind]:
+        g.inp(name, category, default, subtype='ANGLE' if name == 'Direction' else None)
+    p = g.position()
+    x, y, z = g.xyz(p)
+    low, high, span = _bounds(g)
+    if kind == 'Slice':
+        return g.out(_slice(g, low, high, span))
+    if kind == 'Skew':
+        distance = g.m('MULTIPLY', z, g.g('Amount'))
+        offset = g.combine(g.m('MULTIPLY', distance, g.m('COSINE', g.g('Direction'))),
+                           g.m('MULTIPLY', distance, g.m('SINE', g.g('Direction'))), 0)
+        return g.out(g.set_position(g.g('Geometry'), offset=offset))
+    if kind == 'Push':
+        normal = g.nodes.new('GeometryNodeInputNormal').outputs[0]
+        return g.out(g.set_position(g.g('Geometry'), offset=g.vm('SCALE', normal, g.g('Push Value'))))
+    if kind == 'Noise':
+        strength = g.combine(*(g.g('Strength ' + axis) for axis in 'XYZ'))
+        noise = _noise(g, p, g.m('DIVIDE', 1, g.m('MAXIMUM', g.g('Scale'), .000001)),
+                       g.g('Seed'), g.g('Fractal Detail'))
+        offset = g.vm('MULTIPLY', g.vm('SUBTRACT', noise, (.5, .5, .5)), strength)
+        return g.out(g.set_position(g.g('Geometry'), offset=offset))
+    center = g.vm('SCALE', g.vm('ADD', low, high), .5)
+    relative = g.vm('SUBTRACT', p, center)
+    if kind == 'Spherify':
+        sx, sy, sz = g.xyz(span)
+        radius = g.m('MULTIPLY', g.m('MAXIMUM', sx, g.m('MAXIMUM', sy, sz)), .5)
+        sphere = g.vm('SCALE', g.vm('NORMALIZE', relative), radius)
+        delta = g.vm('SCALE', g.vm('SUBTRACT', sphere, relative), g.g('Percent'))
+        return g.out(g.set_position(g.g('Geometry'), offset=delta))
+    lower_z = g.xyz(low)[2]
+    height = g.m('MAXIMUM', g.xyz(span)[2], .000001)
+    t = g.m('DIVIDE', g.m('SUBTRACT', z, lower_z), height)
+    t = g.m('MINIMUM', g.m('MAXIMUM', t, 0), 1)
+    if kind == 'Squeeze':
+        mid = g.m('SUBTRACT', g.m('MULTIPLY', t, 2), 1)
+        bell = g.m('POWER', g.m('MAXIMUM', g.m('SUBTRACT', 1, g.m('MULTIPLY', mid, mid)), 0),
+                   g.m('MAXIMUM', g.g('Curve'), .000001))
+        radial = g.m('ADD', g.m('SUBTRACT', 1, g.g('Radial Squeeze')), g.m('MULTIPLY', bell, g.g('Axial Bulge')))
+        rx, ry, rz = g.xyz(relative)
+        position = g.vm('ADD', center, g.combine(g.m('MULTIPLY', rx, radial), g.m('MULTIPLY', ry, radial), rz))
+    else:
+        # Solidity shapes the height profile. Extras modulate it continuously.
+        flip = g.g('Flip Axis')
+        direction = g.m('SUBTRACT', 1, g.m('MULTIPLY', flip, 2))
+        along = g.m('ADD', g.m('MULTIPLY', t, direction), flip)
+        profile = g.m('POWER', along, g.m('MAXIMUM', g.m('MULTIPLY', g.g('Solidity'), .5), .25))
+        irregular = g.xyz(_noise(g, p, g.m('DIVIDE', 1, g.m('MAXIMUM', g.g('Drip Size'), .000001)), g.g('Seed')))[0]
+        irregular = g.m('MULTIPLY', g.m('SUBTRACT', irregular, .5), g.g('Irregularity'))
+        amount = g.m('MINIMUM', g.m('MAXIMUM', g.g('Amount'), 0), 1)
+        drop = g.m('MULTIPLY', amount, g.m('MINIMUM', g.m('MAXIMUM', g.m('ADD', profile, irregular), 0), along))
+        new_z = g.m('SUBTRACT', z, g.m('MULTIPLY', direction, g.m('MULTIPLY', height, drop)))
+        spread = g.m('ADD', 1, g.m('MULTIPLY', g.g('% of Melt Spread'), g.m('MULTIPLY', amount, g.m('SUBTRACT', 1, along))))
+        rx, ry, _ = g.xyz(relative)
+        cx, cy, _ = g.xyz(center)
+        position = g.combine(g.m('ADD', cx, g.m('MULTIPLY', rx, spread)),
+                             g.m('ADD', cy, g.m('MULTIPLY', ry, spread)), new_z)
+    return g.out(g.set_position(g.g('Geometry'), position=position))
+
+
+def add(ob, kind):
+    mod = ob.modifiers.new(kind, 'NODES')
+    mod.node_group = build(kind)
+    for socket in _sockets(mod):
+        input_ref(mod, socket.identifier)
     return mod
 
 
-def inputs(mod):
-    """(identifier, name) of the user-facing inputs of a node-group modifier."""
-    ng = mod.node_group
-    if ng is None:
-        return []
-    out = []
-    for item in ng.interface.items_tree:
-        if getattr(item, "item_type", "") == "SOCKET" and item.in_out == "INPUT" \
-                and item.socket_type != "NodeSocketGeometry":
-            out.append((item.identifier, item.name))
-    return out
+def get(kind):
+    """Create the independently authored version without replacing loaded groups."""
+    return build(kind)
 
 
-def input_ref(mod, identifier):
-    """(data, property name) for drawing / setting a node-modifier input.
-    Blender 5: mod.properties.inputs.<id>.value; Blender 4.x: mod["<id>"]."""
-    props = getattr(mod, "properties", None)
-    holder = getattr(getattr(props, "inputs", None), identifier, None) if props is not None else None
-    if holder is not None:
-        return holder, "value"
-    return mod, f'["{identifier}"]'
-
-
-def set_input(mod, name, value):
-    for ident, n in inputs(mod):
-        if n == name:
-            data, prop = input_ref(mod, ident)
-            if prop == "value":
-                data.value = value
-            else:
-                mod[ident] = value
-            return True
-    return False
-
-
-def keyframe_input(mod, name, frame):
-    """Insert a keyframe on a node-modifier input (Blender 4.x and 5.x)."""
-    for ident, n in inputs(mod):
-        if n == name:
-            data, prop = input_ref(mod, ident)
-            return data.keyframe_insert(prop, frame=frame)
-    return False
-
-
-def is_melt(mod):
-    return mod is not None and mod.type == "NODES" and mod.node_group is not None \
-        and mod.node_group.name.startswith(PREFIX + "Melt")
+BUILDERS = {kind.upper(): (lambda kind=kind: build(kind)) for kind in PARAMETERS}

@@ -1,437 +1,379 @@
-"""3ds Max FFD (Free-Form Deformation): a Lattice modifier + lattice cage, presented with
-FFD's parameters.
-
-Sub-object       Control Points (edit the cage points) / Lattice (move the cage) / back
-Dimensions       Set Number of Points (U x V x W)
-Display          Lattice, In Front
-Deform           Only In Volume / All Vertices + Falloff (driven by a vertex group,
-                 because Blender's lattice otherwise deforms everything)
-Interpolation    Linear / Cardinal / Catmull-Rom / B-Spline (Max: Tension/Continuity)
-Control Points   Reset, Animate All, Conform to Shape (Inside / Outside Points, Offset)
-"""
-
+"""Free-form cages with stable owner links and explicit sub-object commands."""
+import math
 import bpy
-import numpy as np
+from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty
-from bpy.types import Operator, PropertyGroup
-from mathutils import Vector
+from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
 
-OWNER_KEY = "max_ffd_owner"
+_targets = {}
 
 
-def is_ffd(mod):
-    return (mod is not None and mod.type == "LATTICE" and mod.object is not None
-            and mod.object.type == "LATTICE")
+def bind_modifier(ob, mod):
+    """Choose a UI target in memory. Safe inside Blender's read-only draw phase."""
+    _targets[ob.as_pointer()] = mod
 
 
-def ffd_modifier(ob):
+def resolve_owner(cage, refresh=True):
+    if cage is None or cage.type != 'LATTICE':
+        return None
+    owner = cage.parent
+    if owner and any(m.type == 'LATTICE' and m.object == cage for m in owner.modifiers):
+        if refresh and cage.get('max_ffd_owner') != owner.name:
+            cage['max_ffd_owner'] = owner.name
+        return owner
+    for ob in bpy.data.objects:
+        if any(m.type == 'LATTICE' and m.object == cage for m in ob.modifiers):
+            if refresh and cage.get('max_ffd_owner') != ob.name:
+                cage['max_ffd_owner'] = ob.name
+            return ob
+    return None
+
+
+def modifier(ob):
     if ob is None:
         return None
-    act = ob.modifiers.active
-    if is_ffd(act):
-        return act
-    return next((m for m in ob.modifiers if is_ffd(m)), None)
+    if ob.type == 'LATTICE':
+        cage, ob = ob, resolve_owner(ob, refresh=False)
+        return next((m for m in ob.modifiers if m.type == 'LATTICE' and m.object == cage), None) if ob else None
+    chosen = _targets.get(ob.as_pointer())
+    try:
+        if chosen and chosen.id_data == ob and ob.modifiers.get(chosen.name) == chosen:
+            return chosen
+    except ReferenceError:
+        _targets.pop(ob.as_pointer(), None)
+    name = ob.get('max_ffd_active', '')
+    chosen = ob.modifiers.get(name)
+    if chosen and chosen.type == 'LATTICE':
+        return chosen
+    index = getattr(ob, 'max_stack_index', -1)
+    if 0 <= index < len(ob.modifiers) and ob.modifiers[index].type == 'LATTICE':
+        return ob.modifiers[index]
+    return next((m for m in reversed(ob.modifiers) if m.type == 'LATTICE'), None)
 
 
-def ffd_context(context):
-    """(deformed object, FFD modifier, lattice object) from either the object or its cage."""
-    ob = context.active_object
-    if ob is None:
-        return None, None, None
-    if ob.type == "LATTICE" and ob.get(OWNER_KEY) in bpy.data.objects:
-        owner = bpy.data.objects[ob[OWNER_KEY]]
-        mod = next((m for m in owner.modifiers if m.type == "LATTICE" and m.object == ob), None)
-        return owner, mod, ob
-    mod = ffd_modifier(ob)
-    return (ob, mod, mod.object) if mod else (ob, None, None)
+def select_modifier(ob, mod):
+    if mod and mod.id_data == ob and mod.type == 'LATTICE':
+        bind_modifier(ob, mod)
+        ob['max_ffd_active'] = mod.name
+        return True
+    return False
 
 
-# ---------------------------------------------------------------------------
-# Deform volume (Only In Volume / All Vertices + Falloff)
-# ---------------------------------------------------------------------------
-
-def volume_group_name(mod):
-    return f"FFD Volume ({mod.name})"
-
-
-def apply_volume(ob, mod):
-    if ob.type != "MESH" or ob.mode == "EDIT" or not is_ffd(mod):
-        return
-    s = ob.max_ffd
-    name = volume_group_name(mod)
-    if s.deform_mode == "ALL" and s.falloff <= 0.0:
-        mod.vertex_group = ""                       # every vertex fully deformed
-        return
-    lat = mod.object
-    me = ob.data
-    n = len(me.vertices)
-    co = np.empty(n * 3, np.float32)
-    me.vertices.foreach_get("co", co)
-    co = np.c_[co.reshape(n, 3), np.ones(n, np.float32)]
-    to_lat = np.array(lat.matrix_world.inverted() @ ob.matrix_world, np.float32)
-    local = (co @ to_lat.T)[:, :3]
-    out = np.maximum(np.abs(local) - 0.5, 0.0)               # outside amount per axis (cage units)
-    out *= np.array(lat.matrix_world.to_scale(), np.float32)  # -> world units
-    dist = np.sqrt((out * out).sum(axis=1))
-    if s.deform_mode == "VOLUME":
-        w = (dist <= 1e-6).astype(np.float32)
-    else:
-        w = np.clip(1.0 - dist / max(s.falloff, 1e-6), 0.0, 1.0)
-    vg = ob.vertex_groups.get(name) or ob.vertex_groups.new(name=name)
-    zero = np.nonzero(w <= 0.0)[0]
-    if len(zero):
-        vg.remove(zero.tolist())
-    q = np.round(w * 100).astype(np.int32)                    # batch by weight (fast)
-    for level in np.unique(q[q > 0]):
-        idx = np.nonzero(q == level)[0]
-        vg.add(idx.tolist(), level / 100.0, "REPLACE")
-    mod.vertex_group = name
-
-
-# ---------------------------------------------------------------------------
-# Parameters
-# ---------------------------------------------------------------------------
-
-def _lat(self):
-    mod = ffd_modifier(self.id_data)
-    return mod.object.data if mod else None
-
-
-def _pts_get(axis):
-    def get(self):
-        lat = _lat(self)
-        return getattr(lat, f"points_{axis}") if lat else 4
-    return get
-
-
-def _pts_set(axis):
-    def set_(self, v):
-        lat = _lat(self)
-        if lat is not None:
-            setattr(lat, f"points_{axis}", v)
-    return set_
-
-
-INTERP = [("KEY_BSPLINE", "B-Spline (smooth)", "Smoothest; points pull gently, like Max's default"),
-          ("KEY_CATMULL_ROM", "Catmull-Rom", "Passes through the points"),
-          ("KEY_CARDINAL", "Cardinal", "Tighter than Catmull-Rom"),
-          ("KEY_LINEAR", "Linear", "Straight, sharp influence")]
-INTERP_IDS = [i[0] for i in INTERP]
-
-
-def _interp_get(self):
-    lat = _lat(self)
-    return INTERP_IDS.index(lat.interpolation_type_u) if lat else 0
-
-
-def _interp_set(self, v):
-    lat = _lat(self)
-    if lat is not None:
-        lat.interpolation_type_u = lat.interpolation_type_v = lat.interpolation_type_w = INTERP_IDS[v]
-
-
-def _cage(self):
-    mod = ffd_modifier(self.id_data)
+def _cage(settings):
+    mod = modifier(settings.id_data)
     return mod.object if mod else None
 
 
-def _show_get(self):
-    c = _cage(self)
-    return bool(c and not c.hide_get())
+def _read(settings, key, default):
+    cage = _cage(settings)
+    if cage and 'max_ffd_' + key not in cage:
+        legacy = settings.id_data.get('max_ffd', {})
+        if key in legacy:
+            saved = legacy[key]
+            if key == 'deform_mode' and isinstance(saved, int):
+                saved = ('VOLUME', 'ALL')[min(max(saved, 0), 1)]
+            return saved
+    return cage.get('max_ffd_' + key, default) if cage else default
 
 
-def _show_set(self, v):
-    c = _cage(self)
-    if c is not None:
-        c.hide_set(not v)
+def _write(settings, key, value):
+    cage = _cage(settings)
+    if cage:
+        cage['max_ffd_' + key] = value
+        owner = resolve_owner(cage)
+        if owner:
+            update_volume(owner, modifier(cage))
 
 
-def _front_get(self):
-    c = _cage(self)
-    return bool(c and c.show_in_front)
+def _dimension(axis):
+    def get(settings):
+        cage = _cage(settings)
+        return getattr(cage.data, 'points_' + axis) if cage else 2
+
+    def set(settings, count):
+        cage = _cage(settings)
+        if cage:
+            setattr(cage.data, 'points_' + axis, count)
+            reset(resolve_owner(cage), modifier(cage))
+            fit(resolve_owner(cage), modifier(cage))
+    return IntProperty(name='Points ' + axis.upper(), min=2, max=64, get=get, set=set,
+                       description='Changing dimensions resets every control point')
 
 
-def _front_set(self, v):
-    c = _cage(self)
-    if c is not None:
-        c.show_in_front = v
+INTERPOLATION = (('KEY_BSPLINE', 'Smooth', 'B-Spline supported equivalent'),
+                 ('KEY_CATMULL_ROM', 'Interpolating', 'Catmull-Rom supported equivalent'),
+                 ('KEY_CARDINAL', 'Cardinal equivalent', 'Stored Cardinal interpolation'),
+                 ('KEY_LINEAR', 'Linear equivalent', 'Stored linear interpolation'))
 
 
-def _volume_update(self, context):
-    ob = self.id_data
-    apply_volume(ob, ffd_modifier(ob))
+def _get_interpolation(settings):
+    cage = _cage(settings)
+    current = cage.data.interpolation_type_u if cage else 'KEY_BSPLINE'
+    return next((i for i, item in enumerate(INTERPOLATION) if item[0] == current), 0)
 
 
-class MaxFFD(PropertyGroup):
-    points_u: IntProperty(name="Length", min=2, max=64, get=_pts_get("u"), set=_pts_set("u"),
-                          description="Control points along X (changing it resets the cage)")
-    points_v: IntProperty(name="Width", min=2, max=64, get=_pts_get("v"), set=_pts_set("v"),
-                          description="Control points along Y (changing it resets the cage)")
-    points_w: IntProperty(name="Height", min=2, max=64, get=_pts_get("w"), set=_pts_set("w"),
-                          description="Control points along Z (changing it resets the cage)")
-    interpolation: EnumProperty(name="Interpolation", items=INTERP, get=_interp_get, set=_interp_set)
-    show_lattice: BoolProperty(name="Lattice", get=_show_get, set=_show_set, description="Show the cage")
-    in_front: BoolProperty(name="In Front", get=_front_get, set=_front_set,
-                           description="Draw the cage on top of the model")
-    deform_mode: EnumProperty(name="Deform", items=[
-        ("VOLUME", "Only In Volume", "Only vertices inside the cage are deformed"),
-        ("ALL", "All Vertices", "Every vertex is deformed; use Falloff to fade it outside the cage")],
-        default="ALL", update=_volume_update)
-    falloff: FloatProperty(name="Falloff", default=0.0, min=0.0, unit="LENGTH", update=_volume_update,
-                           description="All Vertices: distance outside the cage over which the effect fades "
-                                       "(0 = no fade)")
-    conform_inside: BoolProperty(name="Inside Points", default=True)
-    conform_outside: BoolProperty(name="Outside Points", default=True)
-    offset: FloatProperty(name="Offset", default=0.05, unit="LENGTH",
-                          description="Conform to Shape: distance kept from the surface")
+def _set_interpolation(settings, value):
+    cage = _cage(settings)
+    if cage:
+        for axis in 'uvw':
+            setattr(cage.data, 'interpolation_type_' + axis, INTERPOLATION[value][0])
 
 
-# ---------------------------------------------------------------------------
-# Operators
-# ---------------------------------------------------------------------------
+class MaxFFD(bpy.types.PropertyGroup):
+    points_u: _dimension('u')
+    points_v: _dimension('v')
+    points_w: _dimension('w')
+    interpolation: EnumProperty(items=INTERPOLATION, get=_get_interpolation, set=_set_interpolation)
+    show_lattice: BoolProperty(name='Lattice', get=lambda s: not _cage(s).hide_viewport if _cage(s) else False,
+                              set=lambda s, v: setattr(_cage(s), 'hide_viewport', not v) if _cage(s) else None)
+    in_front: BoolProperty(name='See-Through', get=lambda s: _cage(s).show_in_front if _cage(s) else False,
+                          set=lambda s, v: setattr(_cage(s), 'show_in_front', v) if _cage(s) else None)
+    deform_mode: EnumProperty(name='Deform', items=(('VOLUME', 'Only In Volume', 'Leave points outside the cage unchanged'),
+                                                  ('ALL', 'All Vertices', 'Affect points outside the cage')),
+                             get=lambda s: 0 if _read(s, 'deform_mode', 'ALL') == 'VOLUME' else 1,
+                             set=lambda s, v: _write(s, 'deform_mode', ('VOLUME', 'ALL')[v]))
+    falloff: FloatProperty(name='Falloff', min=0, unit='LENGTH', get=lambda s: _read(s, 'falloff', 0.),
+                          set=lambda s, v: _write(s, 'falloff', v))
+    conform_inside: BoolProperty(name='Inside Points', get=lambda s: _read(s, 'conform_inside', True),
+                                set=lambda s, v: _write(s, 'conform_inside', v))
+    conform_outside: BoolProperty(name='Outside Points', get=lambda s: _read(s, 'conform_outside', True),
+                                 set=lambda s, v: _write(s, 'conform_outside', v))
+    offset: FloatProperty(name='Offset', unit='LENGTH', get=lambda s: _read(s, 'offset', .05),
+                          set=lambda s, v: _write(s, 'offset', v))
 
-def _object_mode(context):
-    if context.mode != "OBJECT":
-        bpy.ops.object.mode_set(mode="OBJECT")
+
+def _input_shape(ob, mod):
+    """Sample this entry's input, with all downstream display flags restored."""
+    index = ob.modifiers.find(mod.name)
+    later = list(ob.modifiers)[index:]
+    visibility = [(entry, entry.show_viewport) for entry in later]
+    evaluated = None
+    try:
+        for entry, visible in visibility:
+            if visible:
+                entry.show_viewport = False
+        bpy.context.view_layer.update()
+        evaluated = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        mesh = evaluated.to_mesh()
+        if mesh is None:
+            return [], []
+        return [v.co.copy() for v in mesh.vertices], [tuple(face.vertices) for face in mesh.polygons]
+    finally:
+        if evaluated:
+            evaluated.to_mesh_clear()
+        for entry, visible in visibility:
+            if entry.show_viewport != visible:
+                entry.show_viewport = visible
 
 
-def _select_only(context, ob):
-    for o in context.view_layer.objects:
-        o.select_set(False)
-    ob.hide_set(False)
-    ob.select_set(True)
-    context.view_layer.objects.active = ob
+def _local_bounds(ob, mod):
+    coords, _faces = _input_shape(ob, mod)
+    if not coords:
+        coords = [Vector((-.5, -.5, -.5)), Vector((.5, .5, .5))]
+    return (Vector(tuple(min(p[i] for p in coords) for i in range(3))),
+            Vector(tuple(max(p[i] for p in coords) for i in range(3))))
 
 
-class MAX_OT_ffd_level(Operator):
-    """FFD sub-object level"""
-    bl_idname = "max.ffd_level"
-    bl_label = "FFD Sub-Object"
-    bl_options = {"REGISTER", "UNDO"}
+def fit(ob, mod=None):
+    mod = mod or modifier(ob)
+    if not ob or not mod or not mod.object:
+        return False
+    cage = mod.object
+    lo, hi = _local_bounds(ob, mod)
+    rest = [p.co for p in cage.data.points]
+    scales = []
+    for axis in range(3):
+        width = max(p[axis] for p in rest) - min(p[axis] for p in rest)
+        scales.append(max(hi[axis]-lo[axis], .0001) / max(width, .0001))
+    cage.parent = ob
+    cage.matrix_parent_inverse = Matrix.Identity(4)
+    cage.matrix_basis = Matrix.Translation((lo+hi)*.5) @ Matrix.Diagonal((*scales, 1))
+    cage['max_ffd_owner'] = ob.name
+    update_volume(ob, mod)
+    return True
 
-    level: EnumProperty(items=[
-        ("POINTS", "Control Points", "Edit the cage's control points (deforms the model)"),
-        ("LATTICE", "Lattice", "Move, rotate or scale the cage"),
-        ("OBJECT", "Back to Object", "Return to the deformed object")])
 
-    @classmethod
-    def description(cls, context, props):
-        return {"POINTS": "Control Points: edit the cage's points to deform the model",
-                "LATTICE": "Lattice: move, rotate or scale the whole cage",
-                "OBJECT": "Back to the deformed object"}[props.level]
+def reset(ob, mod=None):
+    mod = mod or modifier(ob)
+    if not mod or not mod.object:
+        return False
+    for point in mod.object.data.points:
+        point.co_deform = point.co
+    mod.object.data.update_tag()
+    return True
+
+
+def add(ob, points=4):
+    if ob is None or ob.type != 'MESH':
+        return None
+    count = max(2, min(int(points), 64))
+    data = bpy.data.lattices.new('FFD cage')
+    data.points_u = data.points_v = data.points_w = count
+    for axis in 'uvw':
+        setattr(data, 'interpolation_type_' + axis, 'KEY_BSPLINE')
+    cage = bpy.data.objects.new('FFD cage', data)
+    (ob.users_collection[0] if ob.users_collection else bpy.context.collection).objects.link(cage)
+    cage.show_in_front = True
+    cage.hide_render = True
+    mod = ob.modifiers.new('FFD %dx%dx%d' % (count, count, count), 'LATTICE')
+    mod.object = cage
+    select_modifier(ob, mod)
+    fit(ob, mod)
+    return mod
+
+
+def update_volume(ob, mod=None):
+    mod = mod or modifier(ob)
+    if not mod or not mod.object or ob.type != 'MESH':
+        return False
+    cage = mod.object
+    mode = cage.get('max_ffd_deform_mode', 'ALL')
+    falloff = cage.get('max_ffd_falloff', 0.)
+    if mode == 'ALL' and falloff <= 0:
+        mod.vertex_group = ''
+        return True
+    name = cage.get('max_ffd_volume_group', '')
+    group = ob.vertex_groups.get(name) if name else None
+    if group is None:
+        group = ob.vertex_groups.new(name='_MAX FFD volume')
+        cage['max_ffd_volume_group'] = group.name
+    mod.vertex_group = group.name
+    # Parent-relative matrices avoid depending on a pending depsgraph update.
+    transform = cage.matrix_basis.inverted_safe()
+    bounds = [max(abs(p.co[i]) for p in cage.data.points) for i in range(3)]
+    for vertex in ob.data.vertices:
+        position = transform @ vertex.co
+        distance = Vector(tuple(max(abs(position[i])-bounds[i], 0) * abs(cage.scale[i]) for i in range(3))).length
+        weight = (1. if distance <= 1e-7 else 0.) if mode == 'VOLUME' else max(0., 1.-distance/max(falloff, 1e-7))
+        group.add([vertex.index], weight, 'REPLACE')
+    return True
+
+
+def conform(ob, mod=None):
+    mod = mod or modifier(ob)
+    if not ob or ob.type != 'MESH' or not mod or not mod.object or not ob.data.polygons:
+        return False
+    cage = mod.object
+    vertices, faces = _input_shape(ob, mod)
+    if not faces:
+        return False
+    tree = BVHTree.FromPolygons(vertices, faces)
+    transform = cage.matrix_basis
+    inverse = transform.inverted_safe()
+    settings = ob.max_ffd
+    for point in cage.data.points:
+        position = transform @ point.co_deform
+        hit, normal, _, distance = tree.find_nearest(position)
+        if hit is None:
+            continue
+        # Nearest-face sign is a supported approximation for closed surfaces.
+        inside = (position-hit).dot(normal) < 0
+        if (inside and settings.conform_inside) or (not inside and settings.conform_outside):
+            point.co_deform = inverse @ (hit + normal * settings.offset)
+    cage.data.update_tag()
+    return True
+
+
+def _command_target(context):
+    ob = context.object
+    if ob and ob.type == 'LATTICE':
+        return resolve_owner(ob), modifier(ob)
+    return ob, modifier(ob)
+
+
+class MAX_OT_ffd_level(bpy.types.Operator):
+    bl_idname = 'max.ffd_level'
+    bl_label = 'FFD Sub-Object'
+    bl_options = {'REGISTER', 'UNDO'}
+    level: EnumProperty(items=(('POINTS', 'Control Points', ''), ('LATTICE', 'Lattice', ''), ('OBJECT', 'Object', '')))
 
     def execute(self, context):
-        owner, mod, lat = ffd_context(context)
-        if lat is None:
-            self.report({"WARNING"}, "No FFD on the selected object")
-            return {"CANCELLED"}
-        _object_mode(context)
-        if self.level == "OBJECT":
-            _select_only(context, owner)
-            owner.modifiers.active = mod
-            return {"FINISHED"}
-        lat[OWNER_KEY] = owner.name
-        _select_only(context, lat)
-        if self.level == "POINTS":
-            bpy.ops.object.mode_set(mode="EDIT")
-            bpy.ops.lattice.select_all(action="DESELECT")
-            try:
-                bpy.ops.wm.tool_set_by_id(name="builtin.move")
-            except Exception:
-                pass
-        return {"FINISHED"}
+        owner, mod = _command_target(context)
+        if not owner or not mod or not mod.object:
+            self.report({'WARNING'}, 'Select an FFD with a cage')
+            return {'CANCELLED'}
+        if context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        target = owner if self.level == 'OBJECT' else mod.object
+        target.hide_viewport = False
+        target.hide_set(False)
+        target.select_set(True)
+        context.view_layer.objects.active = target
+        select_modifier(owner, mod)
+        mod.object['max_ffd_owner'] = owner.name
+        if self.level == 'POINTS':
+            bpy.ops.object.mode_set(mode='EDIT')
+        return {'FINISHED'}
 
 
-class MAX_OT_ffd_reset(Operator):
-    """Reset: put every control point back to its original position"""
-    bl_idname = "max.ffd_reset"
-    bl_label = "Reset"
-    bl_options = {"REGISTER", "UNDO"}
+class _FFDCommand:
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        owner, mod, lat = ffd_context(context)
-        if lat is None:
-            return {"CANCELLED"}
-        was_edit = context.mode == "EDIT_LATTICE"
-        _object_mode(context)
-        for p in lat.data.points:
-            p.co_deform = p.co
-        if was_edit:
-            bpy.ops.object.mode_set(mode="EDIT")
-        return {"FINISHED"}
+        ob, mod = _command_target(context)
+        if not ob or not mod or not mod.object:
+            return {'CANCELLED'}
+        return {'FINISHED'} if self.action(ob, mod) else {'CANCELLED'}
 
 
-class MAX_OT_ffd_animate_all(Operator):
-    """Animate All: set a key on every control point at the current frame"""
-    bl_idname = "max.ffd_animate_all"
-    bl_label = "Animate All"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        owner, mod, lat = ffd_context(context)
-        if lat is None:
-            return {"CANCELLED"}
-        was_edit = context.mode == "EDIT_LATTICE"
-        _object_mode(context)
-        frame = context.scene.frame_current
-        for i, _p in enumerate(lat.data.points):
-            lat.data.keyframe_insert(f"points[{i}].co_deform", frame=frame)
-        if was_edit:
-            bpy.ops.object.mode_set(mode="EDIT")
-        self.report({"INFO"}, f"Keyed {len(lat.data.points)} control points at frame {frame}")
-        return {"FINISHED"}
+class MAX_OT_ffd_reset(_FFDCommand, bpy.types.Operator):
+    bl_idname = 'max.ffd_reset'
+    bl_label = 'Reset'
+    action = staticmethod(reset)
 
 
-class MAX_OT_ffd_conform(Operator):
-    """Conform to Shape: pull the control points onto the object's surface"""
-    bl_idname = "max.ffd_conform"
-    bl_label = "Conform to Shape"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        owner, mod, lat = ffd_context(context)
-        if lat is None or owner.type != "MESH":
-            return {"CANCELLED"}
-        was_edit = context.mode == "EDIT_LATTICE"
-        _object_mode(context)
-        s = owner.max_ffd
-        me = owner.data
-        bvh = BVHTree.FromPolygons([v.co for v in me.vertices], [p.vertices for p in me.polygons])
-        ow, ow_inv = owner.matrix_world, owner.matrix_world.inverted()
-        lw, lw_inv = lat.matrix_world, lat.matrix_world.inverted()
-        center_w = lw.translation
-        pu, pv, pw = lat.data.points_u, lat.data.points_v, lat.data.points_w
-        moved = 0
-        for i, p in enumerate(lat.data.points):
-            iu, iv, iw = i % pu, (i // pu) % pv, i // (pu * pv)
-            outer = iu in (0, pu - 1) or iv in (0, pv - 1) or iw in (0, pw - 1)
-            if (outer and not s.conform_outside) or (not outer and not s.conform_inside):
-                continue
-            pos_w = lw @ Vector(p.co)
-            d_w = pos_w - center_w
-            if d_w.length < 1e-6:
-                continue
-            d_w.normalize()
-            o_l = ow_inv @ center_w
-            d_l = (ow_inv.to_3x3() @ d_w).normalized()
-            hit, _n, _idx, _dist = bvh.ray_cast(o_l, d_l)
-            if hit is None:
-                continue
-            target_w = (ow @ hit) + d_w * s.offset
-            p.co_deform = lw_inv @ target_w
-            moved += 1
-        if was_edit:
-            bpy.ops.object.mode_set(mode="EDIT")
-        self.report({"INFO"}, f"Conformed {moved} control points")
-        return {"FINISHED"}
+class MAX_OT_ffd_fit(_FFDCommand, bpy.types.Operator):
+    bl_idname = 'max.ffd_fit'
+    bl_label = 'Fit to Object'
+    action = staticmethod(fit)
 
 
-class MAX_OT_ffd_fit(Operator):
-    """Fit the cage to the object's current size (keeps point edits)"""
-    bl_idname = "max.ffd_fit"
-    bl_label = "Fit to Object"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        owner, mod, lat = ffd_context(context)
-        if lat is None or owner.type != "MESH" or not owner.data.vertices:
-            return {"CANCELLED"}
-        _object_mode(context)
-        n = len(owner.data.vertices)
-        co = np.empty(n * 3, np.float32)
-        owner.data.vertices.foreach_get("co", co)
-        co = co.reshape(n, 3)
-        lo, hi = co.min(axis=0), co.max(axis=0)
-        world = lat.matrix_world.copy()
-        lat.parent = owner
-        lat.matrix_parent_inverse.identity()
-        lat.location = Vector(((lo + hi) / 2).tolist())
-        lat.rotation_euler = (0, 0, 0)
-        lat.scale = [max(float(x), 1e-3) for x in (hi - lo)]
-        apply_volume(owner, mod)
-        return {"FINISHED"}
+class MAX_OT_ffd_conform(_FFDCommand, bpy.types.Operator):
+    bl_idname = 'max.ffd_conform'
+    bl_label = 'Conform to Shape'
+    action = staticmethod(conform)
 
 
-class MAX_OT_ffd_update_volume(Operator):
-    """Recompute which vertices the FFD affects (after moving or scaling the cage)"""
-    bl_idname = "max.ffd_update_volume"
-    bl_label = "Update Volume"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        owner, mod, lat = ffd_context(context)
-        if mod is None:
-            return {"CANCELLED"}
-        _object_mode(context)
-        apply_volume(owner, mod)
-        return {"FINISHED"}
+class MAX_OT_ffd_update_volume(_FFDCommand, bpy.types.Operator):
+    bl_idname = 'max.ffd_update_volume'
+    bl_label = 'Update Volume'
+    action = staticmethod(update_volume)
 
 
-# ---------------------------------------------------------------------------
-# UI
-# ---------------------------------------------------------------------------
+class MAX_OT_ffd_animate_all(_FFDCommand, bpy.types.Operator):
+    bl_idname = 'max.ffd_animate_all'
+    bl_label = 'Animate All'
 
-def draw(layout, ob, mod, editing_cage=False):
-    s = ob.max_ffd
-    lat = mod.object
-    level = "POINTS" if editing_cage and bpy.context.mode == "EDIT_LATTICE" else (
-        "LATTICE" if editing_cage else "OBJECT")
-
-    def box(title):
-        b = layout.box()
-        b.label(text=title)
-        return b.column(align=True)
-
-    col = box("Sub-Object")
-    row = col.row(align=True)
-    row.operator("max.ffd_level", text="Control Points", depress=(level == "POINTS")).level = "POINTS"
-    row.operator("max.ffd_level", text="Lattice", depress=(level == "LATTICE")).level = "LATTICE"
-    if editing_cage:
-        col.operator("max.ffd_level", text=f"Back to {ob.name}", icon="BACK").level = "OBJECT"
-
-    col = box(f"Dimensions: {lat.data.points_u}x{lat.data.points_v}x{lat.data.points_w}")
-    row = col.row(align=True)
-    row.prop(s, "points_u", text="L")
-    row.prop(s, "points_v", text="W")
-    row.prop(s, "points_w", text="H")
-
-    col = box("Display")
-    row = col.row(align=True)
-    row.prop(s, "show_lattice", toggle=True)
-    row.prop(s, "in_front", toggle=True)
-
-    col = box("Deform")
-    col.row(align=True).prop(s, "deform_mode", expand=True)
-    sub = col.row(align=True)
-    sub.enabled = s.deform_mode == "ALL"
-    sub.prop(s, "falloff")
-    col.prop(s, "interpolation", text="")
-    col.prop(mod, "strength", slider=True)
-
-    col = box("Control Points")
-    row = col.row(align=True)
-    row.operator("max.ffd_reset")
-    row.operator("max.ffd_animate_all")
-    col.separator()
-    col.operator("max.ffd_conform", icon="MOD_SHRINKWRAP")
-    row = col.row(align=True)
-    row.prop(s, "conform_inside", toggle=True)
-    row.prop(s, "conform_outside", toggle=True)
-    col.prop(s, "offset")
-
-    row = layout.row(align=True)
-    row.operator("max.ffd_fit", icon="FULLSCREEN_ENTER")
-    row.operator("max.ffd_update_volume", icon="FILE_REFRESH")
+    @staticmethod
+    def action(ob, mod):
+        for point in mod.object.data.points:
+            point.keyframe_insert(data_path='co_deform', frame=bpy.context.scene.frame_current)
+        return True
 
 
-classes = (MaxFFD, MAX_OT_ffd_level, MAX_OT_ffd_reset, MAX_OT_ffd_animate_all, MAX_OT_ffd_conform,
-           MAX_OT_ffd_fit, MAX_OT_ffd_update_volume)
+@persistent
+def _owners(_scene, _depsgraph=None):
+    for cage in bpy.data.objects:
+        if cage.type == 'LATTICE' and 'max_ffd_owner' in cage:
+            resolve_owner(cage)
 
 
 def register_props():
-    bpy.types.Object.max_ffd = PointerProperty(type=MaxFFD)
+    if not hasattr(bpy.types.Object, 'max_ffd'):
+        bpy.types.Object.max_ffd = PointerProperty(type=MaxFFD)
+    if _owners not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(_owners)
 
 
 def unregister_props():
-    del bpy.types.Object.max_ffd
+    _targets.clear()
+    if _owners in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(_owners)
+    if hasattr(bpy.types.Object, 'max_ffd'):
+        del bpy.types.Object.max_ffd
+
+
+classes = (MaxFFD, MAX_OT_ffd_level, MAX_OT_ffd_reset, MAX_OT_ffd_animate_all,
+           MAX_OT_ffd_conform, MAX_OT_ffd_fit, MAX_OT_ffd_update_volume)
