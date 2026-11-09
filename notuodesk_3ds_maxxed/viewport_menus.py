@@ -1,6 +1,7 @@
 """Clickable 3ds Max viewport labels: [+]  [Perspective]  [Standard]  [Default Shading]."""
 
 import bpy
+from . import max_icons
 from bpy.props import EnumProperty, StringProperty
 from bpy.types import Menu, Operator
 
@@ -179,7 +180,7 @@ class MAX_MT_vp_point_of_view(Menu):
         if cams:
             lay.label(text="Cameras")
             for c in cams:
-                lay.operator("max.view_camera", text=c.name, icon="CAMERA_DATA").name = c.name
+                lay.operator("max.view_camera", text=c.name, **max_icons.ui("cameras", "CAMERA_DATA")).name = c.name
         else:
             lay.operator("max.camera_from_view", text="Create Camera From View   Ctrl+C")
         sp = _space(context)
@@ -197,7 +198,7 @@ class MAX_MT_vp_quality(Menu):
         current = overlay.quality_label(context, _space(context)) if _space(context) else ""
         for key, label in (("HIGH", "High Quality"), ("STANDARD", "Standard"), ("PERFORMANCE", "Performance")):
             lay.operator("max.viewport_quality", text=label,
-                         icon="CHECKMARK" if current == label else "BLANK1").level = key
+                         **(max_icons.ui("check", "CHECKMARK") if current == label else {"icon": "BLANK1"})).level = key
         sp = _space(context)
         if sp:
             lay.separator()
@@ -219,7 +220,7 @@ class MAX_MT_vp_shading(Menu):
             if key == "WIRE":
                 lay.separator()
             lay.operator("max.viewport_shading", text=label,
-                         icon="CHECKMARK" if current == label else "BLANK1").mode = key
+                         **(max_icons.ui("check", "CHECKMARK") if current == label else {"icon": "BLANK1"})).mode = key
         lay.separator()
         if sp:
             lay.prop(sp.overlay, "show_wireframes", text="Edged Faces                     F4")

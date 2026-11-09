@@ -5,6 +5,7 @@ from bpy.props import IntProperty
 from bpy.types import Menu, Panel, UIList
 
 from . import create, prims
+from . import max_icons
 from .operators import EDIT_POLY_OPS, current_level
 
 EP_LABELS = {k: n for k, n, _ in EDIT_POLY_OPS}
@@ -34,6 +35,7 @@ BASE_NAMES = {
 }
 
 SUBLEVEL_ICONS = {1: "VERTEXSEL", 2: "EDGESEL", 3: "MOD_EDGESPLIT", 4: "FACESEL", 5: "MESH_CUBE"}
+SUBLEVEL_NAMES = {1: "vertex", 2: "edge", 3: "border", 4: "polygon", 5: "element"}
 
 SKIP_PROPS = {
     "rna_type", "name", "type", "is_active", "is_override_data", "use_apply_on_spline",
@@ -74,7 +76,9 @@ class MAX_UL_stack(UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
-        row.prop(item, "show_viewport", text="", emboss=False, icon_only=True)
+        row.context_pointer_set("max_icon_modifier", item)
+        row.operator("wm.context_toggle", text="", emboss=False,
+                     **max_icons.ui("bulb_on" if item.show_viewport else "bulb_off", "RESTRICT_VIEW_OFF" if item.show_viewport else "RESTRICT_VIEW_ON")).data_path = "max_icon_modifier.show_viewport"
         row.prop(item, "name", text="", emboss=False)
 
     def filter_items(self, context, data, propname):
@@ -147,8 +151,8 @@ class MAX_PT_command_panel(Panel):
             split.prop(ob, "color", text="")
             row = layout.row(align=True)
             row.operator_context = "INVOKE_DEFAULT"
-            row.operator("max.modifier_search", text="Modifier List", icon="VIEWZOOM")
-            row.menu("MAX_MT_modifier_list", text="", icon="COLLAPSEMENU")
+            row.operator("max.modifier_search", text="Modifier List", **max_icons.ui("search", "VIEWZOOM"))
+            row.menu("MAX_MT_modifier_list", text="", **max_icons.ui("configure_modifier_sets", "COLLAPSEMENU"))
 
             col = layout.column(align=True)
             col.template_list("MAX_UL_stack", "", ob, "modifiers", ob, "max_stack_index",
@@ -156,23 +160,23 @@ class MAX_PT_command_panel(Panel):
             base = col.row(align=True)
             no_active = _stack_get(ob) < 0
             base.operator("max.modifier_set_active", text=base_name(ob), depress=no_active,
-                          icon="MESH_DATA" if ob.type == "MESH" else "OBJECT_DATA").name = ""
+                          **max_icons.ui("editable_poly" if ob.type == "MESH" else "shapes", "MESH_DATA" if ob.type == "MESH" else "OBJECT_DATA")).name = ""
 
             # stack tool icons
             active = ob.modifiers.active if _stack_get(ob) >= 0 else None
             row = layout.row(align=True)
             row.alignment = "LEFT"
             if active:
-                row.prop(active, "show_in_editmode", text="", icon="EDITMODE_HLT")
-                row.prop(active, "show_on_cage", text="", icon="MESH_DATA")
-                row.operator("object.make_single_user", text="", icon="DUPLICATE").object = True
-                row.operator("object.modifier_remove", text="", icon="TRASH").modifier = active.name
+                row.prop(active, "show_in_editmode", text="", **max_icons.ui("show_end_result", "EDITMODE_HLT"))
+                row.prop(active, "show_on_cage", text="", **max_icons.ui("editable_poly", "MESH_DATA"))
+                row.operator("object.make_single_user", text="", **max_icons.ui("make_unique", "DUPLICATE")).object = True
+                row.operator("object.modifier_remove", text="", **max_icons.ui("remove_modifier", "TRASH")).modifier = active.name
                 row.separator()
-                row.operator("object.modifier_move_down", text="", icon="TRIA_UP").modifier = active.name
-                row.operator("object.modifier_move_up", text="", icon="TRIA_DOWN").modifier = active.name
-                row.operator("object.modifier_apply", text="", icon="CHECKMARK").modifier = active.name
+                row.operator("object.modifier_move_down", text="", **max_icons.ui("up", "TRIA_UP")).modifier = active.name
+                row.operator("object.modifier_move_up", text="", **max_icons.ui("down", "TRIA_DOWN")).modifier = active.name
+                row.operator("object.modifier_apply", text="", **max_icons.ui("check", "CHECKMARK")).modifier = active.name
             else:
-                row.operator("max.object_cmd", text="", icon="CHECKMARK").cmd = "CONVERT_POLY"
+                row.operator("max.object_cmd", text="", **max_icons.ui("check", "CHECKMARK")).cmd = "CONVERT_POLY"
                 row.label(text="")
 
 
@@ -226,8 +230,8 @@ def draw_modifier_params(layout, mod):
             layout.separator()
             row = layout.row(align=True)
             row.scale_y = 1.3
-            row.operator("max.animate_melt", text="Animate Melt", icon="PLAY")
-            row.operator("max.key_melt", text="", icon="KEY_HLT")
+            row.operator("max.animate_melt", text="Animate Melt", **max_icons.ui("play", "PLAY"))
+            row.operator("max.key_melt", text="", **max_icons.ui("key", "KEY_HLT"))
             layout.label(text="Tip: Auto Key (N) keys Amount as you drag it", icon="INFO")
         return
     for p in mod.bl_rna.properties:
@@ -422,7 +426,7 @@ def material_rollout(layout, context):
         row.alert = True
         row.label(text=f"Missing bitmap: {bitmap}", icon="ERROR")
         row = layout.row(align=True)
-    row.operator("max.load_bitmap", text="Load Bitmap...", icon="IMAGE_DATA")
+    row.operator("max.load_bitmap", text="Load Bitmap...", **max_icons.ui("bitmap", "IMAGE_DATA"))
     if mat.get("max_vray"):
         vray.draw_vraymtl(layout, mat)
     else:
@@ -449,7 +453,7 @@ def poly_selection(layout, context):
     row = layout.row(align=True)
     row.scale_y = 1.3
     for i in range(1, 6):
-        row.operator("max.subobject", text="", icon=SUBLEVEL_ICONS[i], depress=(lvl == i)).level = i
+        row.operator("max.subobject", text="", depress=(lvl == i), **max_icons.ui(SUBLEVEL_NAMES[i], SUBLEVEL_ICONS[i])).level = i
     if context.mode == "EDIT_MESH":
         g = _grid(layout)
         for op in ("SHRINK", "GROW", "RING", "LOOP"):
@@ -541,8 +545,8 @@ def motion_anim(layout, context):
     scene = context.scene
     ts = context.tool_settings
     row = layout.row(align=True)
-    row.prop(ts, "use_keyframe_insert_auto", text="Auto Key", toggle=True, icon="REC")
-    row.operator("max.set_key", text="Set Key", icon="KEY_HLT")
+    row.prop(ts, "use_keyframe_insert_auto", text="Auto Key", toggle=True, **max_icons.ui("record", "REC"))
+    row.operator("max.set_key", text="Set Key", **max_icons.ui("key", "KEY_HLT"))
     layout.operator("anim.keyframe_delete_v3d", text="Delete Keys")
     col = _split_col(layout)
     col.prop(scene, "frame_current", text="Frame")
@@ -613,9 +617,9 @@ def util_main(layout, context):
 @rollout("NotuoDesk 3ds Maxxed", {"UTILITIES"}, 41)
 def util_maxxed(layout, context):
     col = layout.column(align=True)
-    col.operator("max.apply", text="Apply 3ds Max Look", icon="CHECKMARK")
+    col.operator("max.apply", text="Apply 3ds Max Look", **max_icons.ui("check", "CHECKMARK"))
     col.operator("max.apply", text="Theme Only", icon="COLOR").layout_ = False
-    col.operator("max.restore", text="Restore Blender Look", icon="LOOP_BACK")
+    col.operator("max.restore", text="Restore Blender Look", **max_icons.ui("undo", "LOOP_BACK"))
     layout.operator("max.toggle_quad", text="Maximize Viewport Toggle (Alt+W)")
     layout.operator("preferences.addon_show", text="Hotkeys & Settings").module = __package__
     from . import updater

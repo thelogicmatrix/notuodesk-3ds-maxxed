@@ -34,6 +34,11 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 | Status bar | "1 Object Selected", X/Y/Z type-in, Grid, Auto Key, Set Key |
 | Look | Max dark UI, cyan selection outline, red sub-object selection, blue vertices, random object colors, names like Box001 |
 
+The Command Panel tabs, Create categories, sub-object levels, modifier stack and
+Main Toolbar use original Max-style icons. The Material Editor control icons and
+Create-menu object icons use the same set. Missing artwork falls back to Blender's
+icons. Material sample slots still show their real material previews.
+
 ## Compact Material Editor (M)
 
 <img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
@@ -153,6 +158,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
+- The icons are original GPL artwork with Max's visual vocabulary, not Autodesk's icon artwork. Icons are supplied for toolbar and stack controls that this version does not draw, including Pin Stack, Bind to Space Warp, Window/Crossing, Spinner Snap, Layer Explorer and Ribbon. This does not add those controls. Blender still draws its own material preview-type buttons and viewport shading and overlay buttons.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
@@ -169,6 +175,17 @@ From 1.5.0 on, the add-on can update itself from this repo's GitHub Releases. Us
 - **Publishing an update:** bump `version` in `blender_manifest.toml`, build the zip, and attach it to a new GitHub Release tagged `vX.Y.Z`.
 
 ## Building from source
+
+The editable icon sources are in `notuodesk_3ds_maxxed/icons/src/`. To rebuild the
+transparent 32px and 64px PNGs, install the build-only renderer and run:
+
+```powershell
+uv pip install --python C:/Users/thelo/.local/venvs/data/Scripts/python.exe resvg-py==0.5.0 Pillow
+& C:/Users/thelo/.local/venvs/data/Scripts/python.exe tools/build_icons.py --contact-sheet icons-contact.png
+```
+
+Blender needs no extra packages. See `notuodesk_3ds_maxxed/icons/README.md` for
+artwork provenance and test instructions.
 
 ```bash
 blender --command extension build --source-dir notuodesk_3ds_maxxed --output-dir .

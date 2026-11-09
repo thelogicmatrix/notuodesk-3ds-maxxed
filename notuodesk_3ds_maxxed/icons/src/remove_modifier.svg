@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>remove modifier</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M5 8 H27 M12 8 V4 H20 V8 M8 8 L10 28 H22 L24 8 M14 13 V23 M19 13 V23" stroke="#dedede" fill="none" stroke-width="2"/>
+</g>
+</svg>

@@ -1,6 +1,7 @@
 """Quad menus, Modifier List, top menus, the Main Toolbar and the status bar."""
 
 import bpy
+from . import max_icons
 from bpy.types import Menu
 
 # (Max name, "BLENDER_TYPE[:option]") grouped like the 3ds Max Modifier List
@@ -96,7 +97,7 @@ class MAX_MT_modifier_list(Menu):
     def draw(self, context):
         lay = self.layout
         lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("max.modifier_search", text="Search Modifiers...", icon="VIEWZOOM")
+        lay.operator("max.modifier_search", text="Search Modifiers...", **max_icons.ui("search", "VIEWZOOM"))
         lay.separator()
         lay.operator("max.turbosmooth", text="TurboSmooth")
         lay.operator("max.add_modifier", text="FFD 4x4x4").kind = "LATTICE:4|FFD 4x4x4"
@@ -245,24 +246,24 @@ class MAX_MT_create(Menu):
         lay = self.layout
         lay.label(text="Standard Primitives")
         for k, (label, icon, _, _) in create.PRIMITIVES.items():
-            lay.operator("max.create", text=label, icon=icon).kind = k
+            lay.operator("max.create", text=label, **max_icons.ui(k.lower(), icon)).kind = k
         lay.separator()
         lay.label(text="Shapes")
         for k, label, icon in create.SHAPES:
-            lay.operator("max.create_shape", text=label, icon=icon).kind = k
+            lay.operator("max.create_shape", text=label, **max_icons.ui(k.lower(), icon)).kind = k
         lay.separator()
         lay.label(text="Lights")
         for k, label, icon in create.LIGHTS:
-            lay.operator("max.create_light", text=label, icon=icon).kind = k
+            lay.operator("max.create_light", text=label, **max_icons.ui(k.lower(), icon)).kind = k
         lay.separator()
-        lay.operator("max.create_camera", text="Target Camera", icon="CAMERA_DATA").target = True
-        lay.operator("max.create_camera", text="Physical Camera", icon="CAMERA_DATA").target = False
-        lay.operator("max.camera_from_view", text="Create Camera From View", icon="VIEW_CAMERA")
+        lay.operator("max.create_camera", text="Target Camera", **max_icons.ui("cameras", "CAMERA_DATA")).target = True
+        lay.operator("max.create_camera", text="Physical Camera", **max_icons.ui("cameras", "CAMERA_DATA")).target = False
+        lay.operator("max.camera_from_view", text="Create Camera From View", **max_icons.ui("cameras", "VIEW_CAMERA"))
         lay.separator()
         lay.label(text="V-Ray")
         lay.operator_menu_enum("max.vray_light", "kind", text="VRayLight")
-        lay.operator("max.vray_camera", text="VRayPhysicalCamera", icon="CAMERA_DATA")
-        lay.operator("max.vray_plane", text="VRayPlane", icon="MESH_PLANE")
+        lay.operator("max.vray_camera", text="VRayPhysicalCamera", **max_icons.ui("cameras", "CAMERA_DATA"))
+        lay.operator("max.vray_plane", text="VRayPlane", **max_icons.ui("plane", "MESH_PLANE"))
 
 
 class MAX_MT_views(Menu):
@@ -293,13 +294,13 @@ class MAX_MT_rendering(Menu):
     def draw(self, context):
         lay = self.layout
         lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("render.render", text="Render   (Shift+Q)", icon="RENDER_STILL").use_viewport = True
+        lay.operator("render.render", text="Render   (Shift+Q)", **max_icons.ui("render_production", "RENDER_STILL")).use_viewport = True
         lay.operator("max.open_editor", text="Render Setup...   (F10)").editor = "RENDER_SETUP"
         lay.operator("max.open_editor", text="Environment...   (8)").editor = "ENVIRONMENT"
         lay.operator("max.open_editor", text="Material Editor...   (M)").editor = "MATERIAL"
         lay.operator("render.view_show", text="Rendered Frame Window")
         lay.separator()
-        lay.menu("MAX_MT_vray", text="V-Ray", icon="SHADING_RENDERED")
+        lay.menu("MAX_MT_vray", text="V-Ray", **max_icons.ui("render_production", "SHADING_RENDERED"))
 
 
 class MAX_MT_edit(Menu):
@@ -309,8 +310,8 @@ class MAX_MT_edit(Menu):
     def draw(self, context):
         lay = self.layout
         lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("ed.undo", text="Undo", icon="LOOP_BACK")
-        lay.operator("ed.redo", text="Redo", icon="LOOP_FORWARDS")
+        lay.operator("ed.undo", text="Undo", **max_icons.ui("undo", "LOOP_BACK"))
+        lay.operator("ed.redo", text="Redo", **max_icons.ui("redo", "LOOP_FORWARDS"))
         lay.menu("TOPBAR_MT_undo_history", text="Undo History")
         lay.separator()
         lay.operator("max.delete", text="Delete")
@@ -493,7 +494,7 @@ def view3d_header_draw(self, context):
         lay = self.layout
         lay.separator_spacer()
         row = lay.row(align=True)
-        row.prop(context.scene.tool_settings, "use_keyframe_insert_auto", text="", icon="REC")
+        row.prop(context.scene.tool_settings, "use_keyframe_insert_auto", text="", **max_icons.ui("record", "REC"))
         space = context.space_data
         row = lay.row(align=True)
         row.prop(space.overlay, "show_overlays", text="", icon="OVERLAY")
@@ -511,50 +512,50 @@ def draw_main_toolbar(self, context):
     tool = _active_tool(context)
 
     row = lay.row(align=True)
-    row.operator("ed.undo", text="", icon="LOOP_BACK")
-    row.operator("ed.redo", text="", icon="LOOP_FORWARDS")
+    row.operator("ed.undo", text="", **max_icons.ui("undo", "LOOP_BACK"))
+    row.operator("ed.redo", text="", **max_icons.ui("redo", "LOOP_FORWARDS"))
     row = lay.row(align=True)
-    row.operator("max.object_cmd", text="", icon="LINKED").cmd = "LINK"
-    row.operator("max.object_cmd", text="", icon="UNLINKED").cmd = "UNLINK"
+    row.operator("max.object_cmd", text="", **max_icons.ui("link", "LINKED")).cmd = "LINK"
+    row.operator("max.object_cmd", text="", **max_icons.ui("unlink", "UNLINKED")).cmd = "UNLINK"
 
     row = lay.row(align=True)
-    row.operator("max.select_by_name", text="", icon="VIEWZOOM")
-    row.operator("wm.tool_set_by_id", text="", icon="SELECT_SET",
+    row.operator("max.select_by_name", text="", **max_icons.ui("select_by_name", "VIEWZOOM"))
+    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_rect", "SELECT_SET"),
                  depress=tool == "builtin.select_box").name = "builtin.select_box"
-    row.operator("wm.tool_set_by_id", text="", icon="MESH_CIRCLE",
+    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_circle", "MESH_CIRCLE"),
                  depress=tool == "builtin.select_circle").name = "builtin.select_circle"
-    row.operator("wm.tool_set_by_id", text="", icon="SELECT_INTERSECT",
+    row.operator("wm.tool_set_by_id", text="", **max_icons.ui("region_fence", "SELECT_INTERSECT"),
                  depress=tool == "builtin.select_lasso").name = "builtin.select_lasso"
 
     row = lay.row(align=True)
     row.scale_x = 1.1
-    for idname, icon in (("builtin.move", "OBJECT_ORIGIN"), ("builtin.rotate", "ORIENTATION_GIMBAL"),
-                         ("builtin.scale", "FULLSCREEN_ENTER")):
-        row.operator("wm.tool_set_by_id", text="", icon=icon, depress=(tool == idname)).name = idname
+    for idname, icon, custom in (("builtin.move", "OBJECT_ORIGIN", "move"), ("builtin.rotate", "ORIENTATION_GIMBAL", "rotate"),
+                                 ("builtin.scale", "FULLSCREEN_ENTER", "scale")):
+        row.operator("wm.tool_set_by_id", text="", depress=(tool == idname), **max_icons.ui(custom, icon)).name = idname
 
     slot = context.scene.transform_orientation_slots[0]
     sub = lay.row(align=True)
     sub.ui_units_x = 4.5
-    sub.prop(slot, "type", text="")
+    sub.prop(slot, "type", text="", **max_icons.ui("reference_coords", "ORIENTATION_GLOBAL"))
     sub = lay.row(align=True)
-    sub.prop(ts, "transform_pivot_point", text="", icon_only=True)
+    sub.prop(ts, "transform_pivot_point", text="", icon_only=True, **max_icons.ui("pivot", "PIVOT_MEDIAN"))
 
     row = lay.row(align=True)
-    row.prop(ts, "use_snap", text="", icon="SNAP_ON" if ts.use_snap else "SNAP_OFF")
-    row.prop(ts, "use_snap_rotate", text="", icon="DRIVER_ROTATIONAL_DIFFERENCE")
-    row.prop(ts, "use_snap_scale", text="", icon="MOD_PHYSICS")
+    row.prop(ts, "use_snap", text="", **max_icons.ui("snap_3d" if ts.use_snap else "snap_off", "SNAP_ON" if ts.use_snap else "SNAP_OFF"))
+    row.prop(ts, "use_snap_rotate", text="", **max_icons.ui("angle_snap", "DRIVER_ROTATIONAL_DIFFERENCE"))
+    row.prop(ts, "use_snap_scale", text="", **max_icons.ui("percent_snap", "MOD_PHYSICS"))
 
     row = lay.row(align=True)
-    row.operator("max.object_cmd", text="", icon="MOD_MIRROR").cmd = "MIRROR"
-    row.operator("max.object_cmd", text="", icon="ALIGN_CENTER").cmd = "ALIGN"
+    row.operator("max.object_cmd", text="", **max_icons.ui("mirror", "MOD_MIRROR")).cmd = "MIRROR"
+    row.operator("max.object_cmd", text="", **max_icons.ui("align", "ALIGN_CENTER")).cmd = "ALIGN"
     row = lay.row(align=True)
-    row.operator("max.open_editor", text="", icon="OUTLINER").editor = "SCENE_EXPLORER"
-    row.operator("max.open_editor", text="", icon="GRAPH").editor = "CURVE_EDITOR"
-    row.operator("max.open_editor", text="", icon="NODETREE").editor = "SCHEMATIC"
-    row.operator("max.open_editor", text="", icon="MATERIAL").editor = "MATERIAL"
+    row.operator("max.open_editor", text="", **max_icons.ui("scene_explorer", "OUTLINER")).editor = "SCENE_EXPLORER"
+    row.operator("max.open_editor", text="", **max_icons.ui("curve_editor", "GRAPH")).editor = "CURVE_EDITOR"
+    row.operator("max.open_editor", text="", **max_icons.ui("schematic_view", "NODETREE")).editor = "SCHEMATIC"
+    row.operator("max.open_editor", text="", **max_icons.ui("material_editor", "MATERIAL")).editor = "MATERIAL"
     row = lay.row(align=True)
-    row.operator("max.open_editor", text="", icon="SCENE").editor = "RENDER_SETUP"
-    row.operator("render.render", text="", icon="RENDER_STILL").use_viewport = True
+    row.operator("max.open_editor", text="", **max_icons.ui("render_setup", "SCENE")).editor = "RENDER_SETUP"
+    row.operator("render.render", text="", **max_icons.ui("render_production", "RENDER_STILL")).use_viewport = True
 
 
 # ---------------------------------------------------------------------------

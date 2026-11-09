@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>mtl get</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="16" cy="10" r="7" stroke="#78b7ce" fill="none"/><path d="M16 18 V29 M11 24 L16 29 L21 24" stroke="#dedede" fill="none" stroke-width="2"/>
+</g>
+</svg>

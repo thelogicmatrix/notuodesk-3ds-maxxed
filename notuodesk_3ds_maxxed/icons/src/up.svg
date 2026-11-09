@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>up</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M7 21 L16 10 L25 21 Z" stroke="#dedede" fill="#dedede" stroke-width="2"/>
+</g>
+</svg>

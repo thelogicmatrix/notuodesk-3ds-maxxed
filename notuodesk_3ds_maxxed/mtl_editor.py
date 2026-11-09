@@ -9,6 +9,7 @@ material renders the same in EEVEE, Cycles and (via conversion) V-Ray.
 import os
 
 import bpy
+from . import max_icons
 from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, FloatProperty,
                        FloatVectorProperty, IntProperty, PointerProperty, StringProperty)
 from bpy.types import Menu, Operator, Panel, PropertyGroup
@@ -909,7 +910,7 @@ class MAX_PT_mtl_editor(_MtlPanel, Panel):
         row.menu("MAX_MT_mtl_utilities", text="Utils")
 
         if len(st.slots) < NUM_SLOTS:
-            lay.operator("max.mtl_slot", text="Open Material Editor", icon="MATERIAL").index = 0
+            lay.operator("max.mtl_slot", text="Open Material Editor", **max_icons.ui("material_editor", "MATERIAL")).index = 0
             return
 
         if st.visible == "ALL":
@@ -931,7 +932,7 @@ class MAX_PT_mtl_editor(_MtlPanel, Panel):
             if mat is not None:
                 cell.template_icon(icon_value=mat.preview.icon_id if mat.preview else 0, scale=icon_scale)
             else:
-                cell.template_icon(icon_value=_icon_value("SHADING_SOLID"), scale=icon_scale)
+                cell.template_icon(icon_value=max_icons.icon("sphere") or _icon_value("SHADING_SOLID"), scale=icon_scale)
             # "hot" material (Max's white corner triangles): used by something besides
             # the editor itself (its slot references and the fake user)
             refs = sum(1 for sl in st.slots if sl.material == mat) if mat is not None else 0
@@ -940,7 +941,7 @@ class MAX_PT_mtl_editor(_MtlPanel, Panel):
             btn.scale_y = 0.7
             btn.operator("max.mtl_slot", text=str(i + 1) + ("•" if hot else ""),
                          depress=(i == st.active), emboss=(i == st.active)).index = i
-            btn.operator("max.mtl_drag", text="", icon="VIEW_PAN", emboss=False).index = i
+            btn.operator("max.mtl_drag", text="", **max_icons.ui("mtl_drag", "VIEW_PAN"), emboss=False).index = i
 
         # right-hand toolbar
         tools = split.column(align=True)
@@ -948,29 +949,29 @@ class MAX_PT_mtl_editor(_MtlPanel, Panel):
         if mat is not None:
             tools.prop(mat, "preview_render_type", text="", expand=True, icon_only=True)
         tools.separator()
-        tools.operator("max.mtl_select_by", text="", icon="RESTRICT_SELECT_OFF")
-        tools.menu("MAX_MT_mtl_options", text="", icon="PREFERENCES")
+        tools.operator("max.mtl_select_by", text="", **max_icons.ui("mtl_select", "RESTRICT_SELECT_OFF"))
+        tools.menu("MAX_MT_mtl_options", text="", **max_icons.ui("settings", "PREFERENCES"))
 
         # bottom toolbar
         row = lay.row(align=True)
-        row.operator("max.mtl_get", text="", icon="FILEBROWSER")
-        row.operator("max.mtl_assign", text="", icon="MATERIAL")
-        row.operator("max.mtl_reset", text="", icon="X")
-        row.operator("max.mtl_make_unique", text="", icon="DUPLICATE")
-        row.operator("max.mtl_put_library", text="", icon="ASSET_MANAGER")
+        row.operator("max.mtl_get", text="", **max_icons.ui("mtl_get", "FILEBROWSER"))
+        row.operator("max.mtl_assign", text="", **max_icons.ui("mtl_assign", "MATERIAL"))
+        row.operator("max.mtl_reset", text="", **max_icons.ui("mtl_reset", "X"))
+        row.operator("max.mtl_make_unique", text="", **max_icons.ui("make_unique", "DUPLICATE"))
+        row.operator("max.mtl_put_library", text="", **max_icons.ui("mtl_library", "ASSET_MANAGER"))
         if mat is not None:
             row.prop(mat, "pass_index", text="ID")
-        row.operator("max.mtl_show_in_viewport", text="", icon="TEXTURE")
+        row.operator("max.mtl_show_in_viewport", text="", **max_icons.ui("mtl_viewport", "TEXTURE"))
         row = lay.row(align=True)
-        row.operator("max.mtl_add_slot", text="New Slot", icon="ADD")
-        row.operator("max.mtl_drag", text="Drag", icon="VIEW_PAN").index = st.active
+        row.operator("max.mtl_add_slot", text="New Slot", **max_icons.ui("create", "ADD"))
+        row.operator("max.mtl_drag", text="Drag", **max_icons.ui("mtl_drag", "VIEW_PAN")).index = st.active
 
         # name / type row
         if mat is None:
             lay.label(text="Empty slot: click it to create a material")
             return
         row = lay.row(align=True)
-        row.operator("max.mtl_pick", text="", icon="EYEDROPPER")
+        row.operator("max.mtl_pick", text="", **max_icons.ui("mtl_pick", "EYEDROPPER"))
         row.prop(mat, "name", text="")
         kind = "VRayMtl" if mat.get("max_vray") else {"PHYSICAL": "Physical"}.get(
             mat.get("max_type", "STANDARD"), "Standard")
@@ -1018,7 +1019,7 @@ def _map_button(layout, mat, channel):
     row.ui_units_x = 1.2 if (n is None or n.image is None) else 2.2
     if n is not None and n.image is not None:
         row.operator("max.mtl_load_map", text="M").channel = channel
-        row.operator("max.mtl_clear_map", text="", icon="X").channel = channel
+        row.operator("max.mtl_clear_map", text="", **max_icons.ui("close", "X")).channel = channel
     else:
         row.operator("max.mtl_load_map", text="").channel = channel
 
@@ -1152,7 +1153,7 @@ class MAX_PT_mtl_maps(_MtlPanel, Panel):
             name = n.image.name if (n is not None and n.image) else "None"
             right.operator("max.mtl_load_map", text=name).channel = key
             if n is not None:
-                right.operator("max.mtl_clear_map", text="", icon="X").channel = key
+                right.operator("max.mtl_clear_map", text="", **max_icons.ui("close", "X")).channel = key
 
 
 classes = (MaxStdMaterial, MaxMtlSlot, MaxMtlEditorState,

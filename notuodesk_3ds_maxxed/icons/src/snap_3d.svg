@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>snap 3d</title>
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<g transform="translate(6 7) scale(.7)"><path d="M7 7 V19 A9 9 0 0 0 25 19 V7 H19 V19 A3 3 0 0 1 13 19 V7 Z" stroke="#dedede" fill="none" stroke-width="2"/><path d="M7 11 H13 M19 11 H25" stroke="#ead078" fill="none" stroke-width="3"/></g><g transform="translate(1 0)"><path d="M2 2 H9 L5 6 Q11 6 9 10 Q6 13 2 10" stroke="#dedede" fill="none" stroke-width="1.5"/></g>
+</g>
+</svg>
