@@ -299,6 +299,7 @@ class MAX_MT_views(Menu):
         lay.operator("max.toggle", text="Wireframe / Shaded   (F3)").what = "WIREFRAME"
         lay.operator("max.toggle", text="Edged Faces   (F4)").what = "EDGED_FACES"
         lay.operator("max.toggle", text="xView: Show Statistics   (7)").what = "STATS"
+        lay.menu("MAX_MT_xview", text="xView")
         lay.prop(context.scene.render, "use_simplify", text="Adaptive Degradation   (O)")
 
 

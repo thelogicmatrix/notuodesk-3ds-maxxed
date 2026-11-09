@@ -36,6 +36,7 @@ The 3ds Max workspace hides Blender's 3D cursor in every viewport, including new
 | Editable Poly | Selection, Edit Vertices/Edges/Borders/Polygons/Elements and Edit Geometry rollouts |
 | Cut and SwiftLoop | Hover previews and click-to-commit cuts and loops. Right-click ends the tool |
 | Quad menus | Right-click (display / tools / transform) and Ctrl+right-click (modeling) |
+| xView | Views and viewport-label menus, green mesh highlights, result counts and Select Results |
 | Status bar | "1 Object Selected", X/Y/Z type-in, Grid, Auto Key, Set Key |
 | Look | Max dark UI, cyan selection outline, red sub-object selection, blue vertices, random object colors, names like Box001 |
 
@@ -129,6 +130,17 @@ These tools follow the public descriptions of [rapidTools](https://rapidmxs.com/
 Creation tools call `poly_tools.finalize_new_object(context, ob)` after setting the final geometry and transform, before recording creation undo. Standard and extended primitives, Keyboard Entry, Shapes and finished Lines share this function. It never runs during previews.
 
 PlanePlus keeps its own Pivot setting and bypasses Auto Pivot on Create.
+## xView
+
+Choose **Views > xView**, **[+] > xView** or **[Standard] > xView**. One check runs at a time. **Show Statistics (7)** stays independent.
+
+xView checks Face Orientation, Overlapping Faces, Open Edges, Multiple Edges, Isolated Vertices, Overlapping Vertices, T-Vertices, Missing UVW Coordinates, Flipped UVW Faces and Overlapped UVW Faces. Green points, lines or faces mark the results in Object mode and Edit Poly. Selected sub-objects keep their normal selection colour.
+
+Click the centred, bracketed viewport result to open the menu. **Select Results** enters the matching Edit Poly level and selects the flagged elements. **Hide** turns off the check. **Click Here To Configure** opens the Tolerance dialog for overlapping vertices or overlapping faces. With Auto Update off, **Click Here To Update** refreshes without changing mode or selection.
+
+**Selected Only**, **See-Through** and **Auto Update** start on. **Display On Top** starts off. Overlapping Vertices and Overlapping Faces each store their own tolerance, initially **0.01 Blender world units**. This maps one Blender world unit to one Max system unit, without assigning a physical unit. The default comes from Autodesk's 2026 SDK.
+
+Checks run in cancellable timer jobs with an 8 ms work budget. The previous result stays visible with an Updating message while a checked mesh changes. New results can appear in pieces. Results belong to their scene and view layer. Unrelated object edits do not rerun the check.
 
 ## Opening 3ds Max files
 
@@ -311,6 +323,9 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 - Loft uses Blender's minimum-twist and Z-up frames for Banking, which can differ from Max. Smooth Length and Smooth Width share Blender's face smoothing. Caps use n-gons rather than Morph or Grid capping.
 - Loft Scale and Twist are linear parameters, without Max's deformation graph. Teeter, Bevel and Fit deformations are not implemented. Adaptive Path Steps adds the shape level, without Max's deformation-graph divisions. Loft placement uses the selected spline's initial location and rotation, while source point edits and scale stay live.
 
+- xView checks the evaluated modifier result in Object Mode and the editable cage in Edit Poly, using the active UV map. Select Results is unavailable in Object Mode when a viewport modifier is enabled, because evaluated indices may not identify base-mesh elements. Enter Edit Poly to check and select the cage. Cross-object coincidences are not checked.
+- T-Vertices requires three incident edges with faces on both sides, as in Autodesk's 2026 SDK. It has no Tolerance dialog or unwelded near-edge extension. Overlapping Faces also finds edge-only crossings that Max's documented check misses.
+- Large xView checks finish over multiple timer ticks. Edits cancel and restart the snapshot, so continuous edits can postpone a finished result. Python scans yield, but Blender's native modifier evaluation and mesh extraction can take longer than the timer budget.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - Reference clones share Blender data in both directions. They do not have Max's one-way reference stack. Controller Instance uses one-way drivers from the original children, rather than Max's shared controller objects.
 - Shift-clone dialogs use Blender's dialog frame and controls. Gizmo hit areas are calculated in screen space. Gimbal and custom normal orientations can differ from Blender's native handle picking.

@@ -38,6 +38,7 @@ from . import shift_clone
 from . import max_export
 from . import viewcube
 from . import loft
+from . import xview
 
 
 _prefs_cache = [None]
@@ -182,6 +183,7 @@ _classes = (
     + shift_clone.classes
     + viewcube.classes
     + loft.classes
+    + xview.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
     + max_export.classes
 )
@@ -238,6 +240,7 @@ def register():
     max_export.register_menus()
     overlay.register()
     cursor_policy.register()
+    xview.register()
     p = get_prefs()
     if p is None or p.use_keymap:
         keymap.register_keymaps()
@@ -255,6 +258,7 @@ def unregister():
     _prefs_cache[0] = None
     shift_clone.unregister()
     keymap.unregister_keymaps()
+    xview.unregister()
     overlay.unregister()
     max_export.unregister_menus()
     max_import.unregister_menus()

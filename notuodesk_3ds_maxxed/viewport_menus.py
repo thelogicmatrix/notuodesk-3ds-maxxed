@@ -26,6 +26,9 @@ class MAX_OT_viewport_label(Operator):
         region = context.region
         if region is None or region.type != "WINDOW":
             return {"PASS_THROUGH"}
+        from . import xview
+        if xview.click(context, event):
+            return {"FINISHED"}
         key = overlay.hit_label(region, event.mouse_region_x, event.mouse_region_y)
         if key is None:
             return {"PASS_THROUGH"}          # normal click: selection etc. continue
@@ -151,6 +154,7 @@ class MAX_MT_vp_general(Menu):
         lay.operator("max.expert_mode", text="Expert Mode                   Ctrl+X")
         lay.separator()
         lay.operator("max.toggle", text="Show Grids                        G").what = "GRID"
+        lay.menu("MAX_MT_xview", text="xView")
         if sp:
             from . import get_prefs
             prefs = get_prefs()
@@ -202,6 +206,8 @@ class MAX_MT_vp_quality(Menu):
         for key, label in (("HIGH", "High Quality"), ("STANDARD", "Standard"), ("PERFORMANCE", "Performance")):
             lay.operator("max.viewport_quality", text=label,
                          **(max_icons.ui("check", "CHECKMARK") if current == label else {"icon": "BLANK1"})).level = key
+        lay.separator()
+        lay.menu("MAX_MT_xview", text="xView")
         sp = _space(context)
         if sp:
             lay.separator()
