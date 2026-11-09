@@ -78,6 +78,73 @@ In Editable Poly, Shift-drag extends open **Edges** and **Borders** without a di
 
 Only meshes with selected geometry contribute clones in multi-object Edit Mode. Undo, leaving Edit Mode, deleting a source or preview, and disabling the add-on cancel interrupted clones safely. The release dialogs open after the drag operator has finished.
 
+## Editable Poly
+
+The Modify tab has Max's Selection, Soft Selection, Edit Vertices, Edit Edges,
+Edit Borders, Edit Polygons, Edit Elements and Edit Geometry rollouts. Material
+IDs, the 32 Smoothing Groups and Vertex Colors appear at Polygon and Element
+levels. Subdivision Surface, Subdivision Displacement and Paint Deformation are
+available at every level. Unmapped controls remain visible and disabled. Adding
+Edit Poly still edits the base mesh.
+
+The small settings button beside an operation opens its options. Click OK to
+apply them. The main button reuses the accepted values for that operation and
+sub-object level. Values live in the scene and are saved in the blend file.
+
+Material IDs use Blender's material slots, numbered from 1. Smoothing groups use
+the face attribute `max_smoothing_group`, including group 32. Faces that share a
+group have smooth common edges. Other edges become sharp. Auto Smooth assigns
+groups by face angle. Crease writes Blender's native vertex or edge crease.
+Use NURMS Subdivision adds a native Subdivision Surface modifier. Smooth Result
+backs up and restores face shading, as TurboSmooth does.
+
+Ring and Loop have shift arrows. At Border level, Select Open Edges finds the
+mesh boundaries. Quad Cap and Loop Regularizer appear when their companion
+operators are installed. Disabled controls explain the Blender limitation in
+their tooltip.
+
+Target Weld works from the panel and quad menu at Vertex, Edge and Border levels.
+Start with one selected source, or click a source in the viewport. Move without
+holding a button, then click a valid target. The dashed line follows the mouse
+and the cursor changes over valid targets. Vertices must share an edge. Edges
+must each have one polygon attached, and the weld must preserve valid topology.
+The source moves onto the target's exact position. Keep welding until you
+right-click in the viewport or click Target Weld again. Invalid targets explain
+the restriction in the status bar.
+
+Ctrl+Shift+W starts Target Weld. Undo, Redo and file load end it before Blender
+replaces the edit mesh. Each weld has one undo step. Right-click and disabling
+the add-on remove its viewport line and active state.
+
+QuickSlice uses two clicks. Click the start, move without holding a button,
+then click the endpoint. Keep slicing until right-click or click QuickSlice
+again. Polygon and Element levels affect selected visible polygons and retain
+the new polygons in the selection. Split uses the Slice Plane setting.
+Object-level QuickSlice affects the object and returns to Object level on exit.
+Cut also works at Object level. It calls the companion `max.cut` when installed.
+This branch otherwise uses Blender's knife, with Enter to accept the cut, and
+returns to Object level when the knife exits. Alt+C uses the same Cut route.
+
+Imported `.hsx` settings shortcuts use the same caddies and stored values as
+the panel. When the import module is present, its settings registration uses
+the compatibility adapter without changing imported assignments or storage.
+
+Delete Isolated Vertices is a checkbox, on by default. Delete and Remove clean
+up vertices that have no polygons when it is on. Remove Isolated Vertices at
+Vertex level remains a separate command. Slice at Polygon and Element levels
+cuts only selected, visible polygons. By Polygon Extrude keeps the new tops
+selected. Smoothing Groups has its own Clear Selection checkbox.
+
+Headless checks run with an isolated Blender profile:
+
+```powershell
+& 'C:/Program Files/Blender Foundation/Blender 5.0/blender.exe' -b --factory-startup --python-exit-code 1 --python tests/test_editable_poly_panel.py
+& 'C:/Program Files/Blender Foundation/Blender 5.0/blender.exe' -b --factory-startup --python-exit-code 1 --python tests/test_editable_poly_rework.py
+```
+
+Set `BLENDER_USER_SCRIPTS`, `BLENDER_USER_CONFIG` and `BLENDER_USER_EXTENSIONS`
+to your test profile first. Its scripts/addons directory must contain this add-on.
+
 ## Compact Material Editor (M)
 
 <img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
@@ -326,6 +393,46 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 - xView checks the evaluated modifier result in Object Mode and the editable cage in Edit Poly, using the active UV map. Select Results is unavailable in Object Mode when a viewport modifier is enabled, because evaluated indices may not identify base-mesh elements. Enter Edit Poly to check and select the cage. Cross-object coincidences are not checked.
 - T-Vertices requires three incident edges with faces on both sides, as in Autodesk's 2026 SDK. It has no Tolerance dialog or unwelded near-edge extension. Overlapping Faces also finds edge-only crossings that Max's documented check misses.
 - Large xView checks finish over multiple timer ticks. Edits cancel and restart the snapshot, so continuous edits can postpone a finished result. Python scans yield, but Blender's native modifier evaluation and mesh extraction can take longer than the timer budget.
+
+- Editable Poly's By Vertex click filter, Ignore Backfacing, hover Preview
+  Selection, topology Constraints and Preserve UVs channel settings are disabled.
+  By Angle expands the current face selection with a separate button.
+- Soft Selection uses Blender proportional editing for transforms. Edge Distance
+  means connected-only, with no edge-count cutoff. Falloff is Blender's radius.
+  Pinch, Bubble, Affect Backfacing, Shaded Faces and a custom curve preview are unavailable.
+  Fixed-value mesh operations do not use proportional influence.
+- Hinge From Edge, Extrude Along Spline and hidden Edit Triangulation are disabled.
+  Turn rotates real edges and Retriangulate creates real triangles. Remove Unused
+  Map Verts is disabled because Blender stores UVs on face corners.
+- Extrude uses Blender region or individual-face extrusion. Vertex extrusion
+  creates wire edges. Edge extrusion uses the average selected surface normal,
+  with local Z as the fallback. Extrusion Base Width is disabled. Chamfer Tension
+  maps to Blender's bevel profile, so intermediate shapes differ from Max.
+- Bevel has Group, Local Normal and By Polygon modes. It uses BMesh inset with
+  height and outline. Max's Local Normal Bias is unavailable.
+- Bridge uses Blender edge-loop bridging. Taper and Bias scale intermediate
+  rings with a linear envelope, which can differ from Max. Smooth sets the new
+  bridge edges by face angle. Existing smoothing groups take precedence.
+  Twist 1 and Twist 2 set the relative loop offset. The selection and pick
+  controls are disabled because Bridge uses Blender's current selection.
+  Connect subdivides selected edges or connects vertices. Its Pinch and Slide
+  settings are disabled. MSmooth uses native smooth subdivision, not NURMS.
+- Create fills the selected vertices instead of picking vertices in the viewport.
+  Insert Vertex splits selected edges at their midpoint, or pokes selected faces.
+  Create Shape From Selection copies each selected edge to a separate poly spline.
+- Slice Plane uses numeric local coordinates without Max's plane gizmo. QuickSlice
+  cuts a view-aligned BMesh plane through two clicked screen points. Without the
+  companion Cut module, Cut uses Blender's knife gestures. Ring and Loop shifts use quad topology and
+  Blender's face/vertex order, so direction can differ on irregular meshes.
+  Named Selections Copy/Paste stores one selection per mesh and sub-object level.
+- Weight and Subdivision Surface Smoothness are disabled because Blender's
+  subdivision has no equivalent. NURMS uses a live Subdivision Surface modifier.
+  Auto Smooth supports up to 32 disconnected smooth patches in one operation.
+- Edge Depth, Hard, Smooth and Display Hard Edges, Full Interactivity, Vertex
+  Colors, Subdivision Displacement and Paint Deformation remain visible but
+  disabled. Max's automatic Hard/Smooth smoothing-group reassignment, vertex
+  channels, displacement approximation and paint tools are not mapped.
+
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - Reference clones share Blender data in both directions. They do not have Max's one-way reference stack. Controller Instance uses one-way drivers from the original children, rather than Max's shared controller objects.
 - Shift-clone dialogs use Blender's dialog frame and controls. Gizmo hit areas are calculated in screen space. Gimbal and custom normal orientations can differ from Blender's native handle picking.

@@ -7,7 +7,7 @@ from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, St
 from bpy.types import Operator
 from mathutils import Euler, Matrix, Quaternion
 
-from . import theme
+from . import theme, editable_poly
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +337,15 @@ class MAX_OT_delete(Operator):
         if m == "OBJECT":
             bpy.ops.object.delete(use_global=False, confirm=False)
         elif m == "EDIT_MESH":
-            bpy.ops.mesh.delete(type=mesh_select_mode(context))
+            mode = mesh_select_mode(context)
+            if mode == "EDGE" and not context.active_object.max_poly.delete_isolated:
+                import bmesh
+                bm = bmesh.from_edit_mesh(context.active_object.data)
+                bmesh.ops.delete(bm, geom=[e for e in bm.edges if e.select and not e.hide], context="EDGES_FACES")
+                editable_poly.update_mesh(context)
+            else:
+                bpy.ops.mesh.delete(type="ONLY_FACE" if mode == "FACE" and not context.active_object.max_poly.delete_isolated else mode)
+            editable_poly.cleanup_isolated(context)
         elif m == "EDIT_CURVE":
             bpy.ops.curve.delete(type="VERT")
         else:
@@ -423,6 +431,9 @@ EDIT_POLY_OPS = [
 ]
 
 
+EDIT_POLY_OPS += editable_poly.EXTRA_OPS
+
+
 class MAX_OT_edit_poly(Operator):
     """Editable Poly command"""
     bl_idname = "max.edit_poly"
@@ -433,7 +444,7 @@ class MAX_OT_edit_poly(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.mode == "EDIT_MESH"
+        return context.mode == "EDIT_MESH" or (context.mode == "OBJECT" and context.active_object is not None and context.active_object.type == "MESH")
 
     @classmethod
     def description(cls, context, props):
@@ -447,6 +458,9 @@ class MAX_OT_edit_poly(Operator):
 
     def run(self, context, how):
         o = self.op
+        result = editable_poly.run(self, context, how)
+        if result is not None:
+            return result
         mode = mesh_select_mode(context)
         ops = bpy.ops.mesh
         try:
@@ -466,8 +480,10 @@ class MAX_OT_edit_poly(Operator):
                     ops.subdivide(number_cuts=1)
             elif o == "REMOVE":
                 ops.dissolve_mode(use_verts=False)
+                editable_poly.cleanup_isolated(context)
             elif o == "REMOVE_WITH_VERTS":
                 ops.dissolve_mode(use_verts=True)
+                editable_poly.cleanup_isolated(context)
             # hasattr() on bpy.ops is always True, so call the real operator directly
             elif o == "LOOP":
                 ops.loop_multi_select(ring=False)

@@ -65,6 +65,9 @@ def _stack_get(ob):
     if bpy.context.mode.startswith("EDIT"):
         return -1          # sub-object editing happens at the base of the stack
     act = ob.modifiers.active
+    from . import editable_poly
+    if editable_poly.is_nurms(act):
+        return -1          # NURMS belongs to the Editable Poly base object
     if act is not None and act.is_active and not poly_tools.is_font_pivot(act):
         return ob.modifiers.find(act.name)
     return -1
@@ -531,63 +534,19 @@ def _is_poly(context):
 @rollout("Selection", {"MODIFY"}, 4)
 @when(_is_poly)
 def poly_selection(layout, context):
-    lvl = current_level(context)
-    row = layout.row(align=True)
-    row.scale_y = 1.3
-    for i in range(1, 6):
-        row.operator("max.subobject", text="", depress=(lvl == i), **max_icons.ui(SUBLEVEL_NAMES[i], SUBLEVEL_ICONS[i])).level = i
-    if context.mode == "EDIT_MESH":
-        g = _grid(layout)
-        for op in ("SHRINK", "GROW", "RING", "LOOP"):
-            _btn(g, op)
-        _btn(layout, "OPEN_EDGES")
-    me = context.active_object.data
-    if context.mode != "EDIT_MESH":
-        layout.label(text=f"Verts: {len(me.vertices):,}   Polys: {len(me.polygons):,}")
-    else:
-        layout.label(text="Whole Object Selected" if lvl == 0 else f"{me.total_vert_sel} Vertices Selected"
-                     if lvl == 1 else f"{me.total_edge_sel} Edges Selected" if lvl in (2, 3)
-                     else f"{me.total_face_sel} Polygons Selected")
+    from . import editable_poly_ui
+    editable_poly_ui.selection(layout, context)
 
 
-@rollout("Edit Sub-Object", {"MODIFY"}, 5)
-@when(lambda c: _is_poly(c) and c.mode == "EDIT_MESH")
-def poly_edit_level(layout, context):
-    lvl = current_level(context) or 1
-    per_level = {
-        1: ("REMOVE", "BREAK", "EXTRUDE", "WELD", "CHAMFER", "TARGET_WELD", "CONNECT"),
-        2: ("REMOVE", "EXTRUDE", "WELD", "CHAMFER", "TARGET_WELD", "BRIDGE", "CONNECT"),
-        3: ("EXTRUDE", "CAP", "CHAMFER", "BRIDGE", "CONNECT"),
-        4: ("EXTRUDE", "OUTLINE", "BEVEL", "INSET", "BRIDGE", "FLIP"),
-        5: ("FLIP", "DETACH"),
-    }[lvl]
-    g = _grid(layout)
-    for op in per_level:
-        _btn(g, op)
-        if op == "CAP":
-            g.operator("max.quad_cap", text="Quad Cap")
-    if lvl in (2, 3):
-        layout.operator("mesh.edge_face_add", text="Create Shape / Fill")
-        layout.operator("max.loop_regularize", text="Edge Loop Regularizer")
-
-
-@rollout("Edit Geometry", {"MODIFY"}, 6)
+@rollout("Edit Geometry", {"MODIFY"}, 7)
 @when(_is_poly)
 def poly_edit_geometry(layout, context):
-    if context.mode != "EDIT_MESH":
-        g = _grid(layout)
-        g.operator("max.object_cmd", text="Attach").cmd = "ATTACH"
-        g.operator("max.object_cmd", text="Reset XForm").cmd = "RESET_XFORM"
-        return
-    layout.operator("screen.repeat_last", text="Repeat Last")
-    g = _grid(layout)
-    for op in ("COLLAPSE", "DETACH", "SLICE_PLANE", "CUT", "SWIFT_LOOP", "MSMOOTH",
-               "TESSELLATE", "MAKE_PLANAR", "RELAX"):
-        _btn(g, op)
-    g = _grid(layout)
-    for op in ("HIDE_SEL", "UNHIDE", "HIDE_UNSEL"):
-        _btn(g, op)
+    from . import editable_poly_ui
+    editable_poly_ui.geometry(layout, context)
 
+
+from . import editable_poly_ui
+editable_poly_ui.install(rollout, when, _is_poly)
 
 # ----- Hierarchy ---------------------------------------------------------------
 

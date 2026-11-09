@@ -104,6 +104,7 @@ MESH = [
     K("view3d.edit_mesh_extrude_move_normal", "E", shift=True),
     K("max.edit_poly", "E", ctrl=True, shift=True, op="CONNECT"),
     K("max.edit_poly", "C", ctrl=True, shift=True, op="CHAMFER"),
+    K("max.edit_poly", "W", ctrl=True, shift=True, op="TARGET_WELD"),
     K("max.edit_poly", "BACK_SPACE", op="REMOVE"),
     K("max.edit_poly", "BACK_SPACE", ctrl=True, op="REMOVE_WITH_VERTS"),
     K("max.edit_poly", "L", alt=True, op="LOOP"),

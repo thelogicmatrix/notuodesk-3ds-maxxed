@@ -39,6 +39,7 @@ from . import max_export
 from . import viewcube
 from . import loft
 from . import xview
+from . import editable_poly
 
 
 _prefs_cache = [None]
@@ -174,7 +175,7 @@ HOTKEY_CHEATSHEET = (
 
 
 _classes = (
-    (MaxxedPreferences,) + prims.classes + keyboard_entry.classes + freezing.classes + plane_plus.classes + operators.classes + create.classes + vray.classes + max_import.classes
+    (MaxxedPreferences,) + editable_poly.classes + prims.classes + keyboard_entry.classes + freezing.classes + plane_plus.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes + line_tool.classes
     + cut_loop.classes
@@ -222,6 +223,8 @@ def register():
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""),
                                     ("EXTENDED", "Extended Primitives", ""), ("VRAY", "V-Ray", ""), ("JOKERMARTINI", "JokerMartini", ""), ("COMPOUND", "Compound Objects", "")])
+    editable_poly.register_props()
+    editable_poly.target_weld.register_handlers()
     prims.register_props()
     keyboard_entry.register_props()
     poly_tools.register()
@@ -255,6 +258,8 @@ def unregister():
     cursor_policy.unregister()
     cut_loop.cancel_active()
     viewcube.unregister()
+    editable_poly.poly_modal.teardown()
+    editable_poly.target_weld.unregister_handlers()
     _prefs_cache[0] = None
     shift_clone.unregister()
     keymap.unregister_keymaps()
@@ -277,6 +282,7 @@ def unregister():
     prims.unregister_props()
     keyboard_entry.unregister_props()
     poly_tools.unregister()
+    editable_poly.unregister_props()
     for prop in ("max_cmd_tab", "max_create_cat", "max_create_sub", "max_sublevel"):
         if hasattr(wm, prop):
             delattr(wm, prop)
