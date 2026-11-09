@@ -1228,6 +1228,7 @@ tools = tuple(type("MAX_WST_rotate_"+mode,(_RotateTool,bpy.types.WorkSpaceTool),
 def draw_managers(layout, context):
     s = settings(context)
     from .max_gizmos import kind
+    from . import max_icons
     operation = kind(context) or "ROTATE"
     prop = {"ROTATE":"reference","MOVE":"move_reference","SCALE":"scale_reference"}[operation]
     ref = reference_name(context,operation)
@@ -1240,7 +1241,7 @@ def draw_managers(layout, context):
     row = layout.row(align=True)
     center = row.row(align=True)
     center.enabled = ref != "LOCAL"
-    center.menu("MAX_MT_transform_center",text="",icon={"PIVOT":"PIVOT_INDIVIDUAL", "SELECTION":"PIVOT_MEDIAN", "COORDINATE":"PIVOT_CURSOR"}[center_mode(context,operation)])
+    center.menu("MAX_MT_transform_center",text="",**max_icons.ui("pivot", {"PIVOT":"PIVOT_INDIVIDUAL", "SELECTION":"PIVOT_MEDIAN", "COORDINATE":"PIVOT_CURSOR"}[center_mode(context,operation)]))
     attr = _constraint_attr(context,None)
     row.prop(s,attr,text="")
 
