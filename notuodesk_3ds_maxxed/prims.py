@@ -156,6 +156,10 @@ def rebuild(ob):
         return False
     bm = build_bmesh(p.kind, p)
     bm.to_mesh(me)
+    if ob.max_frozen_mesh:
+        # Gray freeze displays a private mesh. Keep its editable source current.
+        bm.to_mesh(ob.max_frozen_mesh)
+        ob.max_frozen_mesh.update()
     bm.free()
     me.update()
     p.vcount = len(me.vertices)

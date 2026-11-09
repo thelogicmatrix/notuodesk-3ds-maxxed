@@ -140,6 +140,29 @@ class MAX_OT_unfreeze_by_name(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _hit_frozen(context, region, co):
+    origin = view3d_utils.region_2d_to_origin_3d(region, region.data, co)
+    direction = view3d_utils.region_2d_to_vector_3d(region, region.data, co)
+    hit, _, _, _, ob, _ = context.scene.ray_cast(context.evaluated_depsgraph_get(), origin, direction)
+    if hit and (ob.original.max_frozen or "max_frozen_color" in ob.original):
+        return ob.original
+    # Lights, cameras, helpers and wire-only objects have no raycast surface.
+    # Pick near their origin without changing selection or selection locks.
+    nearest, distance = None, (12 * context.preferences.system.ui_scale) ** 2
+    for ob in context.visible_objects:
+        if not (ob.max_frozen or "max_frozen_color" in ob):
+            continue
+        if ob.type == "MESH" and ob.data.polygons:
+            continue
+        point = view3d_utils.location_3d_to_region_2d(region, region.data, ob.matrix_world.translation)
+        if point is None:
+            continue
+        d = (point.x - co[0]) ** 2 + (point.y - co[1]) ** 2
+        if d < distance:
+            nearest, distance = ob, d
+    return nearest
+
+
 class MAX_OT_unfreeze_by_hit(bpy.types.Operator):
     """Click a frozen object to unfreeze it. Right-click to leave"""
     bl_idname = "max.unfreeze_by_hit"
@@ -160,11 +183,9 @@ class MAX_OT_unfreeze_by_hit(bpy.types.Operator):
             area, region = region_under_mouse(context, event.mouse_x, event.mouse_y)
             if region:
                 co = (event.mouse_x - region.x, event.mouse_y - region.y)
-                origin = view3d_utils.region_2d_to_origin_3d(region, region.data, co)
-                direction = view3d_utils.region_2d_to_vector_3d(region, region.data, co)
-                hit, _, _, _, ob, _ = context.scene.ray_cast(context.evaluated_depsgraph_get(), origin, direction)
-                if hit and (ob.original.max_frozen or "max_frozen_color" in ob.original):
-                    unfreeze(ob.original, context.scene)
+                ob = _hit_frozen(context, region, co)
+                if ob:
+                    unfreeze(ob, context.scene)
                     bpy.ops.ed.undo_push(message="Unfreeze by Hit")
             return {"RUNNING_MODAL"}
         if event.type == "LEFTMOUSE":

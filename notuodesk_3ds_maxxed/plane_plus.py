@@ -6,7 +6,7 @@ import bmesh
 import bpy
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, PointerProperty, StringProperty
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 PIVOTS = (
     ("LEFT", "Left", "Bottom left"), ("CENTER", "Center", "Center of plane"),
@@ -43,6 +43,10 @@ def build_bmesh(p):
 def _material(ob):
     p = ob.max_plane_plus
     mat = p.material
+    if mat and any(other != ob and other.max_plane_plus.material == mat for other in bpy.data.objects):
+        # Object Copy duplicates the parameters but retains their material ID.
+        mat = mat.copy()
+        p.material = mat
     if mat is None:
         mat = bpy.data.materials.new(ob.name + " Image")
         mat.use_nodes = True
@@ -109,10 +113,6 @@ def _update(self, context, axis=None):
                 self.length = self.width / self.aspect
         from . import prims
         prims.rebuild(ob)
-        if ob.max_frozen_mesh:
-            bm = build_bmesh(self)
-            bm.to_mesh(ob.max_frozen_mesh)
-            bm.free()
         _material(ob)
         # Workbench cannot show per-material opacity or unlit textures. Draw the
         # image over a selectable wire plane in Solid, with normal depth testing.
@@ -246,7 +246,7 @@ class MAX_OT_plane_plus(bpy.types.Operator):
             if not region:
                 return {"PASS_THROUGH"}
             self.region = region
-            # PlanePlus uses the home grid. Ctrl creates an upright plane.
+            # Use the home grid in perspective and the view grid in orthographic.
             self.vertical = event.ctrl
             self.u, self.v, self.normal = construction_frame(region.data)
             co = (event.mouse_x - region.x, event.mouse_y - region.y)
@@ -258,6 +258,15 @@ class MAX_OT_plane_plus(bpy.types.Operator):
             self.obj = new_plane(context)
             self.obj.max_plane_plus.orientation = "VERTICAL" if self.vertical else "HORIZONTAL"
             self.obj.max_plane_plus.uniform = False
+            # Vertical local geometry uses X/Z. In a side view, map those axes
+            # onto the view grid instead of turning the plane edge-on.
+            if self.vertical and abs(self.normal.z) < .5:
+                axes = (self.u, -self.normal, self.v)
+                self.length_axis = self.v
+            else:
+                axes = (self.u, self.v, self.normal)
+                self.length_axis = self.normal if self.vertical else self.v
+            self.obj.matrix_world = Matrix(axes).transposed().to_4x4()
             self.obj.location = Vector((0, 0, 0)) if self.at_origin else point
             self.obj.max_plane_plus.width = .0001
             self.obj.max_plane_plus.length = .0001
@@ -274,8 +283,7 @@ class MAX_OT_plane_plus(bpy.types.Operator):
                 p = self.obj.max_plane_plus
                 p.width, p.length = max(width, .0001), max(length, .0001)
                 if not self.at_origin:
-                    self.obj.location = self.start + Vector((min(du, 0), 0, min(dv, 0)) if self.vertical
-                                                           else (min(du, 0), min(dv, 0), 0))
+                    self.obj.location = self.start + self.u * min(du, 0) + self.length_axis * min(dv, 0)
             if event.type == "LEFTMOUSE" and event.value == "RELEASE":
                 p.aspect = p.width / p.length
                 p.uniform = True
