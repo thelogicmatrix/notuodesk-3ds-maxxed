@@ -24,6 +24,7 @@ bl_info = {
 
 import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from . import hsx_import
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
 
@@ -80,6 +81,7 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
     random_colors: BoolProperty(name="Random Object Colors", default=True,
                                 description="Give new objects a random wireframe/object color like 3ds Max")
     first_run_done: BoolProperty(default=False)
+    imported_hsx: StringProperty(name="Imported 3ds Max Hotkeys", default="", options={"HIDDEN"})
 
     def draw(self, context):
         lay = self.layout
@@ -92,6 +94,7 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
             col.prop(self, p)
 
         updater.draw_update_box(lay, self)
+        hsx_import.draw_preferences(lay, self)
 
         box = lay.box()
         box.label(text="Hotkeys (active while '3ds Max Hotkeys' is on)", icon="KEYINGSET")
@@ -143,6 +146,7 @@ _classes = (
     (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
+    + hsx_import.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 

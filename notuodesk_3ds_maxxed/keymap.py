@@ -135,9 +135,13 @@ def register_keymaps():
     kc = wm.keyconfigs.addon if wm else None
     if kc is None:  # background mode
         return
+    from . import hsx_import
+    imported = hsx_import.load_entries()
     for name, space, region, items in _groups():
         km = kc.keymaps.new(name=name, space_type=space, region_type=region)
         for idname, key, value, ctrl, shift, alt, props in items:
+            if hsx_import.skip_default(name, (idname, key, value, ctrl, shift, alt, props), imported):
+                continue
             kmi = km.keymap_items.new(idname, key, value, ctrl=ctrl, shift=shift, alt=alt)
             for k, v in props.items():
                 try:
@@ -145,6 +149,7 @@ def register_keymaps():
                 except Exception as exc:
                     print(f"[3ds Maxxed] keymap {idname}.{k}: {exc}")
             _registered.append((km, kmi))
+    hsx_import.register_keymaps(kc, _registered, imported)
 
 
 def unregister_keymaps():
