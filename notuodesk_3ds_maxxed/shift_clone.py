@@ -17,6 +17,10 @@ from .operators import current_level, max_name
 
 _pending = {}
 _watchers = set()
+_active = {}
+_deferred = {}
+_dialogs = {}
+_retired = set()
 _last = dict(mode='COPY', controller='COPY', copies=1, destination='ELEMENT')
 _TOOLS = {'builtin.move': 'translate', 'builtin.rotate': 'rotate', 'builtin.scale': 'resize'}
 
@@ -32,6 +36,13 @@ def _named(name):
 def _copy_action(ob):
     if ob.animation_data and ob.animation_data.action:
         ob.animation_data.action = ob.animation_data.action.copy()
+
+
+def _alive(ob):
+    try:
+        return ob is not None and bpy.data.objects.get(ob.name) == ob
+    except ReferenceError:
+        return False
 
 
 def _instance_controller(ob, source):
@@ -56,9 +67,12 @@ class ObjectClone:
         self.originals = list(context.selected_objects)
         self.active = context.view_layer.objects.active
         self.matrices = [o.matrix_world.copy() for o in self.originals]
+        self.data = [o.data for o in self.originals]
+        self.created = []
         self.preview = self._batch()
         self.has_hierarchy = any(o.parent in self.originals for o in self.originals)
         self.closed = False
+        self.invalidated = False
 
     def _batch(self):
         copies = []
@@ -69,6 +83,7 @@ class ObjectClone:
             for collection in src.users_collection:
                 collection.objects.link(ob)
             copies.append(ob)
+            self.created.append(ob)
         mapping = dict(zip(self.originals, copies))
         for src, ob in zip(self.originals, copies):
             if src.parent in mapping:
@@ -83,11 +98,23 @@ class ObjectClone:
         return copies
 
     def changed(self):
+        if not self.valid():
+            return False
         return any(any(abs(a - b) > 1e-6 for row1, row2 in zip(ob.matrix_world, matrix)
                        for a, b in zip(row1, row2))
                    for ob, matrix in zip(self.preview, self.matrices))
 
+    def valid(self):
+        if self.closed or self.invalidated:
+            return False
+        self.invalidated = not (all(_alive(o) for o in self.originals + self.preview)
+                                and all(o.data == data for o, data in zip(self.originals, self.data)))
+        return not self.invalidated
+
     def finish(self, mode, count, name, controller):
+        if not self.valid():
+            self.cancel()
+            return []
         self.context.view_layer.update()
         delta = [o.matrix_world @ m.inverted_safe() for o, m in zip(self.preview, self.matrices)]
         all_copies = []
@@ -130,11 +157,14 @@ class ObjectClone:
     def cancel(self):
         if self.closed:
             return
-        for ob in self.preview:
-            bpy.data.objects.remove(ob, do_unlink=True)
+        for ob in self.created:
+            if _alive(ob):
+                bpy.data.objects.remove(ob, do_unlink=True)
         for ob in self.originals:
-            ob.select_set(True)
-        self.context.view_layer.objects.active = self.active
+            if _alive(ob) and self.context.view_layer.objects.get(ob.name) == ob:
+                ob.select_set(True)
+        if _alive(self.active) and self.context.view_layer.objects.get(self.active.name) == self.active:
+            self.context.view_layer.objects.active = self.active
         self.closed = True
 
 
@@ -143,9 +173,13 @@ class MeshClone:
 
     def __init__(self, context, level, obj=None):
         self.obj = obj or context.edit_object
-        self.bm = bmesh.from_edit_mesh(self.obj.data)
+        self.mesh = self.obj.data
+        self.bm = bmesh.from_edit_mesh(self.mesh)
+        # Independent of the edit BMesh, which mode exit frees.
+        self.snapshot = self.bm.copy()
         self.level = level
         self.closed = False
+        self.invalidated = False
         self.selected = [[e for e in seq if e.select] for seq in
                          (self.bm.verts, self.bm.edges, self.bm.faces)]
         self.history = list(self.bm.select_history)
@@ -182,9 +216,27 @@ class MeshClone:
         bmesh.update_edit_mesh(self.obj.data, loop_triangles=True, destructive=True)
 
     def changed(self):
-        return any((v.co - start).length > 1e-6 for v, start in zip(self.new_verts, self.start))
+        return self.valid() and any((v.co - start).length > 1e-6
+                                    for v, start in zip(self.new_verts, self.start))
+
+    def valid(self):
+        if self.closed or self.invalidated:
+            return False
+        self.invalidated = not (_alive(self.obj) and self.obj.data == self.mesh
+                                and self.obj.mode == 'EDIT' and self.bm.is_valid
+                                and all(e.is_valid for e in self.new_verts + self.new_faces))
+        return not self.invalidated
+
+    def _close(self):
+        self.closed = True
+        if self.snapshot is not None:
+            self.snapshot.free()
+            self.snapshot = None
 
     def finish(self, destination, name):
+        if not self.valid():
+            self.cancel()
+            return False
         if destination == 'OBJECT':
             self.bm.verts.index_update()
             keep = {v.index for v in self.new_verts}
@@ -200,45 +252,100 @@ class MeshClone:
             for collection in self.obj.users_collection:
                 collection.objects.link(ob)
             self._remove()
-        self.closed = True
         self.update()
+        self._close()
+        return True
 
     def _remove(self):
-        bmesh.ops.delete(self.bm, geom=self.new_verts, context='VERTS')
+        bmesh.ops.delete(self.bm, geom=[v for v in self.new_verts if v.is_valid], context='VERTS')
         for seq in (self.bm.faces, self.bm.edges, self.bm.verts):
             for elem in seq:
                 elem.select_set(False)
         for selection in self.selected:
             for elem in selection:
-                elem.select_set(True)
+                if elem.is_valid:
+                    elem.select_set(True)
         self.bm.select_history.clear()
         for elem in self.history:
-            self.bm.select_history.add(elem)
+            if elem.is_valid:
+                self.bm.select_history.add(elem)
 
     def cancel(self):
-        if not self.closed:
-            self._remove()
-            self.update()
-            self.closed = True
+        if self.closed:
+            return
+        if _alive(self.obj) and self.obj.data == self.mesh:
+            if self.obj.mode == 'EDIT' and self.bm.is_valid:
+                self._remove()
+                self.update()
+            elif self.obj.mode == 'EDIT':
+                # A mode round trip created another edit BMesh.
+                mesh = bpy.data.meshes.new('Shift Clone rollback')
+                try:
+                    self.snapshot.to_mesh(mesh)
+                    bm = bmesh.from_edit_mesh(self.mesh)
+                    bm.clear()
+                    bm.from_mesh(mesh)
+                    bmesh.update_edit_mesh(self.mesh, loop_triangles=True, destructive=True)
+                finally:
+                    bpy.data.meshes.remove(mesh)
+            elif self.obj.mode == 'OBJECT' and not self.mesh.is_editmode:
+                self.snapshot.to_mesh(self.mesh)
+                self.mesh.update()
+        self._close()
 
 
 class MeshClones:
     def __init__(self, context):
         self.level = current_level(context)
-        self.parts = [MeshClone(context, self.level, ob) for ob in context.objects_in_mode_unique_data]
+        self.parts = []
+        for ob in context.objects_in_mode_unique_data:
+            bm = bmesh.from_edit_mesh(ob.data)
+            selection = (bm.edges if self.level in {2, 3} else
+                         bm.faces if self.level in {4, 5} else bm.verts)
+            if not any(e.select and (self.level not in {2, 3} or e.is_boundary or e.is_wire)
+                       for e in selection):
+                continue
+            self.parts.append(MeshClone(context, self.level, ob))
         self.originals = [p.obj for p in self.parts]
         self.active = context.edit_object
 
     def changed(self):
-        return any(p.changed() for p in self.parts)
+        return self.valid() and any(p.changed() for p in self.parts)
+
+    def valid(self):
+        return bool(self.parts) and all(p.valid() for p in self.parts)
 
     def cancel(self):
         for p in self.parts:
             p.cancel()
 
     def finish(self, destination, name):
+        if not self.valid():
+            self.cancel()
+            return False
         for i, p in enumerate(self.parts):
             p.finish(destination, name if i == 0 else clone_name(name))
+        return True
+
+
+def _cancel_pending(token):
+    tx = _pending.get(token)
+    if tx is not None:
+        tx.cancel()
+        _pending.pop(token, None)
+
+
+def _finish_pending(token, *args):
+    tx = _pending.get(token)
+    if tx is None:
+        return False
+    try:
+        result = bool(tx.finish(*args))
+    except Exception:
+        _cancel_pending(token)
+        raise
+    _pending.pop(token, None)
+    return result
 
 
 def _radio(layout, data, prop, value, text):
@@ -393,12 +500,16 @@ class MAX_OT_shift_clone_options(Operator):
 
     def invoke(self, context, event):
         tx = _pending.get(self.token)
-        if tx is None:
+        if tx is None or not tx.valid():
+            _cancel_pending(self.token)
             return {'CANCELLED'}
         self.mode, self.controller, self.copies = _last['mode'], _last['controller'], _last['copies']
         ob = tx.preview[tx.originals.index(tx.active)] if tx.active in tx.originals else tx.preview[0]
         self.name = ob.name
-        return context.window_manager.invoke_props_dialog(self, width=260)
+        result = context.window_manager.invoke_props_dialog(self, width=260)
+        if 'RUNNING_MODAL' in result:
+            _dialogs[self.token] = type(self)
+        return result
 
     def draw(self, context):
         layout = self.layout
@@ -421,17 +532,15 @@ class MAX_OT_shift_clone_options(Operator):
         layout.prop(self, 'name', text='')
 
     def execute(self, context):
-        tx = _pending.pop(self.token, None)
-        if tx is None:
+        _dialogs.pop(self.token, None)
+        if not _finish_pending(self.token, self.mode, self.copies, self.name, self.controller):
             return {'CANCELLED'}
-        tx.finish(self.mode, self.copies, self.name, self.controller)
         _last.update(mode=self.mode, controller=self.controller, copies=self.copies)
         return {'FINISHED'}
 
     def cancel(self, context):
-        tx = _pending.pop(self.token, None)
-        if tx:
-            tx.cancel()
+        _dialogs.pop(self.token, None)
+        _cancel_pending(self.token)
 
 
 class MAX_OT_clone_part(Operator):
@@ -446,11 +555,15 @@ class MAX_OT_clone_part(Operator):
 
     def invoke(self, context, event):
         tx = _pending.get(self.token)
-        if tx is None:
+        if tx is None or not tx.valid():
+            _cancel_pending(self.token)
             return {'CANCELLED'}
         self.destination = _last['destination']
         self.name = clone_name(tx.active.name)
-        return context.window_manager.invoke_props_dialog(self, width=300)
+        result = context.window_manager.invoke_props_dialog(self, width=300)
+        if 'RUNNING_MODAL' in result:
+            _dialogs[self.token] = type(self)
+        return result
 
     def draw(self, context):
         row = self.layout.row(align=True)
@@ -461,17 +574,15 @@ class MAX_OT_clone_part(Operator):
         _radio(self.layout, self, 'destination', 'ELEMENT', 'Clone To Element')
 
     def execute(self, context):
-        tx = _pending.pop(self.token, None)
-        if tx is None:
+        _dialogs.pop(self.token, None)
+        if not _finish_pending(self.token, self.destination, self.name):
             return {'CANCELLED'}
-        tx.finish(self.destination, self.name)
         _last['destination'] = self.destination
         return {'FINISHED'}
 
     def cancel(self, context):
-        tx = _pending.pop(self.token, None)
-        if tx:
-            tx.cancel()
+        _dialogs.pop(self.token, None)
+        _cancel_pending(self.token)
 
 
 class MAX_OT_extend_edges(Operator):
@@ -482,11 +593,42 @@ class MAX_OT_extend_edges(Operator):
     token: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
 
     def execute(self, context):
-        tx = _pending.pop(self.token, None)
-        if tx is None:
+        if not _finish_pending(self.token, 'ELEMENT', ''):
             return {'CANCELLED'}
-        tx.finish('ELEMENT', '')
         return {'FINISHED'}
+
+
+def _defer_dialog(context, token):
+    # Capture the viewport, never the modal operator or its transient context.
+    window, area, region = context.window, context.area, context.region
+
+    def invoke():
+        tx = _pending.get(token)
+        if tx is None:
+            _deferred.pop(token, None)
+            return None
+        try:
+            if (window not in tuple(bpy.context.window_manager.windows)
+                    or area not in tuple(window.screen.areas)
+                    or region not in tuple(area.regions) or area.type != 'VIEW_3D'):
+                _cancel_pending(token)
+            elif any(op and (op.bl_idname.startswith(('TRANSFORM_OT_', 'MAX_OT_shift_clone_'))
+                     or op.bl_idname == 'MAX_OT_shift_drag_clone') for op in window.modal_operators):
+                return 0.01
+            elif not tx.valid():
+                _cancel_pending(token)
+            else:
+                with bpy.context.temp_override(window=window, area=area, region=region):
+                    op = bpy.ops.max.shift_clone_options if isinstance(tx, ObjectClone) else bpy.ops.max.clone_part
+                    if 'CANCELLED' in op('INVOKE_DEFAULT', token=token):
+                        _cancel_pending(token)
+        except (ReferenceError, RuntimeError):
+            _cancel_pending(token)
+        _deferred.pop(token, None)
+        return None
+
+    _deferred[token] = invoke
+    bpy.app.timers.register(invoke, first_interval=0.01)
 
 
 class MAX_OT_shift_clone(Operator):
@@ -524,9 +666,10 @@ class MAX_OT_shift_clone(Operator):
 
     def _stop(self, context):
         _watchers.discard(self.key)
-        if self.timer:
-            context.window_manager.event_timer_remove(self.timer)
-            self.timer = None
+        active = _active.pop(self.key, None)
+        if active and active[2] is not None:
+            active[1].event_timer_remove(active[2])
+        self.timer = None
 
     def modal(self, context, event):
         try:
@@ -537,6 +680,8 @@ class MAX_OT_shift_clone(Operator):
             return {'CANCELLED'}
 
     def _modal(self, context, event):
+        if self.key not in _watchers:
+            return {'CANCELLED'}
         if self.tx is None:
             if event.type in {'LEFT_SHIFT', 'RIGHT_SHIFT'} and event.value == 'RELEASE':
                 self._stop(context)
@@ -549,12 +694,14 @@ class MAX_OT_shift_clone(Operator):
                     return {'PASS_THROUGH'}
                 # Start at the press so the transform's mouse origin matches the handle.
                 self.tx = ObjectClone(context) if context.mode == 'OBJECT' else MeshClones(context)
+                _active[self.key] = (self.tx, context.window_manager, None)
                 axis = _gizmo_hit(context, event, self.tx, self.tool)
                 if axis is None and not _over_selection(context, event, self.tx):
                     self.tx.cancel()
                     self._stop(context)
                     return {'CANCELLED', 'PASS_THROUGH'}
                 self.timer = context.window_manager.event_timer_add(0.04, window=context.window)
+                _active[self.key] = (self.tx, context.window_manager, self.timer)
                 transform = _TOOLS[self.tool]
                 result = getattr(bpy.ops.max, f'shift_clone_{transform}')(
                     'INVOKE_DEFAULT', **{
@@ -568,7 +715,7 @@ class MAX_OT_shift_clone(Operator):
                 return {'RUNNING_MODAL'}
             return {'PASS_THROUGH'}
         if event.type == 'TIMER':
-            running = any(op.bl_idname.startswith(('TRANSFORM_OT_', 'MAX_OT_shift_clone_'))
+            running = any(op and op.bl_idname.startswith(('TRANSFORM_OT_', 'MAX_OT_shift_clone_'))
                           for op in context.window.modal_operators)
             if not running:
                 self._stop(context)
@@ -578,14 +725,14 @@ class MAX_OT_shift_clone(Operator):
                 token = str(self.as_pointer())
                 _pending[token] = self.tx
                 if isinstance(self.tx, ObjectClone):
-                    bpy.ops.max.shift_clone_options('INVOKE_DEFAULT', token=token)
+                    _defer_dialog(context, token)
                 elif self.tx.level in {2, 3}:
                     bpy.ops.max.extend_edges(token=token)
                     # This branch finishes inside a modal callback, without a
                     # dialog's own UI event to push the completed mesh state.
                     bpy.ops.ed.undo_push(message='Extend Edges')
                 else:
-                    bpy.ops.max.clone_part('INVOKE_DEFAULT', token=token)
+                    _defer_dialog(context, token)
                 return {'FINISHED'}
         return {'PASS_THROUGH'}
 
@@ -595,11 +742,50 @@ class MAX_OT_shift_clone(Operator):
             self.tx.cancel()
 
 
-def unregister():
-    for tx in _pending.values():
+@bpy.app.handlers.persistent
+def _cancel_all(*_):
+    for callback in list(_deferred.values()):
+        if bpy.app.timers.is_registered(callback):
+            bpy.app.timers.unregister(callback)
+    _deferred.clear()
+    for tx, wm, timer in list(_active.values()):
+        if timer is not None:
+            wm.event_timer_remove(timer)
         tx.cancel()
-    _pending.clear()
+    _active.clear()
+    for token in list(_pending):
+        _cancel_pending(token)
     _watchers.clear()
+
+
+def unregister():
+    _cancel_all()
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.load_pre):
+        if _cancel_all in handlers:
+            handlers.remove(_cancel_all)
+
+
+def retained_class(cls):
+    return cls in _retired
+
+
+def _retire_dialogs():
+    for cls in list(_retired):
+        if cls not in _dialogs.values():
+            bpy.utils.unregister_class(cls)
+            _retired.remove(cls)
+    return 0.05 if _retired else None
+
+
+def defer_unregister(cls):
+    # Blender's popup widgets still reference this class's RNA properties.
+    # Freeing the RNA before the popup closes can crash its native draw code.
+    if cls not in _dialogs.values():
+        return False
+    _retired.add(cls)
+    if not bpy.app.timers.is_registered(_retire_dialogs):
+        bpy.app.timers.register(_retire_dialogs, first_interval=0.05)
+    return True
 
 
 # Macro children do not push their own undo states. The final dialog pushes once,
@@ -611,6 +797,13 @@ _macros = tuple(type(f'MAX_OT_shift_clone_{transform}', (bpy.types.Macro,), {
 
 
 def register_macros():
+    # Re-enable can happen before a disabled add-on's dialog is dismissed.
+    if bpy.app.timers.is_registered(_retire_dialogs):
+        bpy.app.timers.unregister(_retire_dialogs)
+    _retired.clear()
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.load_pre):
+        if _cancel_all not in handlers:
+            handlers.append(_cancel_all)
     for cls in _macros:
         transform = cls.bl_idname.removeprefix('max.shift_clone_')
         cls.define('TRANSFORM_OT_' + transform)

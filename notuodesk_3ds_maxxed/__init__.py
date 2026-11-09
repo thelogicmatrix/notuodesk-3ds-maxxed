@@ -172,7 +172,8 @@ def _unlock_quads_once():
 
 def register():
     for cls in _classes:
-        bpy.utils.register_class(cls)
+        if not shift_clone.retained_class(cls):
+            bpy.utils.register_class(cls)
     shift_clone.register_macros()
     wm = bpy.types.WindowManager
     wm.max_cmd_tab = EnumProperty(name="Command Panel", items=ui_panel.TABS, default="CREATE")
@@ -215,4 +216,5 @@ def unregister():
         if hasattr(wm, prop):
             delattr(wm, prop)
     for cls in reversed(_classes):
-        bpy.utils.unregister_class(cls)
+        if not shift_clone.defer_unregister(cls):
+            bpy.utils.unregister_class(cls)

@@ -42,6 +42,8 @@ With Move (W), Rotate (E) or Scale (R) active, hold Shift and drag a gizmo handl
 
 In Editable Poly, Shift-drag extends open **Edges** and **Borders** without a dialog. **Vertex**, **Polygon** and **Element** selections open **Clone Part of Mesh**. Choose **Clone To Object**, with a name, or **Clone To Element**. Right-click or Esc cancels a drag. Cancel in either dialog removes the preview. Undo removes the whole clone operation. Ctrl+V still clones in place.
 
+Only meshes with selected geometry contribute clones in multi-object Edit Mode. Undo, leaving Edit Mode, deleting a source or preview, and disabling the add-on cancel interrupted clones safely. The release dialogs open after the drag operator has finished.
+
 ## Compact Material Editor (M)
 
 <img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
@@ -166,6 +168,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Reference clones share Blender data in both directions. They do not have Max's one-way reference stack. Controller Instance uses one-way drivers from the original children, rather than Max's shared controller objects.
 - Shift-clone dialogs use Blender's dialog frame and controls. Gizmo hit areas are calculated in screen space. Gimbal and custom normal orientations can differ from Blender's native handle picking.
+- Disabling the add-on removes clone previews immediately. An open clone dialog stays until you dismiss it.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 
 ## Updating

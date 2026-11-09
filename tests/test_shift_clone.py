@@ -16,6 +16,7 @@ from notuodesk_3ds_maxxed import shift_clone
 
 class ShiftCloneTests(unittest.TestCase):
     def setUp(self):
+        shift_clone._cancel_all()
         if bpy.context.object and bpy.context.object.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
         for ob in list(bpy.data.objects):
@@ -131,6 +132,87 @@ class ShiftCloneTests(unittest.TestCase):
         tx = shift_clone.MeshClone(bpy.context, 3)
         tx.cancel()
         self.assertEqual((len(tx.bm.verts), len(tx.bm.faces)), (8, 5))
+
+    def test_removed_objects_cancel_and_ok_roll_back_survivors(self):
+        for removed, accept in (('preview', False), ('original', True), ('preview', True)):
+            with self.subTest(removed=removed, accept=accept):
+                self.setUp()
+                tx = shift_clone.ObjectClone(bpy.context)
+                bpy.data.objects.remove(getattr(tx, removed if removed == 'preview' else 'originals')[0],
+                                        do_unlink=True)
+                try:
+                    result = tx.finish('COPY', 1, '', 'COPY') if accept else tx.cancel()
+                    tx.cancel()  # Cleanup is safe more than once.
+                except ReferenceError as exc:
+                    self.fail(f'Removed {removed} must not break cleanup: {exc}')
+                self.assertEqual(set(bpy.data.objects), {self.box} if removed == 'preview' else set())
+                if accept:
+                    self.assertFalse(result)
+
+    def test_edit_mode_exit_cancel_restores_source_mesh(self):
+        tx = self.mesh_tx(4)
+        for v in tx.new_verts:
+            v.co.z += 3
+        tx.update()
+        bpy.ops.object.mode_set(mode='OBJECT')
+        try:
+            tx.cancel()
+            tx.cancel()
+        except ReferenceError as exc:
+            self.fail(f'Edit Mode exit must not break rollback: {exc}')
+        self.assertEqual((len(self.box.data.vertices), len(self.box.data.polygons)), (8, 6))
+        self.assertLessEqual(max(v.co.z for v in self.box.data.vertices), 1)
+
+    def test_multi_edit_skips_mesh_without_selected_geometry(self):
+        bpy.ops.mesh.primitive_cube_add(location=(5, 0, 0))
+        untouched = bpy.context.object
+        untouched.name = 'Untouched'
+        for v in untouched.data.vertices:
+            v.select = False
+        for e in untouched.data.edges:
+            e.select = False
+        for f in untouched.data.polygons:
+            f.select = False
+        self.box.select_set(True)
+        bpy.context.view_layer.objects.active = self.box
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.context.window_manager.max_sublevel = 4
+        bpy.ops.mesh.select_mode(type='FACE')
+        tx = shift_clone.MeshClones(bpy.context)
+        tx.finish('OBJECT', 'Part001')
+        self.assertEqual({o.name for o in bpy.data.objects}, {'Box001', 'Untouched', 'Part001'})
+        self.assertEqual(len(bpy.data.objects['Part001'].data.polygons), 6)
+        bm = bmesh.from_edit_mesh(untouched.data)
+        self.assertEqual((len(bm.verts), len(bm.faces)), (8, 6))
+        self.assertFalse(any(v.select for v in bm.verts))
+
+    def test_deleted_bmesh_elements_cancel_remaining_preview(self):
+        tx = self.mesh_tx(4)
+        bmesh.ops.delete(tx.bm, geom=[tx.new_verts[0]], context='VERTS')
+        try:
+            self.assertFalse(tx.finish('OBJECT', 'Part001'))
+            tx.cancel()
+        except ReferenceError as exc:
+            self.fail(f'Deleted BMesh elements must not break cleanup: {exc}')
+        bm = bmesh.from_edit_mesh(self.box.data)
+        self.assertEqual((len(bm.verts), len(bm.faces)), (8, 6))
+        self.assertNotIn('Part001', bpy.data.objects)
+
+    def test_replaced_object_data_cancels_without_reverting_replacement(self):
+        tx = shift_clone.ObjectClone(bpy.context)
+        replacement = self.box.data.copy()
+        self.box.data = replacement
+        self.assertFalse(tx.finish('COPY', 1, '', 'COPY'))
+        self.assertEqual(set(bpy.data.objects), {self.box})
+        self.assertEqual(self.box.data, replacement)
+
+    def test_mesh_mode_roundtrip_cancel_restores_source(self):
+        tx = self.mesh_tx(4)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode='EDIT')
+        tx.cancel()
+        bm = bmesh.from_edit_mesh(self.box.data)
+        self.assertEqual((len(bm.verts), len(bm.faces)), (8, 6))
 
 
 suite = unittest.defaultTestLoader.loadTestsFromTestCase(ShiftCloneTests)
