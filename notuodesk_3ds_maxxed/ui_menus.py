@@ -398,6 +398,7 @@ class MAX_MT_customize(Menu):
         lay.operator_context = "INVOKE_DEFAULT"
         lay.operator("screen.userpref_show", text="Preferences...")
         lay.operator("preferences.addon_show", text="Hotkeys (3ds Maxxed)...").module = __package__
+        lay.operator("max.import_hsx", text="Import 3ds Max Hotkeys (.hsx)...")
         lay.separator()
         lay.operator("max.apply", text="Apply 3ds Max Look (reset layout)")
         lay.operator("max.restore", text="Restore Blender Look")

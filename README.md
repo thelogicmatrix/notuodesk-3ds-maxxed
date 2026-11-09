@@ -168,11 +168,19 @@ The Edit Geometry buttons and quad menus use the same tools. No Enter or Q is ne
 
 Cut and SwiftLoop pick visible polygons behind hidden polygons. Cut keeps endpoint vertices on the picked edge or polygon, even when an unrelated vertex occupies the same position.
 
+## Importing 3ds Max hotkeys
+
+Use **Customize › Import 3ds Max Hotkeys (.hsx)...** to load your Max shortcuts. Imported assignments and unassignments override the add-on's default keys. They stay in the add-on preferences when you save preferences. The preferences show every imported entry and a **Clear Imported Hotkeys** button to restore the defaults. The import reports mapped assignments and lists unsupported actions.
+
+Editable Poly settings shortcuts open a settings dialog. Bridge uses **Segments**, starting at 1 with no intermediate ring. Chamfer starts at **Amount** 1.0. Edge and vertex Extrude settings move the new geometry along averaged adjacent surface normals. Tessellate offers **Edge** and **Face** types. Export Selected opens Blender's FBX exporter with **Selected Objects** on. rapidTools fastBridge and RappaTools3 Inset, Relax and MePoly use the add-on's Bridge, Inset, Relax and Convert to Editable Poly. rapidQCap and fastEdgeLoopRegularizer work when the add-on's Quad Cap and Loop Regularize operators are installed.
+
 ## Known differences from 3ds Max
 
 - Cut adds supporting triangles for endpoints inside a polygon. Concave polygons are triangulated before an interior endpoint is added.
 - Cut uses three Blender cursor shapes instead of Max's cursor artwork. Its Undo groups one committed segment per step. Max's exact Undo grouping has not been confirmed.
 - SwiftLoop follows quad rings and stops at triangles, n-gons and hidden faces. Shift uses cubic interpolation of surface normals, so its flow can differ from Max's proprietary result. Sliding needs a regular loop with two bounding edges at each vertex.
+- Imported hotkeys call Blender equivalents. Relax uses vertex smoothing, including Paint Deform Relax. Edit Poly enters mesh editing through the add-on's existing Edit Poly command. Unassignments affect only this add-on's keys. Unknown actions stay in the imported list but get no binding.
+- Settings dialogs expose a subset of Max's caddy controls. Edge and vertex Extrude use Blender's topology and omit Max's Extrusion Base Width. Vertex extrusion adds connected vertices and edges, rather than Max's polygon base. Surface normals are equal-weight averages in mesh space. An extrusion without an adjacent surface normal leaves the mesh unchanged. Tessellate Edge Tension maps inversely to Blender's subdivision smoothness over 0 to 1. It does not reproduce Max's full tension range. Extrusion Height starts at 0.1 and Edge Tension at 1.0, since the reference does not specify their initial values.
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
