@@ -148,7 +148,7 @@ class Session:
             self.closed = True
 
 
-# Icon marks are drawn with vectors, with the control name in the title on hover.
+# Field artwork comes from max_icons, with vector fallbacks and names on hover.
 LABELS = {
     'amount': ('Amount', 'distance'), 'height': ('Height', 'height'),
     'extrusion_type': ('Extrusion Type', 'type'), 'bevel_type': ('Bevel Type', 'type'),
@@ -213,6 +213,22 @@ def label(session, key):
                 'INSET': 'Inset Amount', 'OUTLINE': 'Outline Amount',
                 'CHAMFER': 'Chamfer Amount'}.get(session.action, 'Amount')
     return LABELS[key][0]
+
+
+def artwork(session, key):
+    from . import max_icons
+    if key == 'amount':
+        if session.action == 'EXTRUDE':
+            return 'caddy_height'
+        if session.action == 'CHAMFER':
+            return 'caddy_chamfer'
+    if key in {'extrusion_type', 'bevel_type'}:
+        return 'caddy_type_' + getattr(session.values, key).lower()
+    if key == 'individual':
+        return 'caddy_type_polygon' if session.values.individual else 'caddy_type_group'
+    if key == 'tessellate_type':
+        return 'caddy_type_' + session.values.tessellate_type.lower()
+    return max_icons.CADDY_FIELDS[key]
 
 
 def choices(session, key):
@@ -605,6 +621,7 @@ class Caddy:
         import blf
         import gpu
         from gpu_extras.batch import batch_for_shader
+        from . import max_icons
         if self.session.closed or bpy.context.region != self.region:
             return
         self.layout(bpy.context)
@@ -681,6 +698,10 @@ class Caddy:
                        (cx+s,cy+s), (cx+s,cy-s), (cx+s,cy-s), (cx-s,cy-s)])
                 lines([(cx-s,cy-s), (cx+s,cy+s)])
 
+        def field_mark(key, cx, cy, fallback):
+            if not max_icons.draw(artwork(self.session, key), cx, cy, 20*self.scale):
+                mark(cx, cy, fallback)
+
         from .operators import EDIT_POLY_OPS
         title = dict((k,n) for k,n,_ in EDIT_POLY_OPS)[self.session.action]
         action, level = self.session.action, self.session.level
@@ -717,7 +738,7 @@ class Caddy:
                 text(x+5*self.scale,y+8*self.scale,f'Before: {before}, After: {after}',size=9)
                 continue
             if key in UI_ONLY:
-                mark(x+13*self.scale,y+h/2,LABELS[key][1])
+                field_mark(key,x+13*self.scale,y+h/2,LABELS[key][1])
                 if key in {'pick1','pick2'}:
                     text(x+w-15*self.scale,y+8*self.scale,'1' if key=='pick1' else '2',(.5,.52,.53,1))
                 else:
@@ -727,26 +748,17 @@ class Caddy:
             opts = choices(self.session, key)
             prop = self.session.store.bl_rna.properties[key]
             if opts:
-                mark(x+15*self.scale, y+h/2, 'type')
-                # Max shows a choice icon. Keep a short choice label for legibility.
-                name = dict(opts)[value]
-                short = {'Local Normal': 'Local', 'By Polygon': 'Polygon',
-                         'Use Polygon/Border Selection': 'Selected'}.get(name, name)
-                if w >= 90*self.scale:
-                    text(x+29*self.scale, y+8*self.scale, short, (.04,.08,.1,1), 10)
+                field_mark(key,x+15*self.scale,y+h/2,'type')
                 polygon([(x+w-17*self.scale,y+14*self.scale), (x+w-7*self.scale,y+14*self.scale),
                          (x+w-12*self.scale,y+8*self.scale)], (.12,.18,.2,1))
             elif prop.type == 'BOOLEAN':
                 tick(x+12*self.scale,y+h/2,value)
-                if w >= 90*self.scale:
-                    text(x+29*self.scale,y+8*self.scale, label(self.session,key).replace(' Points','').replace('Hold ','')[:10], (.04,.08,.1,1), 10)
-                else:
-                    mark(x+w-13*self.scale,y+h/2,'hold')
+                field_mark(key,x+w-13*self.scale,y+h/2,'hold')
             else:
                 kind = 'height' if self.session.action == 'EXTRUDE' and key == 'amount' else LABELS[key][1]
                 if self.session.action == 'CHAMFER' and key == 'amount':
                     kind = 'chamfer'
-                mark(x+14*self.scale,y+h/2, kind, self.hover == key and on)
+                field_mark(key,x+14*self.scale,y+h/2,kind)
                 lines([(x+26*self.scale,y+3),(x+26*self.scale,y+h-3)])
                 display = self.text if self.edit == key else str(value) if isinstance(value,int) else f'{value:.4g}'
                 if self.edit == key:
@@ -764,6 +776,8 @@ class Caddy:
         for i, kind in enumerate(('OK','APPLY','CANCEL')):
             cx, cy = x+(i+.5)*w/3, y+h/2
             box(cx-11*self.scale,cy-11*self.scale,22*self.scale,22*self.scale,(.5,.53,.54,.98),radius=11*self.scale)
+            if max_icons.draw('caddy_'+kind.lower(),cx,cy,20*self.scale):
+                continue
             s = 5*self.scale
             if kind == 'OK':
                 lines([(cx-s,cy),(cx-1,cy-s),(cx-1,cy-s),(cx+s,cy+s)],(.12,.35,.3,1))

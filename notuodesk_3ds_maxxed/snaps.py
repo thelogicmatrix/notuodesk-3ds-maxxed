@@ -827,6 +827,13 @@ class MAX_OT_select_transform(bpy.types.Operator):
     kind: EnumProperty(items=[("MOVE", "Select and Move", ""), ("ROTATE", "Select and Rotate", ""),
                               ("SCALE", "Select and Uniform Scale", "")])
 
+    @classmethod
+    def description(cls, context, properties):
+        from . import max_icons
+        label = {"MOVE": "Select and Move", "ROTATE": "Select and Rotate",
+                 "SCALE": "Select and Uniform Scale"}[properties.kind]
+        return max_icons.tooltip(context, label, cls.bl_idname, kind=properties.kind)
+
     def execute(self, context):
         select_transform(context, self.kind)
         return {"FINISHED"}
@@ -938,7 +945,7 @@ def draw_toolbar(layout, context):
     s, ts = settings(context), context.scene.tool_settings
     row = layout.row(align=True)
     art = {"2D": "snap_2d", "2_5D": "snap_25d", "3D": "snap_3d"}[s.mode] if ts.use_snap else "snap_off"
-    row.operator("max.snap_toggle", text=dict((k, n) for k, n, _ in MODES)[s.mode],
+    row.operator("max.snap_toggle", text="",
                  depress=ts.use_snap, **max_icons.ui(art, "SNAP_ON")).kind = "SNAP"
     row.menu("MAX_MT_snap_modes", text="", icon="DOWNARROW_HLT")
     for kind, icon, value in (("ANGLE_SNAP", "DRIVER_ROTATIONAL_DIFFERENCE", s.angle_snap),

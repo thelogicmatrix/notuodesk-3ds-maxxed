@@ -210,7 +210,8 @@ def edit_level(layout, context):
 def geometry(layout, context):
     level = current_level(context)
     layout.operator("screen.repeat_last", text="Repeat Last")
-    layout.label(text="Constraints")
+    # Keep Max's named radio choices; the heading identifies the active mode.
+    layout.label(text="Constraints", **icon("constraint_" + context.active_object.max_poly.constraints.lower(), "NONE"))
     row = layout.row(align=True)
     radios(row, context.active_object.max_poly, "constraints")
     row = layout.row(align=True)

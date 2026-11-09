@@ -7,6 +7,7 @@ from bpy.props import EnumProperty
 from bpy.types import Operator
 
 _collection = None
+_textures = {}
 DIRECTORY = Path(__file__).with_name("icons")
 
 # Field keys and tool names match the pending feature branches. Their integrator
@@ -112,6 +113,23 @@ def ui(name, fallback):
     return {"icon_value": value} if value else {"icon": fallback}
 
 
+def draw(name, cx, cy, size):
+    """Draw the same artwork in viewport caddies, without creating image datablocks."""
+    preview = _collection.get(name) if _collection is not None else None
+    if preview is None:
+        return False
+    import gpu
+    from gpu_extras.presets import draw_texture_2d
+    texture = _textures.get(name)
+    if texture is None:
+        pixels = preview.image_pixels_float[:]
+        texture = gpu.types.GPUTexture(tuple(preview.image_size), format='RGBA16F',
+                                      data=gpu.types.Buffer('FLOAT', len(pixels), pixels))
+        _textures[name] = texture
+    draw_texture_2d(texture, (cx-size/2, cy-size/2), size, size)
+    return True
+
+
 def enum_items(items):
     """Enum buttons take custom IDs in their items, not prop_enum keywords."""
     return [(key, label, description, icon(key.lower()) or fallback, number)
@@ -141,6 +159,7 @@ def register():
 
 def unregister():
     global _collection
+    _textures.clear()
     if _collection is not None:
         bpy.utils.previews.remove(_collection)
         _collection = None
