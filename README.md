@@ -37,7 +37,8 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 The Command Panel tabs, Create categories, sub-object levels, modifier stack and
 Main Toolbar use original Max-style icons. The Material Editor control icons and
 Create-menu object icons use the same set. Missing artwork falls back to Blender's
-icons. Material sample slots still show their real material previews.
+icons. The set includes artwork for all 11 supported Extended Primitives.
+Material sample slots still show their real material previews.
 
 ## Compact Material Editor (M)
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>hedra</title>
+<g fill="none" stroke="#dedede" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M16 3 L27 10 L29 21 L19 29 L7 25 L3 13 Z M16 3 L12 14 L27 10 M12 14 L19 29 L29 21 L12 14 L7 25 M3 13 L12 14"/>
+<path d="M27 10 L29 21 M16 3 L3 13" stroke="#999999" stroke-width="1"/>
+</g>
+</svg>

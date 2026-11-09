@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk artwork. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<title>torus_knot</title>
+<g fill="none" stroke="#dedede" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M11 8 C10 1 21 1 22 9 C23 15 14 25 7 25 C0 25 1 15 8 13 C15 11 29 13 29 20 C29 28 19 30 16 24 C12 18 10 12 11 8 Z M15 8 C15 5 18 5 18 9 C18 14 11 21 7 21 C4 21 5 18 9 17 C15 15 25 16 25 20 C25 24 21 25 20 22 C17 17 14 12 15 8 Z"/>
+<path d="M11 10 L12 14 M15 10 L17 14 M11 19 L14 22 M22 16 L25 18" stroke="#999999" stroke-width="1"/>
+</g>
+</svg>

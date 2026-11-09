@@ -5,6 +5,11 @@ modeling symbols, light grey strokes, transparent backgrounds and sparse accent
 colors. The Modify tab has a colored arch. The Render buttons have a teapot.
 The color choices belong to this set and are not measured Autodesk theme values.
 
+Extended Primitive artwork covers Hedra, Torus Knot, ChamferBox, ChamferCyl,
+OilTank, Capsule, Spindle, L-Ext, Gengon, C-Ext and Prism. OilTank has shallow
+convex caps, Capsule has hemispherical caps, and Spindle has pointed caps.
+These are original drawings using the same strokes as Box, Cylinder and Cone.
+
 License for every SVG and PNG in this directory is GPL-3.0-or-later, like the
 add-on. See the repository's LICENSE. Every SVG also carries the SPDX identifier.
 
