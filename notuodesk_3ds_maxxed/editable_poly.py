@@ -1,0 +1,828 @@
+"""Editable Poly rollouts and persistent operation settings, using native mesh tools."""
+
+import math
+
+import bpy
+import bmesh
+from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, FloatProperty,
+                       IntProperty, PointerProperty, StringProperty)
+from bpy.types import Operator, PropertyGroup
+from mathutils import Vector
+
+SG_ATTRIBUTE = "max_smoothing_group"
+SMOOTH_BACKUP = "max_poly_original_smooth"
+OBJECT_ACTIONS = {"MSMOOTH", "TESSELLATE", "MAKE_PLANAR", "PLANAR_X", "PLANAR_Y", "PLANAR_Z", "VIEW_ALIGN", "GRID_ALIGN", "RELAX", "ATTACH"}
+
+
+def is_nurms(mod):
+    return mod is not None and mod.type == "SUBSURF" and mod.name.startswith("NURMS Subdivision")
+
+EXTRA_OPS = [
+    ("INSERT_VERTEX", "Insert Vertex", "Subdivide selected edges or poke selected faces"),
+    ("SPLIT", "Split", "Split selected edges from adjacent faces"),
+    ("DELETE_ISOLATED", "Delete Isolated Vertices", "Delete vertices with no edges"),
+    ("REMOVE_UNUSED_MAP", "Remove Unused Map Verts", "Blender stores UVs per face corner and has no unused map vertices"),
+    ("CREATE_SHAPE", "Create Shape From Selection", "Copy selected edges into a curve"),
+    ("RETRIANGULATE", "Retriangulate", "Triangulate selected polygons"),
+    ("TURN", "Turn", "Rotate the selected diagonal between two faces"),
+    ("EDIT_TRIANGULATION", "Edit Triangulation", "Blender cannot edit hidden triangulation without changing polygon topology"),
+    ("HINGE", "Hinge From Edge", "Blender has no picked-edge hinge extrusion tool"),
+    ("SPLINE_EXTRUDE", "Extrude Along Spline", "Blender has no polygon extrusion along a picked spline"),
+    ("PLANAR_X", "X", "Flatten selected vertices on local X"),
+    ("PLANAR_Y", "Y", "Flatten selected vertices on local Y"),
+    ("PLANAR_Z", "Z", "Flatten selected vertices on local Z"),
+    ("VIEW_ALIGN", "View Align", "Flatten selection on the active view plane"),
+    ("GRID_ALIGN", "Grid Align", "Flatten selection on the nearest principal view plane"),
+    ("CREATE", "Create", "Create an edge or face from selected vertices"),
+    ("QUICK_SLICE", "QuickSlice", "Draw a Blender bisect plane"),
+    ("SLICE", "Slice", "Slice using the stored plane"),
+    ("RESET_PLANE", "Reset Plane", "Reset the slice plane to local Z at the origin"),
+    ("ATTACH", "Attach", "Attach other selected meshes"),
+    ("COPY_SELECTION", "Copy", "Copy this sub-object selection to a named mesh attribute"),
+    ("PASTE_SELECTION", "Paste", "Restore the copied selection at this sub-object level"),
+    ("RING_SHIFT_UP", "Ring Shift Up", "Shift selected edges across adjacent quads"),
+    ("RING_SHIFT_DOWN", "Ring Shift Down", "Shift selected edges across adjacent quads"),
+    ("LOOP_SHIFT_UP", "Loop Shift Up", "Shift selected edges along their quad loops"),
+    ("LOOP_SHIFT_DOWN", "Loop Shift Down", "Shift selected edges along their quad loops"),
+    ("SELECT_ANGLE", "By Angle", "Expand selected faces across angles below the threshold"),
+]
+
+UNSUPPORTED = {
+    key: reason for key, label, reason in EXTRA_OPS
+    if key in {"REMOVE_UNUSED_MAP", "EDIT_TRIANGULATION", "HINGE", "SPLINE_EXTRUDE"}
+}
+
+CADDIES = {
+    "EXTRUDE": ("extrusion_type", "amount", "base_width"), "WELD": ("threshold",),
+    "CHAMFER": ("amount", "segments", "open", "tension"),
+    "BRIDGE": ("segments", "taper", "bias", "smooth", "twist"),
+    "CONNECT": ("segments", "pinch", "slide"),
+    "OUTLINE": ("amount",), "BEVEL": ("amount", "height"),
+    "INSET": ("amount", "individual"), "HINGE": (), "SPLINE_EXTRUDE": (),
+    "MSMOOTH": ("smoothness",), "TESSELLATE": ("tessellate_type", "tension"),
+    "RELAX": ("relax", "iterations", "hold_boundary", "hold_outer"), "DETACH": ("object_name", "as_clone", "as_element"),
+    "CREATE_SHAPE": ("object_name",), "SLICE_PLANE": ("plane_x", "plane_y", "plane_z", "normal_x", "normal_y", "normal_z", "split"),
+}
+
+
+def option_properties():
+    return {
+        "amount": FloatProperty(name="Amount", default=0.1),
+        "height": FloatProperty(name="Height", default=0.1),
+        "extrusion_type": EnumProperty(name="Extrusion Type", items=[("GROUP", "Group", ""), ("LOCAL", "Local Normal", ""), ("POLYGON", "By Polygon", "")]),
+        "base_width": FloatProperty(name="Extrusion Base Width", default=0, description="Blender extrusion has no base-width parameter"),
+        "tessellate_type": EnumProperty(name="Type", items=[("EDGE", "Edge", ""), ("FACE", "Face", "")]),
+        "threshold": FloatProperty(name="Weld Threshold", min=0, default=0.0001),
+        "segments": IntProperty(name="Segments", min=1, max=100, default=1),
+        "open": BoolProperty(name="Open", default=False),
+        "tension": FloatProperty(name="Tension", min=0, max=1, default=1),
+        "taper": FloatProperty(name="Taper", default=0, min=-100, max=1000),
+        "bias": FloatProperty(name="Bias", default=0, min=-99, max=99),
+        "smooth": FloatProperty(name="Smooth", default=45, min=0, max=180),
+        "twist": IntProperty(name="Twist", default=0),
+        "pinch": FloatProperty(name="Pinch", default=0, min=-100, max=100, description="Blender subdivision has no Max Connect Pinch spacing solver"),
+        "slide": FloatProperty(name="Slide", default=0, min=-100, max=100, description="Blender subdivision has no Max Connect Slide spacing solver"),
+        "smoothness": FloatProperty(name="Smoothness", default=1, min=0, max=1),
+        "relax": FloatProperty(name="Relax Amount", default=0.5, min=-1, max=1),
+        "iterations": IntProperty(name="Iterations", default=3, min=1, max=100),
+        "hold_boundary": BoolProperty(name="Hold Boundary Points", default=True),
+        "hold_outer": BoolProperty(name="Hold Outer Points", default=False),
+        "individual": BoolProperty(name="By Polygon", default=False),
+        "object_name": StringProperty(name="Name", default="Detached"),
+        "as_clone": BoolProperty(name="Detach As Clone", default=False),
+        "as_element": BoolProperty(name="Detach To Element", default=False),
+        "plane_x": FloatProperty(name="Plane X"),
+        "plane_y": FloatProperty(name="Plane Y"),
+        "plane_z": FloatProperty(name="Plane Z"),
+        "normal_x": FloatProperty(name="Normal X"),
+        "normal_y": FloatProperty(name="Normal Y"),
+        "normal_z": FloatProperty(name="Normal Z", default=1),
+        "split": BoolProperty(name="Split", default=False),
+    }
+
+
+class MaxPolyOperation(PropertyGroup):
+    __annotations__ = option_properties()
+
+
+def settings(context, action):
+    from .operators import current_level
+    if action == "SLICE_PLANE":
+        return context.scene.max_poly_slice
+    key = f"{action}:{current_level(context)}"
+    coll = context.scene.max_poly_operations
+    item = coll.get(key)
+    if item is None:
+        item = coll.add()
+        item.name = key
+    return item
+
+
+def soft_update(self, context):
+    ts = context.tool_settings
+    ts.use_proportional_edit = self.soft
+    ts.use_proportional_connected = self.edge_distance
+    ts.proportional_size = self.falloff
+    ts.proportional_edit_falloff = self.falloff_curve
+
+
+def subdiv_update(self, context):
+    ob = self.id_data
+    mod = next((m for m in ob.modifiers if is_nurms(m)), None)
+    if mod is None and self.nurms:
+        active = ob.modifiers.active
+        active = active if active is not None and active.is_active else None
+        mod = ob.modifiers.new("NURMS Subdivision", "SUBSURF")
+        if active is not None:
+            ob.modifiers.active = active
+    if mod:
+        mod.show_viewport = mod.show_render = self.nurms
+        mod.levels = mod.render_levels = self.iterations
+        mod.show_only_control_edges = self.isoline
+        mod.show_in_editmode = True
+        mod.show_on_cage = True
+    me = ob.data
+    if ob.mode == "EDIT":
+        bm = bmesh.from_edit_mesh(me)
+        layer = bm.faces.layers.int.get(SMOOTH_BACKUP)
+        if self.smooth_result:
+            if layer is None:
+                layer = bm.faces.layers.int.new(SMOOTH_BACKUP)
+                for face in bm.faces:
+                    face[layer] = int(face.smooth)
+            for face in bm.faces:
+                face.smooth = True
+        elif layer:
+            for face in bm.faces:
+                face.smooth = bool(face[layer])
+            bm.faces.layers.int.remove(layer)
+        bmesh.update_edit_mesh(me)
+    else:
+        backup = me.attributes.get(SMOOTH_BACKUP)
+        if self.smooth_result:
+            if backup is None:
+                backup = me.attributes.new(SMOOTH_BACKUP, "INT", "FACE")
+                for face, value in zip(me.polygons, backup.data):
+                    value.value = int(face.use_smooth)
+            for face in me.polygons:
+                face.use_smooth = True
+        elif backup:
+            for face, value in zip(me.polygons, backup.data):
+                face.use_smooth = bool(value.value)
+            me.attributes.remove(backup)
+        me.update()
+
+
+class MaxPolyState(PropertyGroup):
+    by_vertex: BoolProperty(name="By Vertex", description="Use Blender's Vertex selection level. Per-click By Vertex is unavailable")
+    ignore_backfacing: BoolProperty(name="Ignore Backfacing", description="Blender does not expose Max's backface selection filter")
+    preview: EnumProperty(name="Preview Selection", items=[(v, n, "Blender has no Max-style hover preview and multi-level selection") for v, n in (("OFF", "Off"), ("SUBOBJ", "SubObj"), ("MULTI", "Multi"))])
+    constraints: EnumProperty(name="Constraints", items=[(v, n, "Blender has snapping and transform orientations, but no Max topology constraint") for v, n in (("NONE", "None"), ("EDGE", "Edge"), ("FACE", "Face"), ("NORMAL", "Normal"))])
+    soft: BoolProperty(name="Use Soft Selection", update=soft_update)
+    edge_distance: BoolProperty(name="Edge Distance", description="Connected-only proportional editing. Blender has no edge-count cutoff", update=soft_update)
+    edge_steps: IntProperty(name="Edge Distance", default=1, min=1, description="Blender proportional editing has no edge-count cutoff")
+    affect_backfacing: BoolProperty(name="Affect Backfacing", default=True, description="Blender proportional editing has no backface influence filter")
+    pinch: FloatProperty(name="Pinch", description="Blender uses preset curves rather than Max's Pinch parameter")
+    bubble: FloatProperty(name="Bubble", description="Blender uses preset curves rather than Max's Bubble parameter")
+    falloff: FloatProperty(name="Falloff", default=1, min=0.00001, update=soft_update)
+    falloff_curve: EnumProperty(name="Falloff Curve", items=[(v, n, "") for v, n in (
+        ("SMOOTH", "Smooth"), ("SPHERE", "Sphere"), ("ROOT", "Root"),
+        ("INVERSE_SQUARE", "Inverse Square"), ("SHARP", "Sharp"), ("LINEAR", "Linear"), ("CONSTANT", "Constant"))], update=soft_update)
+    by_angle: BoolProperty(name="By Angle", description="Use Select By Angle to expand the current polygon selection")
+    slice_plane: BoolProperty(name="Slice Plane", description="Enable the numeric slice plane. Use its settings to position it, then click Slice")
+    angle: FloatProperty(name="Angle", default=45, min=0, max=180)
+    material_id: IntProperty(name="Set ID", min=1, max=32767, default=1)
+    select_id: IntProperty(name="Select ID", min=1, max=32767, default=1)
+    clear_selection: BoolProperty(name="Clear Selection", default=True)
+    material_name: EnumProperty(name="Select by Name", items=lambda self, c: material_items(self, c))
+    sg_select: IntProperty(name="Smoothing Group", min=1, max=32, default=1)
+    auto_angle: FloatProperty(name="Threshold", default=45, min=0, max=180)
+    weight: FloatProperty(name="Weight", default=1, description="Blender subdivision has no Max vertex/edge weight parameter")
+    smoothness: FloatProperty(name="Smoothness", default=1, description="Blender Catmull-Clark subdivision has no Max adaptive Smoothness threshold")
+    crease: FloatProperty(name="Crease", default=0, min=0, max=1)
+    nurms: BoolProperty(name="Use NURMS Subdivision", update=subdiv_update)
+    smooth_result: BoolProperty(name="Smooth Result", default=True, update=subdiv_update)
+    isoline: BoolProperty(name="Isoline Display", update=subdiv_update)
+    iterations: IntProperty(name="Iterations", default=1, min=0, max=6, update=subdiv_update)
+
+
+def material_items(self, context):
+    ob = self.id_data
+    return [(str(i), m.name if m else f"ID {i + 1}", "") for i, m in enumerate(ob.data.materials)] or [("0", "No materials", "")]
+
+
+class MAX_OT_poly_settings(Operator):
+    """Open operation settings and apply them. Main buttons reuse the accepted values"""
+    bl_idname = "max.poly_settings"
+    bl_label = "Editable Poly Settings"
+    bl_options = {"REGISTER", "UNDO"}
+
+    action: StringProperty()
+    __annotations__ = {**option_properties(), "action": StringProperty()}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == "EDIT_MESH" or (context.mode == "OBJECT" and context.active_object is not None)
+
+    def invoke(self, context, event):
+        s = settings(context, self.action)
+        for key in CADDIES[self.action]:
+            setattr(self, key, getattr(s, key))
+        return context.window_manager.invoke_props_dialog(self, width=300)
+
+    def draw(self, context):
+        from .operators import EDIT_POLY_OPS, current_level
+        self.layout.label(text=dict((k, n) for k, n, _ in EDIT_POLY_OPS)[self.action])
+        for key in CADDIES[self.action]:
+            if self.action == "EXTRUDE" and ((key == "extrusion_type" and current_level(context) < 4) or (key == "base_width" and current_level(context) >= 4)):
+                continue
+            if self.action == "BRIDGE" and current_level(context) == 2 and key not in {"segments", "smooth"}:
+                continue
+            row = self.layout.row()
+            # Connect has no native Max pinch/slide spacing control.
+            if (self.action == "CONNECT" and key in {"pinch", "slide"}) or key == "base_width":
+                row.enabled = False
+            label = "Extrusion Height" if self.action == "EXTRUDE" and key == "amount" else "Outline" if self.action == "BEVEL" and key == "amount" else "Amount" if key == "relax" else None
+            if label:
+                row.prop(self, key, text=label)
+            else:
+                row.prop(self, key)
+        if self.action == "CONNECT":
+            self.layout.label(text="Pinch and Slide require Max's edge spacing solver", icon="INFO")
+        if self.action == "EXTRUDE" and current_level(context) < 4:
+            self.layout.label(text="Blender extrusion has no base-width parameter", icon="INFO")
+
+    def execute(self, context):
+        s = settings(context, self.action)
+        old = {key: getattr(s, key) for key in CADDIES[self.action]}
+        for key in old:
+            setattr(s, key, getattr(self, key))
+        result = bpy.ops.max.edit_poly(op=self.action)
+        if result != {"FINISHED"}:
+            for key, value in old.items():
+                setattr(s, key, value)
+        return result
+
+
+class MAX_OT_poly_unavailable(Operator):
+    """This Max tool has no Blender equivalent"""
+    bl_idname = "max.poly_unavailable"
+    bl_label = "Unavailable in Blender"
+    reason: StringProperty()
+
+    @classmethod
+    def description(cls, context, props):
+        return props.reason
+
+    def execute(self, context):
+        self.report({"WARNING"}, self.reason)
+        return {"CANCELLED"}
+
+
+def update_mesh(context):
+    bm = bmesh.from_edit_mesh(context.active_object.data)
+    layer = bm.faces.layers.int.get(SG_ATTRIBUTE)
+    if layer:
+        sync_smoothing(bm, layer)
+    bmesh.update_edit_mesh(context.active_object.data, loop_triangles=True, destructive=True)
+
+
+def selected_vertices(bm):
+    return [v for v in bm.verts if v.select and not v.hide]
+
+
+def flatten(context, normal):
+    bm = bmesh.from_edit_mesh(context.active_object.data)
+    verts = selected_vertices(bm)
+    if not verts:
+        return {"CANCELLED"}
+    center = sum((v.co for v in verts), Vector()) / len(verts)
+    normal.normalize()
+    for v in verts:
+        v.co -= normal * (v.co - center).dot(normal)
+    update_mesh(context)
+    return {"FINISHED"}
+
+
+def create_shape(context, name):
+    ob = context.active_object
+    bm = bmesh.from_edit_mesh(ob.data)
+    edges = [e for e in bm.edges if e.select and not e.hide]
+    if not edges:
+        return {"CANCELLED"}
+    cu = bpy.data.curves.new(name, "CURVE")
+    cu.dimensions = "3D"
+    # Keep each edge as a poly spline so branches and disconnected sets are preserved.
+    for edge in edges:
+        spline = cu.splines.new("POLY")
+        spline.points.add(1)
+        for point, vert in zip(spline.points, edge.verts):
+            point.co = (*vert.co, 1)
+    shape = bpy.data.objects.new(name, cu)
+    context.collection.objects.link(shape)
+    shape.matrix_world = ob.matrix_world.copy()
+    return {"FINISHED"}
+
+
+def shift_edges(bm, ring, direction):
+    """Move a selection one quad step. Stable face/vertex order defines +/- direction."""
+    bm.faces.index_update()
+    bm.verts.index_update()
+    source = {e for e in bm.edges if e.select and not e.hide}
+    target = set()
+    for edge in source:
+        if ring:
+            candidates = []
+            for face in edge.link_faces:
+                if len(face.verts) == 4:
+                    other = next(e for e in face.edges if not set(e.verts) & set(edge.verts))
+                    candidates.append((face.index, other))
+        else:
+            candidates = []
+            for vert in edge.verts:
+                # Interior quad loops continue through the edge that shares no face.
+                others = [e for e in vert.link_edges if e != edge and not set(e.link_faces) & set(edge.link_faces)]
+                if len(others) == 1:
+                    candidates.append((vert.index, others[0]))
+        candidates.sort(key=lambda pair: pair[0])
+        if candidates:
+            target.add(candidates[-1 if direction > 0 else 0][1])
+    if not target:
+        return {"CANCELLED"}
+    for face in bm.faces:
+        face.select_set(False)
+    for edge in bm.edges:
+        edge.select_set(False)
+    for vert in bm.verts:
+        vert.select_set(False)
+    for edge in target:
+        edge.select_set(True)
+    bm.select_flush_mode()
+    return {"FINISHED"}
+
+
+def run(operator, context, how, operation_settings=None):
+    """Return None for the legacy commands that need no new handling."""
+    from .operators import mesh_select_mode
+    action = operator.op
+    if context.mode == "OBJECT":
+        if action not in OBJECT_ACTIONS:
+            return {"CANCELLED"}
+        if action == "ATTACH":
+            return bpy.ops.max.object_cmd(cmd="ATTACH")
+        operation_settings = settings(context, action)
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        try:
+            return run(operator, context, how, operation_settings)
+        finally:
+            bpy.ops.object.mode_set(mode="OBJECT")
+    if action in UNSUPPORTED:
+        operator.report({"WARNING"}, UNSUPPORTED[action])
+        return {"CANCELLED"}
+    handled = set(CADDIES) | {k for k, _, _ in EXTRA_OPS} | {"MAKE_PLANAR", "BEVEL"}
+    if action not in handled:
+        return None
+    ob = context.active_object
+    bm = bmesh.from_edit_mesh(ob.data)
+    mode = mesh_select_mode(context)
+    s = operation_settings if operation_settings is not None else settings(context, action)
+    ops = bpy.ops.mesh
+    try:
+        if action == "EXTRUDE":
+            faces = [f for f in bm.faces if f.select and not f.hide]
+            if mode != "FACE":
+                faces = list({f for v in selected_vertices(bm) for f in v.link_faces})
+            normal = sum((f.normal for f in faces), Vector())
+            if normal.length == 0:
+                normal = Vector((0, 0, 1))
+            normal.normalize()
+            if mode == "FACE" and s.extrusion_type == "POLYGON":
+                result = bmesh.ops.extrude_discrete_faces(bm, faces=faces)
+                for face in result["faces"]:
+                    bmesh.ops.translate(bm, verts=list(face.verts), vec=face.normal * s.amount)
+                update_mesh(context)
+                return {"FINISHED"}
+            if mode == "FACE":
+                result = bmesh.ops.extrude_face_region(bm, geom=faces)
+                bmesh.ops.delete(bm, geom=faces, context="FACES_ONLY")
+            elif mode == "EDGE":
+                result = bmesh.ops.extrude_edge_only(bm, edges=[e for e in bm.edges if e.select])
+            else:
+                result = bmesh.ops.extrude_vert_indiv(bm, verts=selected_vertices(bm))
+            geom = result.get("geom", result.get("verts", []) + result.get("edges", []))
+            verts = [v for v in geom if isinstance(v, bmesh.types.BMVert)]
+            if not verts:
+                return {"CANCELLED"}
+            if mode == "FACE" and s.extrusion_type == "LOCAL":
+                top_faces = {f for f in geom if isinstance(f, bmesh.types.BMFace)}
+                for vert in verts:
+                    direction = sum((f.normal for f in vert.link_faces if f in top_faces), Vector())
+                    vert.co += (direction.normalized() if direction.length else normal) * s.amount
+            else:
+                bmesh.ops.translate(bm, verts=verts, vec=normal * s.amount)
+            for seq in (bm.faces, bm.edges, bm.verts):
+                for item in seq:
+                    item.select_set(False)
+            for item in geom:
+                if item.is_valid:
+                    item.select_set(True)
+            bm.select_flush_mode()
+        elif action == "CHAMFER":
+            before = set(bm.faces)
+            ops.bevel(offset=max(0, s.amount), segments=s.segments, profile=1 - 0.5 * s.tension,
+                      affect="VERTICES" if mode == "VERT" else "EDGES")
+            if s.open:
+                bmesh.ops.delete(bm, geom=[f for f in bm.faces if f not in before], context="FACES_ONLY")
+        elif action == "WELD":
+            ops.remove_doubles(threshold=s.threshold)
+        elif action == "BRIDGE":
+            old_verts = set(bm.verts)
+            old_faces = set(bm.faces)
+            # Find the two selected border loops for the taper axis.
+            remaining = {e for e in bm.edges if e.select}
+            centers = []
+            while remaining:
+                loop = {remaining.pop()}
+                todo = list(loop)
+                while todo:
+                    for vert in todo.pop().verts:
+                        for edge in vert.link_edges:
+                            if edge in remaining:
+                                remaining.remove(edge)
+                                loop.add(edge)
+                                todo.append(edge)
+                verts = {v for e in loop for v in e.verts}
+                centers.append(sum((v.co for v in verts), Vector()) / len(verts))
+            ops.bridge_edge_loops(number_cuts=s.segments - 1, twist_offset=s.twist,
+                                  interpolation="LINEAR")
+            if len(centers) == 2 and s.taper:
+                start, end = centers
+                axis = end - start
+                if axis.length_squared > 1e-12:
+                    peak = 0.5 + s.bias / 200
+                    for vert in set(bm.verts) - old_verts:
+                        t = max(0, min(1, (vert.co - start).dot(axis) / axis.length_squared))
+                        strength = t / peak if t <= peak else (1 - t) / (1 - peak)
+                        center = start.lerp(end, t)
+                        vert.co = center + (vert.co - center) * (1 + s.taper * strength / 100)
+            bm.normal_update()
+            new_faces = set(bm.faces) - old_faces
+            for face in new_faces:
+                face.smooth = True
+            for edge in bm.edges:
+                if len(edge.link_faces) == 2 and any(f in new_faces for f in edge.link_faces):
+                    edge.smooth = edge.calc_face_angle() <= math.radians(s.smooth)
+        elif action == "CONNECT":
+            if mode == "VERT":
+                ops.vert_connect_path()
+            else:
+                ops.subdivide(number_cuts=s.segments, smoothness=0)
+        elif action == "INSET":
+            if s.individual:
+                ops.inset(thickness=max(0, s.amount), use_individual=True)
+            else:
+                ops.inset(thickness=max(0, s.amount), use_individual=False)
+        elif action == "OUTLINE":
+            # Move the selected region boundary in its plane without adding faces.
+            faces = {f for f in bm.faces if f.select}
+            offsets = {}
+            for edge in bm.edges:
+                linked = [f for f in edge.link_faces if f in faces]
+                if len(linked) == 1 and (len(edge.link_faces) == 1 or len(linked) != len(edge.link_faces)):
+                    face = linked[0]
+                    loop = next(l for l in face.loops if l.edge == edge)
+                    tangent = (loop.link_loop_next.vert.co - loop.vert.co).normalized()
+                    outward = tangent.cross(face.normal).normalized()
+                    for v in edge.verts:
+                        offsets.setdefault(v, []).append(outward)
+            for v, normals in offsets.items():
+                offset = sum(normals, Vector())
+                if offset.length:
+                    offset.normalize()
+                    v.co += offset * s.amount / max(abs(offset.dot(normals[0])), 0.01)
+        elif action == "BEVEL":
+            faces = [f for f in bm.faces if f.select]
+            bmesh.ops.inset_region(bm, faces=faces, thickness=-s.amount, depth=s.height, use_even_offset=True, use_boundary=True)
+        elif action == "MSMOOTH":
+            ops.subdivide(number_cuts=s.segments, smoothness=s.smoothness)
+        elif action == "TESSELLATE":
+            if s.tessellate_type == "FACE":
+                ops.poke()
+            else:
+                ops.subdivide(number_cuts=1, smoothness=1 - s.tension)
+        elif action == "RELAX":
+            verts = selected_vertices(bm)
+            held = {v: v.co.copy() for v in verts if (s.hold_boundary and v.is_boundary) or (s.hold_outer and any(not e.select for e in v.link_edges))}
+            for i in range(s.iterations):
+                bmesh.ops.smooth_vert(bm, verts=verts, factor=s.relax, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+                for vert, co in held.items():
+                    vert.co = co
+        elif action == "DETACH":
+            if s.as_clone:
+                ops.duplicate()
+            if s.as_element:
+                ops.split()
+                return {"FINISHED"}
+            before = set(bpy.data.objects)
+            ops.separate(type="SELECTED")
+            for new in set(bpy.data.objects) - before:
+                new.name = s.object_name
+        elif action == "INSERT_VERTEX":
+            if mode == "FACE":
+                ops.poke()
+            else:
+                for edge in list(bm.edges):
+                    if edge.select and not edge.hide:
+                        new_edge, vertex = bmesh.utils.edge_split(edge, edge.verts[0], 0.5)
+                        vertex.select_set(True)
+        elif action == "SPLIT":
+            ops.edge_split(type="EDGE")
+        elif action == "DELETE_ISOLATED":
+            bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_edges and not v.hide], context="VERTS")
+        elif action == "CREATE_SHAPE":
+            return create_shape(context, s.object_name)
+        elif action == "RETRIANGULATE":
+            ops.quads_convert_to_tris(quad_method="BEAUTY", ngon_method="BEAUTY")
+        elif action == "TURN":
+            ops.edge_rotate(use_ccw=False)
+        elif action in {"MAKE_PLANAR", "PLANAR_X", "PLANAR_Y", "PLANAR_Z", "VIEW_ALIGN", "GRID_ALIGN"}:
+            if action == "MAKE_PLANAR":
+                normal = sum((f.normal for f in bm.faces if f.select), Vector())
+                if not normal.length:
+                    normal = Vector((0, 0, 1))
+            elif action in {"VIEW_ALIGN", "GRID_ALIGN"}:
+                from .operators import find_view3d
+                area, region = find_view3d(context)
+                rv3d = region.data if region is not None else None
+                if rv3d is None and area is not None:
+                    rv3d = area.spaces.active.region_3d
+                if rv3d is None:
+                    return {"CANCELLED"}
+                normal = ob.matrix_world.to_3x3().transposed() @ (rv3d.view_rotation @ Vector((0, 0, 1)))
+                if action == "GRID_ALIGN":
+                    axis = max(range(3), key=lambda i: abs(normal[i]))
+                    normal = Vector(tuple(1 if i == axis else 0 for i in range(3)))
+            else:
+                normal = Vector(tuple(1 if c == action[-1] else 0 for c in "XYZ"))
+            return flatten(context, normal)
+        elif action == "CREATE":
+            ops.edge_face_add()
+        elif action in {"SLICE", "SLICE_PLANE", "QUICK_SLICE"}:
+            if action == "QUICK_SLICE" and how == "INVOKE_DEFAULT":
+                return ops.bisect(how)
+            if action == "SLICE_PLANE":
+                ob.max_poly.slice_plane = not ob.max_poly.slice_plane
+                return {"FINISHED"}
+            plane = settings(context, "SLICE_PLANE")
+            normal = Vector((plane.normal_x, plane.normal_y, plane.normal_z))
+            if not normal.length:
+                operator.report({"WARNING"}, "Slice plane normal must not be zero")
+                return {"CANCELLED"}
+            result = bmesh.ops.bisect_plane(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces),
+                dist=0.00001, plane_co=(plane.plane_x, plane.plane_y, plane.plane_z), plane_no=normal)
+            if plane.split:
+                edges = [e for e in result["geom_cut"] if isinstance(e, bmesh.types.BMEdge)]
+                bmesh.ops.split_edges(bm, edges=edges)
+        elif action == "RESET_PLANE":
+            plane = settings(context, "SLICE_PLANE")
+            plane.plane_x = plane.plane_y = plane.plane_z = 0
+            plane.normal_x = plane.normal_y = 0
+            plane.normal_z = 1
+        elif action == "ATTACH":
+            others = [o for o in context.selected_objects if o != ob and o.type == "MESH"]
+            if not others:
+                operator.report({"WARNING"}, "Select another mesh before Attach, or use Attach List")
+                return {"CANCELLED"}
+            bpy.ops.object.mode_set(mode="OBJECT")
+            bpy.ops.object.join()
+            bpy.ops.object.mode_set(mode="EDIT")
+            return {"FINISHED"}
+        elif action in {"COPY_SELECTION", "PASTE_SELECTION"}:
+            seq = bm.verts if mode == "VERT" else bm.edges if mode == "EDGE" else bm.faces
+            name = "max_named_selection_" + str(context.window_manager.max_sublevel)
+            layer = seq.layers.int.get(name)
+            if action == "COPY_SELECTION":
+                layer = layer or seq.layers.int.new(name)
+                for item in seq:
+                    item[layer] = int(item.select)
+            elif layer:
+                ops.select_all(action="DESELECT")
+                for item in seq:
+                    item.select_set(bool(item[layer]) and not item.hide)
+                bm.select_flush_mode()
+            else:
+                return {"CANCELLED"}
+        elif action.startswith(("RING_SHIFT", "LOOP_SHIFT")):
+            result = shift_edges(bm, action.startswith("RING"), 1 if action.endswith("UP") else -1)
+            update_mesh(context)
+            return result
+        elif action == "SELECT_ANGLE":
+            selected = {f for f in bm.faces if f.select}
+            todo = list(selected)
+            angle = math.radians(ob.max_poly.angle)
+            while todo:
+                f = todo.pop()
+                for e in f.edges:
+                    for other in e.link_faces:
+                        if other not in selected and not other.hide and f.normal.angle(other.normal, math.pi) <= angle:
+                            selected.add(other)
+                            todo.append(other)
+            for face in selected:
+                face.select_set(True)
+            bm.select_flush_mode()
+        update_mesh(context)
+    except (RuntimeError, ValueError, TypeError) as exc:
+        operator.report({"WARNING"}, str(exc))
+        return {"CANCELLED"}
+    return {"FINISHED"}
+
+
+class MAX_OT_poly_attach_list(Operator):
+    """Choose a mesh and attach it to the active Editable Poly"""
+    bl_idname = "max.poly_attach_list"
+    bl_label = "Attach List"
+    bl_options = {"REGISTER", "UNDO"}
+    target: EnumProperty(name="Object", items=lambda s, c: [(o.name, o.name, "") for o in c.scene.objects if o.type == "MESH" and o != c.active_object])
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        ob = context.scene.objects.get(self.target)
+        if ob is None:
+            return {"CANCELLED"}
+        active = context.active_object
+        editing = context.mode == "EDIT_MESH"
+        if editing:
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        active.select_set(True)
+        ob.select_set(True)
+        bpy.ops.object.join()
+        if editing:
+            bpy.ops.object.mode_set(mode="EDIT")
+        return {"FINISHED"}
+
+
+def sync_smoothing(bm, layer):
+    for face in bm.faces:
+        face.smooth = bool(face[layer])
+    for edge in bm.edges:
+        edge.smooth = len(edge.link_faces) == 2 and bool(edge.link_faces[0][layer] & edge.link_faces[1][layer])
+
+
+class MAX_OT_poly_smoothing(Operator):
+    """Assign or select persistent Max smoothing groups and update sharp edges"""
+    bl_idname = "max.poly_smoothing"
+    bl_label = "Smoothing Groups"
+    bl_options = {"REGISTER", "UNDO"}
+    action: EnumProperty(items=[(v, n, "") for v, n in (("TOGGLE", "Assign Group"), ("SELECT", "Select By SG"), ("CLEAR", "Clear All"), ("AUTO", "Auto Smooth"))])
+    group: IntProperty(min=1, max=32, default=1)
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == "EDIT_MESH"
+
+    def execute(self, context):
+        bm = bmesh.from_edit_mesh(context.active_object.data)
+        layer = bm.faces.layers.int.get(SG_ATTRIBUTE) or bm.faces.layers.int.new(SG_ATTRIBUTE)
+        faces = [f for f in bm.faces if f.select and not f.hide]
+        p = context.active_object.max_poly
+        if self.action == "TOGGLE":
+            bit = 1 << (self.group - 1)
+            remove = bool(faces) and all(f[layer] & bit for f in faces)
+            for face in faces:
+                value = (face[layer] & 0xffffffff) & ~bit if remove else (face[layer] & 0xffffffff) | bit
+                face[layer] = value if value < 0x80000000 else value - 0x100000000
+        elif self.action == "CLEAR":
+            for face in faces:
+                face[layer] = 0
+        elif self.action == "SELECT":
+            bit = 1 << (p.sg_select - 1)
+            if p.clear_selection:
+                bpy.ops.mesh.select_all(action="DESELECT")
+            for face in bm.faces:
+                if not face.hide and face[layer] & bit:
+                    face.select_set(True)
+            bm.select_flush_mode()
+        else:
+            # Each smooth patch gets a group. Do not silently reuse a group after 32.
+            remaining = set(faces)
+            patches = []
+            while remaining:
+                patch = {remaining.pop()}
+                todo = list(patch)
+                while todo:
+                    face = todo.pop()
+                    for edge in face.edges:
+                        for other in edge.link_faces:
+                            if other in remaining and face.normal.angle(other.normal, math.pi) <= math.radians(p.auto_angle):
+                                remaining.remove(other)
+                                patch.add(other)
+                                todo.append(other)
+                patches.append(patch)
+            if len(patches) > 32:
+                self.report({"WARNING"}, "Auto Smooth needs more than 32 groups. Select a smaller region")
+                return {"CANCELLED"}
+            assigned = []
+            used = 0
+            selected = set(faces)
+            for patch in patches:
+                forbidden = used
+                for face in patch:
+                    for edge in face.edges:
+                        for other in edge.link_faces:
+                            if other not in selected and face.normal.angle(other.normal, math.pi) > math.radians(p.auto_angle):
+                                forbidden |= other[layer] & 0xffffffff
+                value = next((1 << i for i in range(32) if not forbidden & (1 << i)), None)
+                if value is None:
+                    self.report({"WARNING"}, "Auto Smooth has no free group that preserves the unselected hard boundaries")
+                    return {"CANCELLED"}
+                used |= value
+                assigned.append((patch, value))
+            for patch, value in assigned:
+                for face in patch:
+                    face[layer] = value if value < 0x80000000 else value - 0x100000000
+        sync_smoothing(bm, layer)
+        update_mesh(context)
+        return {"FINISHED"}
+
+
+class MAX_OT_poly_material(Operator):
+    """Set or select a one-based Max material ID"""
+    bl_idname = "max.poly_material"
+    bl_label = "Material ID"
+    bl_options = {"REGISTER", "UNDO"}
+    action: EnumProperty(items=[("SET", "Set ID", ""), ("SELECT", "Select ID", ""), ("NAME", "Select by Name", "")])
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == "EDIT_MESH"
+
+    def execute(self, context):
+        ob = context.active_object
+        p = ob.max_poly
+        bm = bmesh.from_edit_mesh(ob.data)
+        idx = p.material_id - 1 if self.action == "SET" else int(p.material_name) if self.action == "NAME" else p.select_id - 1
+        if self.action == "SET":
+            # Empty slots preserve Max's IDs even without assigned materials.
+            while len(ob.data.materials) <= idx:
+                ob.data.materials.append(None)
+            for face in bm.faces:
+                if face.select:
+                    face.material_index = idx
+        else:
+            if p.clear_selection:
+                bpy.ops.mesh.select_all(action="DESELECT")
+            for face in bm.faces:
+                if face.material_index == idx and not face.hide:
+                    face.select_set(True)
+            bm.select_flush_mode()
+        update_mesh(context)
+        return {"FINISHED"}
+
+
+class MAX_OT_poly_weight(Operator):
+    """Set selected vertex/edge subdivision weight or crease"""
+    bl_idname = "max.poly_weight"
+    bl_label = "Set Weight / Crease"
+    bl_options = {"REGISTER", "UNDO"}
+    crease: BoolProperty(default=True)
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == "EDIT_MESH"
+
+    def execute(self, context):
+        from .operators import current_level
+        if not self.crease:
+            self.report({"WARNING"}, "Blender subdivision has no Max vertex/edge weight parameter")
+            return {"CANCELLED"}
+        ob = context.active_object
+        bm = bmesh.from_edit_mesh(ob.data)
+        vertex = current_level(context) == 1
+        seq = bm.verts if vertex else bm.edges
+        name = "crease_vert" if vertex else "crease_edge"
+        layer = seq.layers.float.get(name) or seq.layers.float.new(name)
+        for item in seq:
+            if item.select:
+                item[layer] = ob.max_poly.crease
+        update_mesh(context)
+        return {"FINISHED"}
+
+
+classes = (MaxPolyOperation, MaxPolyState, MAX_OT_poly_settings, MAX_OT_poly_unavailable,
+           MAX_OT_poly_attach_list, MAX_OT_poly_smoothing, MAX_OT_poly_material, MAX_OT_poly_weight)
+
+
+def register_props():
+    bpy.types.Scene.max_poly_operations = CollectionProperty(type=MaxPolyOperation)
+    bpy.types.Scene.max_poly_slice = PointerProperty(type=MaxPolyOperation)
+    bpy.types.Object.max_poly = PointerProperty(type=MaxPolyState)
+
+
+def unregister_props():
+    del bpy.types.Object.max_poly
+    del bpy.types.Scene.max_poly_operations
+    del bpy.types.Scene.max_poly_slice

@@ -7,7 +7,7 @@ from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, St
 from bpy.types import Operator
 from mathutils import Euler, Quaternion
 
-from . import theme
+from . import theme, editable_poly
 
 
 # ---------------------------------------------------------------------------
@@ -423,6 +423,9 @@ EDIT_POLY_OPS = [
 ]
 
 
+EDIT_POLY_OPS += editable_poly.EXTRA_OPS
+
+
 class MAX_OT_edit_poly(Operator):
     """Editable Poly command"""
     bl_idname = "max.edit_poly"
@@ -433,7 +436,7 @@ class MAX_OT_edit_poly(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.mode == "EDIT_MESH"
+        return context.mode == "EDIT_MESH" or (context.mode == "OBJECT" and context.active_object is not None and context.active_object.type == "MESH")
 
     @classmethod
     def description(cls, context, props):
@@ -447,6 +450,9 @@ class MAX_OT_edit_poly(Operator):
 
     def run(self, context, how):
         o = self.op
+        result = editable_poly.run(self, context, how)
+        if result is not None:
+            return result
         mode = mesh_select_mode(context)
         ops = bpy.ops.mesh
         try:
@@ -469,15 +475,9 @@ class MAX_OT_edit_poly(Operator):
             elif o == "REMOVE_WITH_VERTS":
                 ops.dissolve_mode(use_verts=True)
             elif o == "LOOP":
-                if hasattr(ops, "select_edge_loop_multi"):
-                    ops.select_edge_loop_multi()
-                else:
-                    ops.loop_multi_select(ring=False)
+                ops.loop_multi_select(ring=False)
             elif o == "RING":
-                if hasattr(ops, "select_edge_ring_multi"):
-                    ops.select_edge_ring_multi()
-                else:
-                    ops.loop_multi_select(ring=True)
+                ops.loop_multi_select(ring=True)
             elif o == "WELD":
                 ops.remove_doubles(how)
             elif o == "TARGET_WELD":

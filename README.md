@@ -34,6 +34,38 @@ To go back to normal Blender, choose **Customize › Restore Blender Look**, or 
 | Status bar | "1 Object Selected", X/Y/Z type-in, Grid, Auto Key, Set Key |
 | Look | Max dark UI, cyan selection outline, red sub-object selection, blue vertices, random object colors, names like Box001 |
 
+## Editable Poly
+
+The Modify tab has Max's Selection, Soft Selection, Edit Vertices, Edit Edges,
+Edit Borders, Edit Polygons, Edit Elements and Edit Geometry rollouts. Material
+IDs and the 32 Smoothing Groups appear at Polygon and Element levels. Subdivision
+Surface is available at every level. Adding Edit Poly still edits the base mesh.
+
+The small settings button beside an operation opens its options. Click OK to
+apply them. The main button reuses the accepted values for that operation and
+sub-object level. Values live in the scene and are saved in the blend file.
+
+Material IDs use Blender's material slots, numbered from 1. Smoothing groups use
+the face attribute `max_smoothing_group`, including group 32. Faces that share a
+group have smooth common edges. Other edges become sharp. Auto Smooth assigns
+groups by face angle. Crease writes Blender's native vertex or edge crease.
+Use NURMS Subdivision adds a native Subdivision Surface modifier. Smooth Result
+backs up and restores face shading, as TurboSmooth does.
+
+Ring and Loop have shift arrows. At Border level, Select Open Edges finds the
+mesh boundaries. Quad Cap and Loop Regularizer appear when their companion
+operators are installed. Disabled controls explain the Blender limitation in
+their tooltip.
+
+Headless checks run with an isolated Blender profile:
+
+```powershell
+& 'C:/Program Files/Blender Foundation/Blender 5.0/blender.exe' -b --factory-startup --python-exit-code 1 --python tests/test_editable_poly_panel.py
+```
+
+Set `BLENDER_USER_SCRIPTS`, `BLENDER_USER_CONFIG` and `BLENDER_USER_EXTENSIONS`
+to your test profile first. Its scripts/addons directory must contain this add-on.
+
 ## Compact Material Editor (M)
 
 <img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
@@ -152,6 +184,37 @@ Underneath it's Blender's native Subdivision Surface, so it keeps GPU subdivisio
 You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, labels, random colors) under **Preferences › Add-ons › NotuoDesk 3ds Maxxed**.
 
 ## Known differences from 3ds Max
+
+- Editable Poly's By Vertex click filter, Ignore Backfacing, hover Preview
+  Selection, topology Constraints and Preserve UVs channel settings are disabled.
+  By Angle expands the current face selection with a separate button.
+- Soft Selection uses Blender proportional editing for transforms. Edge Distance
+  means connected-only, with no edge-count cutoff. Falloff is Blender's radius.
+  Pinch, Bubble, Affect Backfacing and a custom curve preview are unavailable.
+  Fixed-value mesh operations do not use proportional influence.
+- Hinge From Edge, Extrude Along Spline and hidden Edit Triangulation are disabled.
+  Turn rotates real edges and Retriangulate creates real triangles. Remove Unused
+  Map Verts is disabled because Blender stores UVs on face corners.
+- Extrude uses Blender region or individual-face extrusion. Vertex extrusion
+  creates wire edges. Edge extrusion uses the average selected surface normal,
+  with local Z as the fallback. Extrusion Base Width is disabled. Chamfer Tension
+  maps to Blender's bevel profile, so intermediate shapes differ from Max.
+- Bridge uses Blender edge-loop bridging. Taper and Bias scale intermediate
+  rings with a linear envelope, which can differ from Max. Smooth sets the new
+  bridge edges by face angle. Existing smoothing groups take precedence.
+  Connect subdivides selected edges or connects vertices. Its Pinch and Slide
+  settings are disabled. MSmooth uses native smooth subdivision, not NURMS.
+- Create fills the selected vertices instead of picking vertices in the viewport.
+  Insert Vertex splits selected edges at their midpoint, or pokes selected faces.
+  Create Shape From Selection copies each selected edge to a separate poly spline.
+  Target Weld uses the active vertex rather than a viewport target picker.
+- Slice Plane uses numeric local coordinates without Max's plane gizmo. QuickSlice
+  uses Blender's interactive bisect. Ring and Loop shifts use quad topology and
+  Blender's face/vertex order, so direction can differ on irregular meshes.
+  Named Selections Copy/Paste stores one selection per mesh and sub-object level.
+- Weight and Subdivision Surface Smoothness are disabled because Blender's
+  subdivision has no equivalent. NURMS uses a live Subdivision Surface modifier.
+  Auto Smooth supports up to 32 disconnected smooth patches in one operation.
 
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.

@@ -25,7 +25,7 @@ bl_info = {
 import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
-from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import editable_poly, create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
 
 
 _prefs_cache = [None]
@@ -140,7 +140,7 @@ HOTKEY_CHEATSHEET = (
 
 
 _classes = (
-    (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
+    (MaxxedPreferences,) + editable_poly.classes + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
@@ -176,6 +176,7 @@ def register():
     wm.max_create_cat = EnumProperty(name="Category", items=ui_panel.CREATE_CATS, default="GEOMETRY")
     wm.max_sublevel = IntProperty(default=0)
     wm.max_create_sub = EnumProperty(name="Type", items=[("STANDARD", "Standard", ""), ("VRAY", "V-Ray", "")])
+    editable_poly.register_props()
     prims.register_props()
     ui_panel.register_props()
     vray.register_props()
@@ -207,6 +208,7 @@ def unregister():
     vray.unregister_props()
     ui_panel.unregister_props()
     prims.unregister_props()
+    editable_poly.unregister_props()
     for prop in ("max_cmd_tab", "max_create_cat", "max_create_sub", "max_sublevel"):
         if hasattr(wm, prop):
             delattr(wm, prop)
