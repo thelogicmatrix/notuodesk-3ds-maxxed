@@ -61,7 +61,7 @@ CADDIES = {
     "CONNECT": ("segments", "pinch", "slide"),
     "OUTLINE": ("amount",), "BEVEL": ("bevel_type", "height", "amount", "local_bias"),
     "INSET": ("amount", "individual"), "HINGE": (), "SPLINE_EXTRUDE": (),
-    "MSMOOTH": ("smoothness",), "TESSELLATE": ("tessellate_type", "tension"),
+    "MSMOOTH": ("smoothness",), "TESSELLATE": ("tessellate_type", "tess_tension"),
     "RELAX": ("relax", "iterations", "hold_boundary", "hold_outer"), "DETACH": ("object_name", "as_clone", "as_element"),
     "CREATE_SHAPE": ("object_name",), "SLICE_PLANE": ("plane_x", "plane_y", "plane_z", "normal_x", "normal_y", "normal_z", "split"),
 }
@@ -80,6 +80,7 @@ def option_properties():
         "segments": IntProperty(name="Segments", min=1, max=100, default=1),
         "open": BoolProperty(name="Open", default=False),
         "tension": FloatProperty(name="Tension", min=0, max=1, default=1),
+        "tess_tension": FloatProperty(name="Tension", default=0),
         "taper": FloatProperty(name="Taper", default=0, min=-100, max=1000),
         "bias": FloatProperty(name="Bias", default=0, min=-99, max=99),
         "smooth": FloatProperty(name="Smooth", default=45, min=0, max=180),
@@ -112,6 +113,18 @@ class MaxPolyOperation(PropertyGroup):
     __annotations__ = option_properties()
 
 
+def operation_defaults(action):
+    # Caddy distances use one Max world unit per Blender unit, without physical-unit inference.
+    return {
+        "EXTRUDE": {"amount": 10, "base_width": 3},
+        "CHAMFER": {"amount": 1},
+        "BEVEL": {"height": 10, "amount": -1},
+        "INSET": {"amount": 1}, "OUTLINE": {"amount": -1},
+        "WELD": {"threshold": .1}, "RELAX": {"iterations": 1},
+        "TESSELLATE": {"tess_tension": 0},
+    }.get(action, {})
+
+
 def settings(context, action):
     from .operators import current_level
     if action == "SLICE_PLANE":
@@ -122,6 +135,11 @@ def settings(context, action):
     if item is None:
         item = coll.add()
         item.name = key
+        for prop, value in operation_defaults(action).items():
+            setattr(item, prop, value)
+    elif action == "TESSELLATE" and not item.is_property_set("tess_tension") and item.is_property_set("tension"):
+        # Preserve the number entered in files saved before Tension was separated.
+        item.tess_tension = item.tension
     return item
 
 
@@ -633,7 +651,13 @@ def run(operator, context, how, operation_settings=None):
             if s.tessellate_type == "FACE":
                 ops.poke()
             else:
-                ops.subdivide(number_cuts=1, smoothness=1 - s.tension)
+                # The mesh operator clamps smoothness to nonnegative values.
+                # BMesh supports the signed displacement required by Max Tension.
+                result = bmesh.ops.subdivide_edges(bm, edges=[e for e in bm.edges if e.select and not e.hide],
+                                                   cuts=1, smooth=s.tess_tension, use_grid_fill=True)
+                for elem in result["geom_inner"] + result["geom_split"]:
+                    elem.select_set(True)
+                bm.select_flush_mode()
         elif action == "RELAX":
             verts = selected_vertices(bm)
             held = {v: v.co.copy() for v in verts if (s.hold_boundary and v.is_boundary) or (s.hold_outer and any(not e.select for e in v.link_edges))}

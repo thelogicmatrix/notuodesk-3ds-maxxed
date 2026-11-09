@@ -112,6 +112,15 @@ class Session:
         for key in self.keys:
             setattr(self.store, key, getattr(self.values, key))
 
+    def reselect(self, context, select):
+        """Select only against accepted geometry, then preview the new selection once."""
+        self.baseline.restore(self.obj)
+        select()
+        new_baseline = Snapshot(self.obj)
+        self.baseline.free()
+        self.baseline = new_baseline
+        return self.preview(context)
+
     def apply(self, context):
         if not self.valid:
             return False
@@ -146,6 +155,7 @@ LABELS = {
     'local_bias': ('Bias', 'bias'), 'base_width': ('Extrusion Base Width', 'width'),
     'threshold': ('Weld Threshold', 'weld'), 'segments': ('Segments', 'segments'),
     'open': ('Open', 'open'), 'tension': ('Tension', 'tension'),
+    'tess_tension': ('Tension', 'tension'),
     'taper': ('Taper', 'taper'), 'bias': ('Bias', 'bias'), 'smooth': ('Smooth', 'smooth'),
     'twist1': ('Twist 1', 'twist'), 'twist2': ('Twist 2', 'twist'),
     'bridge_selection': ('Selection', 'type'), 'pinch': ('Pinch', 'width'),
@@ -190,7 +200,7 @@ def enabled(session, key):
         return False
     if session.action == 'CONNECT' and key in {'pinch', 'slide'}:
         return False
-    if session.action == 'TESSELLATE' and key == 'tension':
+    if session.action == 'TESSELLATE' and key == 'tess_tension':
         return session.values.tessellate_type == 'EDGE'
     if session.action == 'CHAMFER' and key == 'segments' and session.level == 1:
         return False
@@ -224,18 +234,7 @@ class Caddy:
         self.session = Session(context, operator.action)
         self.window = context.window
         self.area, self.region = find_view3d(context)
-        self.keys = fields(self.session)
-        self.scale = max(1.0, context.preferences.system.ui_scale)
-        self.width, self.row, self.gap = 104*self.scale, 24*self.scale, 5*self.scale
-        self.rows = [[key] for key in self.keys]
-        if self.session.action == 'BRIDGE':
-            self.width = 213*self.scale
-            self.rows = ([['segments', 'smooth']] if self.session.level == 2 else
-                         [['segments', 'taper'], ['bias', 'smooth'], ['twist1', 'twist2']])
-            self.rows += [['bridge_selection', 'pick1', 'pick2']]
-        elif self.session.action in {'RELAX', 'MSMOOTH'}:
-            self.rows = [[key] for key in self.keys[:-2]]+[self.keys[-2:]]
-        self.height = (len(self.rows)+2)*(self.row+self.gap)
+        self.layout(context)
         self.x, self.y = self.position(event)
         self.hover = None
         self.drag = None
@@ -243,6 +242,10 @@ class Caddy:
         self.menu = None
         self.text = ''
         self.select_all = False
+        self.cursor = self.anchor = 0
+        self.value_history = []
+        self.redo_history = []
+        self.gesture = None
         self.handler = None
         try:
             self.session.preview(context)
@@ -250,6 +253,39 @@ class Caddy:
         except Exception:
             self.session.close(context, cancel=True)
             raise
+
+    def canvas(self):
+        left, bottom, right, top = 0, 0, self.region.width, self.region.height
+        for r in self.area.regions:
+            if r.type not in {'UI', 'TOOLS'} or r.width <= 1:
+                continue
+            lo, hi = r.x-self.region.x, r.x+r.width-self.region.x
+            if hi <= 0 or lo >= right:
+                continue
+            if lo <= 0:
+                left = max(left, hi)
+            elif hi >= self.region.width:
+                right = min(right, lo)
+        return left+8, bottom+8, right-8, top-12
+
+    def layout(self, context):
+        self.keys = fields(self.session)
+        self.rows = [[key] for key in self.keys]
+        base_width = 104
+        if self.session.action == 'BRIDGE':
+            base_width = 213
+            self.rows = ([['segments', 'smooth']] if self.session.level == 2 else
+                         [['segments', 'taper'], ['bias', 'smooth'], ['twist1', 'twist2']])
+            self.rows += [['bridge_selection', 'pick1', 'pick2']]
+        elif self.session.action in {'RELAX', 'MSMOOTH'}:
+            self.rows = [[key] for key in self.keys[:-2]]+[self.keys[-2:]]
+        left, bottom, right, top = self.canvas()
+        self.scale = max(.1, min(context.preferences.system.ui_scale,
+                                (right-left)/base_width, (top-bottom)/((len(self.rows)+2)*29)))
+        self.width, self.row, self.gap = base_width*self.scale, 24*self.scale, 5*self.scale
+        self.height = (len(self.rows)+2)*(self.row+self.gap)
+        if hasattr(self, 'x'):
+            self.x, self.y = self.clamp(self.x, self.y)
 
     def position(self, event):
         from bpy_extras.view3d_utils import location_3d_to_region_2d
@@ -266,8 +302,9 @@ class Caddy:
         return self.clamp(point[0]+50*self.scale, point[1]+self.height*.6)
 
     def clamp(self, x, y):
-        return (max(8, min(x, self.region.width-self.width-12)),
-                max(self.height+8, min(y, self.region.height-12)))
+        left, bottom, right, top = self.canvas()
+        return (max(left, min(x, right-self.width)),
+                max(self.height+bottom, min(y, top)))
 
     def rect(self, index):
         if index == 0:
@@ -311,7 +348,112 @@ class Caddy:
             return False
         self.change(context, self.edit, value)
         self.edit = None
+        self.remember()
         return True
+
+    def begin_gesture(self):
+        self.gesture = vars(self.session.values).copy()
+
+    def remember(self):
+        if self.gesture is not None and self.gesture != vars(self.session.values):
+            self.value_history.append(self.gesture)
+            self.redo_history.clear()
+        self.gesture = None
+
+    def undo_value(self, context, redo=False):
+        self.remember()
+        source, target = (self.redo_history, self.value_history) if redo else (self.value_history, self.redo_history)
+        if source:
+            target.append(vars(self.session.values).copy())
+            vars(self.session.values).update(source.pop())
+            self.session.preview(context)
+        self.edit = self.drag = self.menu = None
+
+    def replace_text(self, context, value):
+        lo, hi = (0, len(self.text)) if self.select_all else sorted((self.cursor, self.anchor))
+        self.text = self.text[:lo]+value+self.text[hi:]
+        self.cursor = self.anchor = lo+len(value)
+        self.select_all = False
+        self.live_text(context)
+
+    def text_key(self, context, event):
+        if event.type == 'A' and event.ctrl:
+            self.anchor, self.cursor = 0, len(self.text)
+            self.select_all = True
+        elif event.ctrl and event.type in {'C', 'X', 'V'}:
+            lo, hi = (0, len(self.text)) if self.select_all else sorted((self.cursor, self.anchor))
+            if event.type in {'C', 'X'}:
+                context.window_manager.clipboard = self.text[lo:hi]
+                if event.type == 'X':
+                    self.replace_text(context, '')
+            else:
+                value = context.window_manager.clipboard.strip()
+                if value and all(c in '0123456789.-+eE' for c in value):
+                    self.replace_text(context, value)
+        elif event.type in {'LEFT_ARROW', 'RIGHT_ARROW', 'HOME', 'END'}:
+            lo, hi = (0, len(self.text)) if self.select_all else sorted((self.cursor, self.anchor))
+            if event.type == 'HOME':
+                self.cursor = 0
+            elif event.type == 'END':
+                self.cursor = len(self.text)
+            elif not event.shift and lo != hi:
+                self.cursor = lo if event.type == 'LEFT_ARROW' else hi
+            else:
+                self.cursor = max(0, min(len(self.text), self.cursor+(-1 if event.type == 'LEFT_ARROW' else 1)))
+            if not event.shift:
+                self.anchor = self.cursor
+            self.select_all = False
+        elif event.type in {'BACK_SPACE', 'DEL'}:
+            if self.cursor == self.anchor and not self.select_all:
+                self.anchor = max(0, self.cursor-1) if event.type == 'BACK_SPACE' else min(len(self.text), self.cursor+1)
+            self.replace_text(context, '')
+        elif event.type == 'TAB':
+            self.finish_edit(context)
+        elif event.unicode and all(c in '0123456789.-+eE' for c in event.unicode):
+            self.replace_text(context, event.unicode)
+
+    def reset_value(self, context, key):
+        defaults = {'segments': 1, 'iterations': 1, 'tension': 1, 'smoothness': 1, 'smooth': 45}
+        self.begin_gesture()
+        self.change(context, key, defaults.get(key, 0))
+        self.remember()
+
+    def select_event(self, context, event, x, y):
+        """Keep topology-changing shortcuts out of the transaction's pristine mesh."""
+        if event.value != 'PRESS':
+            return False
+        levels = {'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5, 'SIX': 0}
+        if event.type in levels and not (event.ctrl or event.alt or event.shift):
+            from . import editable_poly as ep
+            from .operators import current_level
+            level = levels[event.type]
+            if self.session.was_object or level == 0 or level == self.session.level:
+                self.close(context, cancel=True)
+                bpy.ops.max.subobject('EXEC_DEFAULT', False, level=level if self.session.was_object else 0)
+                return True
+            self.session.baseline.restore(self.session.obj)
+            bpy.ops.max.subobject('EXEC_DEFAULT', False, level=level)
+            self.session.level = current_level(context)
+            self.session.store = ep.settings(context, self.session.action)
+            vars(self.session.values).update({key: getattr(self.session.store, key) for key in ep.option_properties()})
+            self.value_history.clear()
+            self.redo_history.clear()
+            self.session.baseline.free()
+            self.session.baseline = Snapshot(self.session.obj)
+            self.session.preview(context)
+            self.layout(context)
+            return True
+        if event.ctrl and event.type in {'A', 'D', 'I'} and not event.alt:
+            action = {'A': 'SELECT', 'D': 'DESELECT', 'I': 'INVERT'}[event.type]
+            self.session.reselect(context, lambda: bpy.ops.mesh.select_all('EXEC_DEFAULT', False, action=action))
+            return True
+        left, bottom, right, top = self.canvas()
+        if event.type == 'LEFTMOUSE' and left <= x <= right and bottom <= y <= top:
+            self.session.reselect(context, lambda: bpy.ops.view3d.select(
+                'EXEC_DEFAULT', False, location=(int(x), int(y)),
+                extend=event.ctrl, deselect=event.alt, toggle=event.shift))
+            return True
+        return False
 
     def live_text(self, context):
         try:
@@ -340,14 +482,26 @@ class Caddy:
         if context.active_object != self.session.obj or self.session.obj.mode != 'EDIT':
             self.close(context, cancel=True)
             return {'CANCELLED'}
+        self.layout(context)
         x, y = event.mouse_x-self.region.x, event.mouse_y-self.region.y
         hit = self.hit(x, y)
         self.hover = hit
-        if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
+        if event.type == 'Z' and event.ctrl and event.value == 'PRESS':
+            self.undo_value(context, redo=event.shift)
+        elif event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
             if event.type == 'RIGHTMOUSE' and self.drag and self.drag[0] != 'TITLE':
                 key, _, _, value = self.drag
                 self.change(context, key, value)
                 self.drag = None
+                self.gesture = None
+            elif event.type == 'RIGHTMOUSE' and hit in self.keys and enabled(self.session, hit) and self.edit is None:
+                left, _, _, _ = self.rect(self.keys.index(hit)+1)
+                prop = self.session.store.bl_rna.properties.get(hit)
+                if prop and prop.type in {'INT', 'FLOAT'} and x < left+27*self.scale:
+                    self.reset_value(context, hit)
+                else:
+                    self.close(context, cancel=True)
+                    return {'CANCELLED'}
             else:
                 self.close(context, cancel=True)
                 return {'CANCELLED'}
@@ -356,23 +510,14 @@ class Caddy:
                 self.finish_edit(context)
             elif event.ctrl:
                 if self.session.apply(context):
+                    self.value_history.clear()
+                    self.redo_history.clear()
                     self.session.preview(context)
             elif self.session.valid:
                 self.close(context)
                 return {'FINISHED'}
         elif self.edit is not None and event.value == 'PRESS' and event.type != 'LEFTMOUSE':
-            if event.type == 'BACK_SPACE':
-                self.text = '' if self.select_all else self.text[:-1]
-                self.select_all = False
-                self.live_text(context)
-            elif event.type == 'A' and event.ctrl:
-                self.select_all = True
-            elif event.type == 'TAB':
-                self.finish_edit(context)
-            elif event.unicode and all(c in '0123456789.-+eE' for c in event.unicode):
-                self.text = event.unicode if self.select_all else self.text+event.unicode
-                self.select_all = False
-                self.live_text(context)
+            self.text_key(context, event)
         elif event.type == 'LEFTMOUSE':
             if event.value == 'RELEASE':
                 if self.drag and self.drag[0] != 'TITLE' and abs(y-self.drag[2]) < 1 and abs(x-self.drag[1]) < 1:
@@ -380,6 +525,8 @@ class Caddy:
                     bottom = self.rect(self.keys.index(key)+1)[1]
                     step = 1 if isinstance(value, int) else .01
                     self.change(context, key, value+(step if start_y > bottom+self.row/2 else -step))
+                if self.drag:
+                    self.remember()
                 self.drag = None
             elif event.value == 'PRESS':
                 if self.edit is not None and hit != 'CANCEL' and not self.finish_edit(context):
@@ -389,7 +536,9 @@ class Caddy:
                     options = choices(self.session, key)
                     idx = int((self.menu_top-y)/(self.row+self.gap))
                     if self.x <= x <= self.x+max(self.width, 180*self.scale) and 0 <= idx < len(options):
+                        self.begin_gesture()
                         self.change(context, key, options[idx][0])
+                        self.remember()
                     self.menu = None
                 elif hit == 'TITLE':
                     self.drag = ('TITLE', x, y, (self.x, self.y))
@@ -402,6 +551,8 @@ class Caddy:
                             self.close(context)
                             return {'FINISHED'}
                         if self.session.apply(context):
+                            self.value_history.clear()
+                            self.redo_history.clear()
                             self.session.preview(context)
                 elif hit in self.keys and enabled(self.session, hit):
                     left, bottom, width, height = self.rect(self.keys.index(hit)+1)
@@ -413,15 +564,24 @@ class Caddy:
                             self.menu_top = self.rect(self.keys.index(hit)+1)[1]
                         else:
                             idx = next(i for i, (v, _) in enumerate(opts) if v == value)
+                            self.begin_gesture()
                             self.change(context, hit, opts[(idx+1) % len(opts)][0])
+                            self.remember()
                     elif isinstance(value, bool):
+                        self.begin_gesture()
                         self.change(context, hit, not value)
+                        self.remember()
                     elif x < left+27*self.scale:
+                        self.begin_gesture()
                         self.drag = (hit, x, y, value)
                     else:
+                        self.begin_gesture()
                         self.edit = hit
                         self.text = str(value) if isinstance(value, int) else f'{value:.6g}'
                         self.select_all = True
+                        self.anchor, self.cursor = 0, len(self.text)
+                elif hit is None:
+                    self.select_event(context, event, x, y)
         elif event.type == 'MOUSEMOVE' and self.drag:
             key, start_x, start_y, value = self.drag
             if key == 'TITLE':
@@ -431,6 +591,10 @@ class Caddy:
                 step = 1 if prop.type == 'INT' else .01
                 step *= 10 if event.ctrl else .1 if event.alt else 1
                 self.change(context, key, value+(y-start_y)*step)
+        elif not (self.edit or self.drag or self.menu or hit):
+            self.select_event(context, event, x, y)
+        if self.session.closed:
+            return {'CANCELLED'}
         self.area.tag_redraw()
         # Consume editing input, keep navigation in the viewport available.
         if self.drag or self.edit or self.menu or hit or event.type not in {'MIDDLEMOUSE', 'WHEELUPMOUSE', 'WHEELDOWNMOUSE', 'MOUSEMOVE'}:
@@ -443,6 +607,7 @@ class Caddy:
         from gpu_extras.batch import batch_for_shader
         if self.session.closed or bpy.context.region != self.region:
             return
+        self.layout(bpy.context)
         shader = gpu.shader.from_builtin('UNIFORM_COLOR')
         gpu.state.blend_set('ALPHA')
 
@@ -470,6 +635,23 @@ class Caddy:
             shader.bind()
             shader.uniform_float('color', color)
             batch_for_shader(shader, 'LINES', {'pos': points}).draw(shader)
+
+        def tick(cx, cy, checked):
+            # State control only. Field icon artwork is maintained separately.
+            s = 5*self.scale
+            points = [(cx-s,cy), (cx-s/4,cy-s), (cx+s,cy+s)]
+            color = (.08,.24,.28,1) if checked else (.32,.36,.37,1)
+            if checked:
+                for offset in (-self.scale, 0, self.scale):
+                    lines([(points[0][0],points[0][1]+offset),
+                           (points[1][0],points[1][1]+offset),
+                           (points[1][0],points[1][1]+offset),
+                           (points[2][0],points[2][1]+offset)], color)
+            else:
+                outline = [(cx-s,cy+2*self.scale),(cx-s/4,cy-s+2*self.scale),
+                           (cx+s,cy+s+2*self.scale),(cx+s+2*self.scale,cy+s),
+                           (cx-s/4,cy-s-2*self.scale),(cx-s-2*self.scale,cy)]
+                lines([p for i in range(len(outline)) for p in (outline[i],outline[(i+1)%len(outline)])], color)
 
         def mark(cx, cy, kind, hover=False):
             s = 6*self.scale
@@ -518,7 +700,9 @@ class Caddy:
             title += ': '+label(self.session, self.hover)
         blf.size(0, 11*self.scale)
         tx, ty, tw, th = self.rect(0)
-        title_width = max(tw, blf.dimensions(0, title)[0]+20*self.scale)
+        title_width = min(self.canvas()[2]-tx, max(tw, blf.dimensions(0, title)[0]+20*self.scale))
+        while title and blf.dimensions(0, title)[0] > title_width-16*self.scale:
+            title = title[:-1]
         box(tx, ty, title_width, th, (.045, .05, .052, .96))
         text(tx+8*self.scale, ty+8*self.scale, title)
         for i, key in enumerate(self.keys, 1):
@@ -534,7 +718,10 @@ class Caddy:
                 continue
             if key in UI_ONLY:
                 mark(x+13*self.scale,y+h/2,LABELS[key][1])
-                text(x+w-15*self.scale,y+8*self.scale,'1' if key=='pick1' else '2' if key=='pick2' else 'o',(.5,.52,.53,1))
+                if key in {'pick1','pick2'}:
+                    text(x+w-15*self.scale,y+8*self.scale,'1' if key=='pick1' else '2',(.5,.52,.53,1))
+                else:
+                    tick(x+w-13*self.scale,y+h/2,False)
                 continue
             value = getattr(self.session.values, key)
             opts = choices(self.session, key)
@@ -550,7 +737,7 @@ class Caddy:
                 polygon([(x+w-17*self.scale,y+14*self.scale), (x+w-7*self.scale,y+14*self.scale),
                          (x+w-12*self.scale,y+8*self.scale)], (.12,.18,.2,1))
             elif prop.type == 'BOOLEAN':
-                text(x+8*self.scale,y+8*self.scale, 'x' if value else 'o', (.08,.24,.28,1))
+                tick(x+12*self.scale,y+h/2,value)
                 if w >= 90*self.scale:
                     text(x+29*self.scale,y+8*self.scale, label(self.session,key).replace(' Points','').replace('Hold ','')[:10], (.04,.08,.1,1), 10)
                 else:
@@ -561,9 +748,17 @@ class Caddy:
                     kind = 'chamfer'
                 mark(x+14*self.scale,y+h/2, kind, self.hover == key and on)
                 lines([(x+26*self.scale,y+3),(x+26*self.scale,y+h-3)])
-                display = self.text+'|' if self.edit == key else str(value) if isinstance(value,int) else f'{value:.4g}'
-                if self.edit == key and self.select_all:
-                    box(x+28*self.scale,y+3,w-32*self.scale,h-6,(.19,.37,.5,1))
+                display = self.text if self.edit == key else str(value) if isinstance(value,int) else f'{value:.4g}'
+                if self.edit == key:
+                    blf.size(0, 11*self.scale)
+                    lo, hi = (0,len(self.text)) if self.select_all else sorted((self.cursor,self.anchor))
+                    start = blf.dimensions(0,self.text[:lo])[0]
+                    end = blf.dimensions(0,self.text[:hi])[0]
+                    if lo != hi:
+                        box(x+32*self.scale+start,y+3,end-start,h-6,(.19,.37,.5,1))
+                    else:
+                        caret = blf.dimensions(0,self.text[:self.cursor])[0]
+                        lines([(x+32*self.scale+caret,y+5),(x+32*self.scale+caret,y+h-5)],(.04,.08,.1,1))
                 text(x+32*self.scale,y+8*self.scale, display, (.04,.08,.1,1) if on else (.52,.53,.54,1))
         x,y,w,h = self.rect(len(self.keys)+1)
         for i, kind in enumerate(('OK','APPLY','CANCEL')):
