@@ -26,6 +26,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import xview
 
 
 _prefs_cache = [None]
@@ -143,6 +144,7 @@ _classes = (
     (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
+    + xview.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
@@ -185,6 +187,7 @@ def register():
     ui_menus.register_draw()
     max_import.register_menus()
     overlay.register()
+    xview.register()
     p = get_prefs()
     if p is None or p.use_keymap:
         keymap.register_keymaps()
@@ -197,6 +200,7 @@ def register():
 def unregister():
     _prefs_cache[0] = None
     keymap.unregister_keymaps()
+    xview.unregister()
     overlay.unregister()
     max_import.unregister_menus()
     ui_menus.unregister_draw()
