@@ -71,6 +71,8 @@ Press **M**, or choose **Rendering › Material Editor**. It opens as a narrow f
 
 These tools follow the public descriptions of [rapidTools](https://rapidmxs.com/store/rapidtools/) and [AutoPivot](https://www.scriptspot.com/3ds-max/scripts/autopivot). The original scripts do not run inside Blender.
 
+Creation tools call `poly_tools.finalize_new_object(context, ob)` after setting the final geometry and transform, before recording creation undo. The standard primitive and Shapes paths use it. Integrators should call the same function from Keyboard Entry and interactive Line when those creation paths finish, never during previews.
+
 ## Opening 3ds Max files
 
 ![A 3ds Max 2015 character opened with File › Open 3ds Max File](docs/open-max-file.png)
@@ -163,6 +165,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 - Quad Cap uses an interpolated grid. It does not reproduce rapidQCap's surface smoothing. Borders too concave or twisted for a grid without folded cells are skipped with a warning. Odd borders cannot be all quads without changing the boundary.
 - AutoPivot's original buttons use center-of-mass calculations for meshes and vertex averages for splines. This add-on uses the bounding box and adds an optional creation preference. Moving an origin can change modifiers that depend on that origin, such as Mirror.
+- Text stays editable after a pivot move. A Text Pivot Offset Geometry Nodes modifier translates the generated glyphs, including local Z for tilted or extruded text. Keep that modifier to retain the pivot compensation.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.

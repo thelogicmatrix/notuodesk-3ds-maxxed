@@ -61,6 +61,16 @@ def world_vertices(ob):
     return [ob.matrix_world @ v.co for v in ob.data.vertices]
 
 
+def evaluated_world_vertices(ob):
+    bpy.context.view_layer.update()
+    evaluated = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    try:
+        return [evaluated.matrix_world @ v.co for v in mesh.vertices]
+    finally:
+        evaluated.to_mesh_clear()
+
+
 class PolyToolsTests(unittest.TestCase):
     def tearDown(self):
         if bpy.context.object and bpy.context.object.mode != "OBJECT":
@@ -200,7 +210,7 @@ class PolyToolsTests(unittest.TestCase):
             prims.set_params(ob, "BOX", width=4, length=2, height=6)
             bpy.context.view_layer.update()
             before = world_vertices(ob)
-            poly_tools.auto_pivot_created(ob)
+            poly_tools.finalize_new_object(bpy.context, ob)
             bpy.context.view_layer.update()
             expected = Vector((5, -3, 2 if mode == "BOTTOM" else 5))
             self.assertLess((ob.matrix_world.translation - expected).length, 1e-5)
@@ -251,6 +261,66 @@ class PolyToolsTests(unittest.TestCase):
         self.assertAlmostEqual(shape.matrix_world.translation.z, min(p.z for p in coords), places=5)
         prefs.auto_pivot_on_create = "OFF"
         print("PASS Pivot controls: rotated/scaled negative-height box, child and shared mesh preserved, spline creation hook", flush=True)
+
+    def test_text_pivot_preserves_evaluated_glyphs(self):
+        from notuodesk_3ds_maxxed import get_prefs
+        get_prefs().auto_pivot_on_create = "OFF"
+        for mode in ("CENTER", "BOTTOM"):
+            for size in (1, 2.5):
+                with self.subTest(mode=mode, size=size):
+                    self.assertEqual(bpy.ops.max.create_shape(kind="TEXT"), {"FINISHED"})
+                    ob = bpy.context.object
+                    self.assertEqual(ob.data.body, "MAX Text")
+                    ob.data.size = size
+                    ob.data.extrude = .15
+                    ob.data.offset_x = .3
+                    ob.data.offset_y = -.2
+                    ob.matrix_world = Matrix.Translation((5, -3, 2)) @ Matrix.Rotation(.7, 4, "Y") @ Matrix.Diagonal((2, .5, 1, 1))
+                    before = evaluated_world_vertices(ob)
+                    expected = Vector([(min(p[i] for p in before) + max(p[i] for p in before)) / 2 for i in range(3)])
+                    if mode == "BOTTOM":
+                        expected.z = min(p.z for p in before)
+                    for _ in range(2):
+                        self.assertEqual(bpy.ops.max.pivot_bounds(mode=mode), {"FINISHED"})
+                        after = evaluated_world_vertices(ob)
+                        self.assertEqual(len(before), len(after))
+                        displacement = max((a - b).length for a, b in zip(before, after))
+                        self.assertLess(displacement, 1e-5, f"Text glyphs moved {displacement:.6f} Blender units")
+                        self.assertLess((ob.matrix_world.translation - expected).length, 1e-5)
+                    self.assertEqual(ob.type, "FONT")
+                    self.assertEqual(ob.data.body, "MAX Text")
+                    print(f"PASS Text pivot {mode} size={size}: evaluated glyphs unchanged, tilted/extruded/scaled, repeated calls", flush=True)
+
+    def test_creation_finalizer_and_text_autopivot(self):
+        from notuodesk_3ds_maxxed import get_prefs, poly_tools
+        prefs = get_prefs()
+        try:
+            for mode in ("OFF", "CENTER", "BOTTOM"):
+                prefs.auto_pivot_on_create = "OFF"
+                self.assertEqual(bpy.ops.max.create_shape(kind="TEXT"), {"FINISHED"})
+                baseline = bpy.context.object
+                before = evaluated_world_vertices(baseline)
+                original_origin = baseline.matrix_world.translation.copy()
+                expected = Vector([(min(p[i] for p in before) + max(p[i] for p in before)) / 2 for i in range(3)])
+                if mode == "BOTTOM":
+                    expected.z = min(p.z for p in before)
+                if mode == "OFF":
+                    expected = original_origin
+                prefs.auto_pivot_on_create = mode
+                poly_tools.finalize_new_object(bpy.context, baseline)
+                after = evaluated_world_vertices(baseline)
+                self.assertLess((baseline.matrix_world.translation - expected).length, 1e-5)
+                self.assertEqual(len(before), len(after))
+                self.assertTrue(all((a - b).length < 1e-5 for a, b in zip(before, after)))
+                self.assertEqual(bpy.ops.max.create_shape(kind="TEXT"), {"FINISHED"})
+                created = bpy.context.object
+                after = evaluated_world_vertices(created)
+                self.assertLess((created.matrix_world.translation - expected).length, 1e-5)
+                self.assertEqual(len(before), len(after))
+                self.assertTrue(all((a - b).length < 1e-5 for a, b in zip(before, after)))
+        finally:
+            prefs.auto_pivot_on_create = "OFF"
+        print("PASS creation finalizer and Shapes Text: Off/Center/Bottom preserve evaluated glyphs and set expected origins", flush=True)
 
 
 if __name__ == "__main__":

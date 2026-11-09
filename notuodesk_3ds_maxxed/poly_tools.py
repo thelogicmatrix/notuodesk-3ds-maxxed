@@ -10,6 +10,7 @@ from mathutils.geometry import normal
 
 
 PIVOT_OFFSET = "max_pivot_offset"
+FONT_PIVOT = "max_font_pivot"
 
 
 def edge_chains(edges):
@@ -313,6 +314,24 @@ class MAX_OT_loop_regularize(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _offset_font_geometry(ob, delta):
+    """Translate generated glyphs, including local Z for tilted/extruded Text."""
+    modifier = next((mod for mod in ob.modifiers if mod.type == "NODES" and mod.get(FONT_PIVOT)), None)
+    if modifier is None:
+        from .gn_mods import G
+        g = G("Text Pivot Offset")
+        transform = g.nodes.new("GeometryNodeTransform")
+        g.links.new(g.g("Geometry"), transform.inputs["Geometry"])
+        g.out(transform.outputs["Geometry"])
+        modifier = ob.modifiers.new("Text Pivot Offset", "NODES")
+        modifier.node_group = g.ng
+        modifier[FONT_PIVOT] = True
+    elif modifier.node_group.users > 1:
+        modifier.node_group = modifier.node_group.copy()
+    transform = next(node for node in modifier.node_group.nodes if node.bl_idname == "GeometryNodeTransform")
+    transform.inputs["Translation"].default_value -= delta
+
+
 def move_pivot(ob, mode):
     """Move a mesh/spline origin in world space without moving its geometry."""
     if ob.type not in {"MESH", "CURVE", "SURFACE", "FONT"} or ob.mode != "OBJECT":
@@ -335,7 +354,11 @@ def move_pivot(ob, mode):
     children = [(child, child.matrix_world.copy()) for child in ob.children]
     if ob.data.users > 1:
         ob.data = ob.data.copy()
-    ob.data.transform(Matrix.Translation(-delta), shape_keys=True)
+    if ob.type == "FONT":
+        # Curve.transform does not translate generated text glyphs.
+        _offset_font_geometry(ob, delta)
+    else:
+        ob.data.transform(Matrix.Translation(-delta), shape_keys=True)
     ob.matrix_world = ob.matrix_world @ Matrix.Translation(delta)
     if ob.type == "MESH" and ob.max_prim.kind:
         ob[PIVOT_OFFSET] = list(Vector(ob.get(PIVOT_OFFSET, (0, 0, 0))) - delta)
@@ -345,13 +368,18 @@ def move_pivot(ob, mode):
     return True
 
 
-def auto_pivot_created(ob):
-    """Finalize add-on mesh/spline creation using the user's pivot preference."""
+def finalize_new_object(context, ob):
+    """Apply AutoPivot after a creation path sets final geometry and transform.
+
+    Call once before the creation undo step, never during a modal preview.
+    Other creators, including Keyboard Entry and interactive Line, should call it.
+    Off and unsupported object types leave the object unchanged.
+    """
     from . import get_prefs
     prefs = get_prefs()
     mode = prefs.auto_pivot_on_create if prefs else "OFF"
     if mode != "OFF":
-        bpy.context.view_layer.update()
+        context.view_layer.update()
         move_pivot(ob, mode)
 
 
