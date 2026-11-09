@@ -38,14 +38,14 @@ DEFAULT_METHODS.update(BOX="BOX", PYRAMID="BASE_APEX", PLANE="RECTANGLE")
 
 
 class MaxKeyboardValues(bpy.types.PropertyGroup):
-    x: FloatProperty(name="X", unit="LENGTH")
-    y: FloatProperty(name="Y", unit="LENGTH")
-    z: FloatProperty(name="Z", unit="LENGTH")
-    length: FloatProperty(name="Length", default=0.0, min=0.0, unit="LENGTH")
-    width: FloatProperty(name="Width", default=0.0, min=0.0, unit="LENGTH")
-    height: FloatProperty(name="Height", default=0.0, unit="LENGTH")
-    radius1: FloatProperty(name="Radius 1", default=0.0, min=0.0, unit="LENGTH")
-    radius2: FloatProperty(name="Radius 2", default=0.0, min=0.0, unit="LENGTH")
+    x: FloatProperty(name="X", unit="LENGTH", precision=1)
+    y: FloatProperty(name="Y", unit="LENGTH", precision=1)
+    z: FloatProperty(name="Z", unit="LENGTH", precision=1)
+    length: FloatProperty(name="Length", default=0.0, min=0.0, unit="LENGTH", precision=1)
+    width: FloatProperty(name="Width", default=0.0, min=0.0, unit="LENGTH", precision=1)
+    height: FloatProperty(name="Height", default=0.0, unit="LENGTH", precision=1)
+    radius1: FloatProperty(name="Radius 1", default=0.0, min=0.0, unit="LENGTH", precision=1)
+    radius2: FloatProperty(name="Radius 2", default=0.0, min=0.0, unit="LENGTH", precision=1)
     method: EnumProperty(items=[
         ("CENTER", "Center", "Drag from the center"),
         ("EDGE", "Edge", "Drag the diameter"),
@@ -170,22 +170,34 @@ class MAX_OT_keyboard_create(bpy.types.Operator):
 def draw_method(layout, context):
     kind = current_kind(context)
     values = context.scene.max_keyboard_entries[kind]
-    col = layout.column(align=True)
+    row = layout.row(align=True)
+    row.alignment = "CENTER"
+    row.emboss = "NONE"
     for key, label in METHODS.get(kind, ()):
-        col.prop_enum(values, "method", key, text=label)
+        icon = "RADIOBUT_ON" if values.method == key else "RADIOBUT_OFF"
+        row.prop_enum(values, "method", key, text=label, icon=icon)
 
 
 def draw_keyboard(layout, context):
     kind = current_kind(context)
     values = context.scene.max_keyboard_entries[kind]
     col = layout.column(align=True)
-    col.use_property_split = True
+    col.use_property_split = False
     col.use_property_decorate = False
-    for prop in ("x", "y", "z"):
-        col.prop(values, prop)
-    col.separator()
-    for prop, label in FIELDS[kind]:
-        col.prop(values, prop, text=label)
+    for prop, label in (("x", "X"), ("y", "Y"), ("z", "Z")) + FIELDS[kind]:
+        if prop == FIELDS[kind][0][0]:
+            col.separator(factor=0.4)
+        row = col.row(align=True)
+        row.scale_y = 0.85
+        split = row.split(factor=0.48, align=True)
+        caption = split.row(align=True)
+        caption.alignment = "RIGHT"
+        caption.label(text=label + ":")
+        field = split.row(align=True)
+        field.alignment = "LEFT"
+        field.ui_units_x = 5.0
+        field.prop(values, prop, text="")
+    layout.separator(factor=0.4)
     layout.operator("max.keyboard_create", text="Create").kind = kind
 
 

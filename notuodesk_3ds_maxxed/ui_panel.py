@@ -378,13 +378,13 @@ def create_name_color(layout, context):
 
 # ----- Creation Method and Keyboard Entry -----------------------------------
 
-@rollout("Creation Method", {"CREATE"}, 2)
+@rollout("Creation Method", {"CREATE"}, 3)
 @when(keyboard_entry.visible)
 def creation_method(layout, context):
     keyboard_entry.draw_method(layout, context)
 
 
-@rollout("Keyboard Entry", {"CREATE"}, 2, closed=True)
+@rollout("Keyboard Entry", {"CREATE"}, 4, closed=True)
 @when(keyboard_entry.visible)
 def keyboard_entry_rollout(layout, context):
     keyboard_entry.draw_keyboard(layout, context)
@@ -403,7 +403,7 @@ def _has_params(context):
     return True
 
 
-@rollout("Parameters", {"CREATE", "MODIFY"}, 3)
+@rollout("Parameters", {"CREATE", "MODIFY"}, 5)
 @when(_has_params)
 def parameters(layout, context):
     ob = context.active_object

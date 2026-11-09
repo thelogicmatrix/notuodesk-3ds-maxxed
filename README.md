@@ -41,6 +41,8 @@ In **Create > Geometry > Standard Primitives**, pick a primitive and open **Keyb
 
 The rollout starts closed. Each type keeps its own values between creations and when you save the scene. New objects keep editable parameters and the default segment counts. **Creation Method** controls mouse creation only. GeoSphere calls its diameter method **Diameter**, as Max does. **Cube** creates equal sides in one drag.
 
+The Create rollouts follow Max's order: Object Type, Name and Color, Creation Method, Keyboard Entry, Parameters. Creation Method uses a row of radio buttons. Keyboard Entry has compact labelled spinners, with coordinates above dimensions and a full-width Create button. Numbers use the scene's display units.
+
 ## Compact Material Editor (M)
 
 <img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
@@ -165,6 +167,7 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.
 - Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
 - Keyboard Entry uses the existing viewport construction planes. It has no custom grid objects or AutoGrid. GeoSphere keeps Blender's icosphere tessellation.
+- Keyboard Entry uses Blender's numeric widgets and unit formatting. Spinner arrows and unit spacing differ from Max.
 - Mouse creation still uses fixed second radii for Cone, Tube and Torus. Use Keyboard Entry to set both radii.
 
 ## Updating
