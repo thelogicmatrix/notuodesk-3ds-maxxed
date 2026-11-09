@@ -478,8 +478,11 @@ def poly_edit_level(layout, context):
     g = _grid(layout)
     for op in per_level:
         _btn(g, op)
+        if op == "CAP":
+            g.operator("max.quad_cap", text="Quad Cap")
     if lvl in (2, 3):
         layout.operator("mesh.edge_face_add", text="Create Shape / Fill")
+        layout.operator("max.loop_regularize", text="Edge Loop Regularizer")
 
 
 @rollout("Edit Geometry", {"MODIFY"}, 6)
@@ -510,6 +513,8 @@ def hier_pivot(layout, context):
     col.prop(ts, "use_transform_skip_children", text="Don't Affect Children", toggle=True)
     layout.label(text="Alignment:")
     col = layout.column(align=True)
+    col.operator("max.pivot_bounds", text="Pivot to Bottom").mode = "BOTTOM"
+    col.operator("max.pivot_bounds", text="Pivot to Center").mode = "CENTER"
     col.operator("max.object_cmd", text="Center to Object").cmd = "CENTER_PIVOT"
     col.operator("max.object_cmd", text="Align to World").cmd = "PIVOT_TO_WORLD"
     col.operator("max.object_cmd", text="Center Object to Pivot").cmd = "OBJECT_TO_PIVOT"

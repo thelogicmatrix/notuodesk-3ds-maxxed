@@ -309,6 +309,8 @@ class MAX_OT_create(Operator):
             set_params(ob, k, radius1=s.x, radius2=s.x * 0.25)
         else:
             set_params(ob, k, radius1=s.x)
+        from .poly_tools import auto_pivot_created
+        auto_pivot_created(ob)
         bpy.ops.ed.undo_push(message=f"Create {PRIMITIVES[self.kind][0]}")
         self.obj = None
 
@@ -445,6 +447,8 @@ class MAX_OT_create_shape(Operator):
             ob.name = name
             ob.data.body = "MAX Text"
             ob.color = random_color()
+        from .poly_tools import auto_pivot_created
+        auto_pivot_created(context.active_object)
         return {"FINISHED"}
 
 

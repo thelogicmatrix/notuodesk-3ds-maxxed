@@ -151,6 +151,8 @@ def rebuild(ob):
         p.kind = ""          # mesh was edited: it is an Editable Poly now
         return False
     bm = build_bmesh(p.kind, p)
+    if "max_pivot_offset" in ob:
+        bmesh.ops.translate(bm, verts=bm.verts, vec=ob["max_pivot_offset"])
     bm.to_mesh(me)
     bm.free()
     me.update()

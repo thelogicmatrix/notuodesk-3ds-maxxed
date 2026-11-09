@@ -63,6 +63,14 @@ Press **M**, or choose **Rendering › Material Editor**. It opens as a narrow f
 
 <br clear="right">
 
+## Poly tools and pivots
+
+- **Quad Cap:** in Edit Poly at Border level, next to Cap, or in the modeling quad menu. Select the border edges or just one edge of a hole. It fills each selected hole with a quad grid and chooses the grid corners from the border angles. An odd edge count uses triangles and quads, with a warning.
+- **Edge Loop Regularizer:** in Edit Sub-Object at Edge or Border level, or in the modeling quad menu. The default is **Circle**, like rapidTools' round-loop command. It handles separate loops and open arcs together. The redo panel has **Even Spacing** along the existing polyline and **Strength**. Even Spacing keeps open endpoints fixed. Circle fits a plane and circle, then spaces vertices by angle. Straight chains use Even Spacing.
+- **Auto Pivot on Create:** choose **Off**, **Bottom** or **Center** in the add-on preferences. Off is the default. It runs when you finish an add-on standard primitive or spline, including Text. Bottom uses the bottom center of the world bounding box. Center uses its center. Lights, cameras, helpers, imports, duplicates and Blender's own Add menu keep their usual pivots. **Hierarchy > Adjust Pivot** also has **Pivot to Bottom** and **Pivot to Center** for selected meshes and splines. Primitive parameter edits retain the pivot offset, without recentering after each edit.
+
+These tools follow the public descriptions of [rapidTools](https://rapidmxs.com/store/rapidtools/) and [AutoPivot](https://www.scriptspot.com/3ds-max/scripts/autopivot). The original scripts do not run inside Blender.
+
 ## Opening 3ds Max files
 
 ![A 3ds Max 2015 character opened with File › Open 3ds Max File](docs/open-max-file.png)
@@ -153,6 +161,8 @@ You can switch each feature on or off (hotkeys, menu bar, toolbar, status bar, l
 
 ## Known differences from 3ds Max
 
+- Quad Cap uses an interpolated grid. It does not reproduce rapidQCap's surface smoothing. Borders too concave or twisted for a grid without folded cells are skipped with a warning. Odd borders cannot be all quads without changing the boundary.
+- AutoPivot's original buttons use center-of-mass calculations for meshes and vertex averages for splines. This add-on uses the bounding box and adds an optional creation preference. Moving an origin can change modifiers that depend on that origin, such as Mirror.
 - Blender keeps one shading mode per viewport *area*, so all four quads share the same shading (Max can set it per viewport).
 - There's no Teapot, ViewCube or Ribbon. Blender's navigation gizmo stands in for the ViewCube.
 - Shift-drag cloning isn't supported. Use Ctrl+V (Clone), or Blender's Shift+D.

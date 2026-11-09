@@ -208,6 +208,8 @@ class MAX_MT_quad_modeling(Menu):
             for op in ("EXTRUDE", "BEVEL", "OUTLINE", "INSET", "CHAMFER", "CONNECT", "BRIDGE", "CUT",
                        "SWIFT_LOOP", "OPEN_EDGES", "GROW", "SHRINK", "LOOP", "RING"):
                 right.operator("max.edit_poly", text=op.replace("_", " ").title()).op = op
+            right.operator("max.quad_cap", text="Quad Cap")
+            right.operator("max.loop_regularize", text="Edge Loop Regularizer")
         else:
             right.operator("max.turbosmooth", text="TurboSmooth")
             right.menu("MAX_MT_convert", text="Convert To:")

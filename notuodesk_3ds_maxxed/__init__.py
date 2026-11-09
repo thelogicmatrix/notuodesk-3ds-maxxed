@@ -26,6 +26,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 from . import create, ffd, keymap, max_import, operators, overlay, prims, theme, ui_menus, ui_panel, turbosmooth, updater, viewport_menus, vray, mtl_editor
+from . import poly_tools
 
 
 _prefs_cache = [None]
@@ -80,6 +81,11 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
     random_colors: BoolProperty(name="Random Object Colors", default=True,
                                 description="Give new objects a random wireframe/object color like 3ds Max")
     first_run_done: BoolProperty(default=False)
+    auto_pivot_on_create: EnumProperty(name="Auto Pivot on Create", default="OFF",
+        items=[("OFF", "Off", "Keep the normal creation pivot"),
+               ("BOTTOM", "Bottom", "Bottom center of the world bounding box"),
+               ("CENTER", "Center", "Center of the world bounding box")],
+        description="Set the pivot when finishing an add-on primitive or spline")
 
     def draw(self, context):
         lay = self.layout
@@ -90,6 +96,7 @@ class MaxxedPreferences(bpy.types.AddonPreferences):
         col = lay.column(heading="Features")
         for p in ("use_keymap", "max_menubar", "show_toolbar", "show_statusbar", "show_labels", "random_colors"):
             col.prop(self, p)
+        col.prop(self, "auto_pivot_on_create")
 
         updater.draw_update_box(lay, self)
 
@@ -143,6 +150,7 @@ _classes = (
     (MaxxedPreferences,) + prims.classes + operators.classes + create.classes + vray.classes + max_import.classes
     + viewport_menus.classes + mtl_editor.classes + updater.classes + turbosmooth.classes + ffd.classes
     + ui_menus.classes
+    + poly_tools.classes
     + ui_panel.classes + tuple(ui_panel.ROLLOUTS)
 )
 
