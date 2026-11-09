@@ -4,8 +4,10 @@ import sys
 from pathlib import Path
 import tempfile
 import unittest
+from math import radians, sqrt
 
 import bpy
+import bmesh
 import addon_utils
 
 addon_utils.enable("notuodesk_3ds_maxxed", default_set=True)
@@ -26,6 +28,117 @@ FIXTURE = '''<MaxHotkeyTransformations>
 class HsxTests(unittest.TestCase):
     def setUp(self):
         self.entries = hsx.parse_hsx(FIXTURE)
+
+    def edit_mesh(self, vertices, edges=(), faces=(), mode="EDGE", selected=None):
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        mesh = bpy.data.meshes.new("HSX regression")
+        mesh.from_pydata(vertices, edges, faces)
+        obj = bpy.data.objects.new("HSX regression", mesh)
+        bpy.context.collection.objects.link(obj)
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_mode(type=mode)
+        bm = bmesh.from_edit_mesh(mesh)
+        bpy.ops.mesh.select_all(action="DESELECT")
+        sequence = bm.verts if mode == "VERT" else bm.edges
+        sequence.ensure_lookup_table()
+        for index in (range(len(sequence)) if selected is None else selected):
+            sequence[index].select_set(True)
+        bm.select_flush_mode()
+        bmesh.update_edit_mesh(mesh)
+        return obj, bm
+
+    def test_bridge_segments_default_and_explicit(self):
+        vertices = [(x, y, z) for z in (0, 2) for x, y in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        edges = [(i + base, (i + 1) % 4 + base) for base in (0, 4) for i in range(4)]
+        for kwargs, want_faces, want_vertices in [({}, 4, 8), ({"segments": 3}, 12, 16)]:
+            with self.subTest(kwargs=kwargs):
+                obj, bm = self.edit_mesh(vertices, edges)
+                self.assertEqual(bpy.ops.max.hsx_settings(op="BRIDGE", **kwargs), {"FINISHED"})
+                self.assertEqual((len(bm.faces), len(bm.verts)), (want_faces, want_vertices))
+                print(f"HSX FIX PASS Bridge {kwargs or 'defaults'} faces={len(bm.faces)} vertices={len(bm.verts)}", flush=True)
+
+    def test_connect_segments_default_and_explicit(self):
+        for kwargs, want_edges in [({}, 2), ({"segments": 2}, 3)]:
+            with self.subTest(kwargs=kwargs):
+                obj, bm = self.edit_mesh([(0, 0, 0), (3, 0, 0)], [(0, 1)])
+                self.assertEqual(bpy.ops.max.hsx_settings(op="CONNECT", **kwargs), {"FINISHED"})
+                self.assertEqual(len(bm.edges), want_edges)
+
+    def test_chamfer_default_amount_is_one(self):
+        obj, bm = self.edit_mesh([(0, 0, 0), (4, 0, 0), (4, 4, 0), (0, 4, 0)],
+                                 faces=[(0, 1, 2, 3)], mode="VERT", selected=[0])
+        self.assertEqual(bpy.ops.max.hsx_settings(op="CHAMFER"), {"FINISHED"})
+        points = {tuple(round(c, 5) for c in v.co) for v in bm.verts}
+        self.assertIn((1.0, 0.0, 0.0), points)
+        self.assertIn((0.0, 1.0, 0.0), points)
+        print("HSX FIX PASS Chamfer default Amount=1.0", flush=True)
+
+    def test_tessellate_face_type(self):
+        obj, bm = self.edit_mesh([(0, 0, 0), (2, 0, 0), (2, 2, 0), (0, 2, 0)], faces=[(0, 1, 2, 3)])
+        self.assertIn("tessellate_type", bpy.ops.max.hsx_settings.get_rna_type().properties)
+        self.assertEqual(bpy.ops.max.hsx_settings(op="TESSELLATE", tessellate_type="FACE"), {"FINISHED"})
+        self.assertEqual((len(bm.faces), len(bm.verts)), (4, 5))
+        self.assertTrue(all(len(f.verts) == 3 for f in bm.faces))
+        print("HSX FIX PASS Tessellate Type=Face makes 4 triangles", flush=True)
+
+    def test_edge_and_vertex_extrude_follow_surface_normals(self):
+        # The two faces share an edge along Y and have normals +Z and +X.
+        vertices = [(0, 0, 0), (0, 2, 0), (-2, 2, 0), (-2, 0, 0), (0, 0, -2), (0, 2, -2)]
+        faces = [(0, 1, 2, 3), (1, 0, 4, 5)]
+        for mode in ("EDGE", "VERT"):
+            for rotated in (False, True):
+                for amount in (1.0, -0.5):
+                    with self.subTest(mode=mode, rotated=rotated, amount=amount):
+                        obj, bm = self.edit_mesh(vertices, faces=faces, mode=mode, selected=[0])
+                        if mode == "EDGE":
+                            bpy.ops.mesh.select_all(action="DESELECT")
+                            next(e for e in bm.edges if {v.index for v in e.verts} == {0, 1}).select_set(True)
+                            bm.select_flush_mode()
+                            bmesh.update_edit_mesh(obj.data)
+                        if rotated:
+                            obj.rotation_euler.x = radians(90)
+                            bpy.context.view_layer.update()
+                        old = set(bm.verts)
+                        before = {v: v.co.copy() for v in old}
+                        self.assertEqual(bpy.ops.max.hsx_settings(op="EXTRUDE", amount=amount), {"FINISHED"})
+                        new = set(bm.verts) - old
+                        self.assertEqual(len(new), 2 if mode == "EDGE" else 1)
+                        matrix = obj.matrix_world.to_3x3()
+                        for vert in new:
+                            source = next(e.other_vert(vert) for e in vert.link_edges if e.other_vert(vert) in old)
+                            delta = matrix @ (vert.co - before[source])
+                            step = amount / sqrt(2)
+                            expected = (step, -step, 0) if rotated else (step, 0, step)
+                            for got, want in zip(delta, expected):
+                                self.assertAlmostEqual(got, want, places=5)
+                        self.assertTrue(all((v.co - before[v]).length < 1e-6 for v in old))
+                        self.assertFalse(any(v.select for v in old), "Extrude must select only the new top geometry")
+
+    def test_rotated_flat_surface_extrudes_along_world_minus_y(self):
+        for mode in ("VERT", "EDGE"):
+            with self.subTest(mode=mode):
+                obj, bm = self.edit_mesh([(0, 0, 0), (2, 0, 0), (2, 2, 0), (0, 2, 0)],
+                                         faces=[(0, 1, 2, 3)], mode=mode, selected=[0])
+                obj.rotation_euler.x = radians(90)
+                bpy.context.view_layer.update()
+                old = set(bm.verts)
+                self.assertEqual(bpy.ops.max.hsx_settings(op="EXTRUDE", amount=1), {"FINISHED"})
+                for vert in set(bm.verts) - old:
+                    source = next(e.other_vert(vert) for e in vert.link_edges if e.other_vert(vert) in old)
+                    delta = obj.matrix_world.to_3x3() @ (vert.co - source.co)
+                    for got, want in zip(delta, (0, -1, 0)):
+                        self.assertAlmostEqual(got, want, places=5)
+
+    def test_extrude_without_surface_normal_preserves_geometry(self):
+        for mode in ("VERT", "EDGE"):
+            with self.subTest(mode=mode):
+                obj, bm = self.edit_mesh([(0, 0, 0), (1, 0, 0)], [(0, 1)], mode=mode)
+                self.assertEqual(bpy.ops.max.hsx_settings(op="EXTRUDE", amount=1), {"CANCELLED"})
+                self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (2, 1, 0))
 
     def test_parse_and_resolve(self):
         self.assertEqual(len(self.entries), 8)
@@ -92,7 +205,7 @@ class HsxTests(unittest.TestCase):
             bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.select_mode(type="EDGE")
             bpy.ops.mesh.select_all(action="SELECT")
-            self.assertEqual(bpy.ops.max.hsx_settings(op=operation, amount=0.2, segments=1, cuts=1), {"FINISHED"})
+            self.assertEqual(bpy.ops.max.hsx_settings(op=operation, amount=0.2, segments=1), {"FINISHED"})
             self.assertEqual(len(bmesh.from_edit_mesh(bpy.context.object.data).faces), want_faces)
         bpy.ops.object.mode_set(mode="OBJECT")
         bpy.ops.mesh.primitive_plane_add()
@@ -132,7 +245,7 @@ class HsxTests(unittest.TestCase):
 
 
 suite = unittest.defaultTestLoader.loadTestsFromTestCase(HsxTests)
-result = unittest.TextTestRunner(verbosity=2).run(suite)
+result = unittest.TextTestRunner(verbosity=2, stream=sys.stdout).run(suite)
 if not result.wasSuccessful():
     raise SystemExit(1)
 if "--" in sys.argv:
