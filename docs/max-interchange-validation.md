@@ -117,4 +117,3 @@ Checked on 2026-11-09. Autodesk defines the destination behavior. Blender's inst
 - [io_scene_max 1.9.2 release](https://github.com/nrgsille76/io_scene_max/releases/tag/v1.9.2) and [Blender extension page](https://extensions.blender.org/add-ons/io-scene-max/), latest reader and supported data.
 - [Reader source at 37db107](https://github.com/nrgsille76/io_scene_max/tree/37db107/source), parsed face data, material suffixes and hierarchy scaling.
 - Blender 5.0.1 bundled `io_scene_fbx/__init__.py`, `export_fbx_bin.py`, `import_fbx.py` and `fbx_utils.py`, inspected on the test machine. Runtime tests inspect their RNA settings and actual FBX output.
-
