@@ -163,26 +163,14 @@ class WorkspaceCommands(unittest.TestCase):
         bpy.ops.max.edit_poly(op='REMOVE')
         self.assertEqual(len(bmesh.from_edit_mesh(obj.data).verts), 8)
 
-    def test_hide_by_name_is_a_hide_dialog(self):
-        calls = []
-        class Layout:
-            def row(self, **kwargs):
-                return self
-            column = row
-            def label(self, **kwargs):
-                pass
-            def separator(self):
-                pass
-            def menu(self, *args, **kwargs):
-                pass
-            def operator(self, idname, **kwargs):
-                props = SimpleNamespace()
-                calls.append((idname, kwargs.get('text'), props))
-                return props
-        ui_menus.MAX_MT_quad.draw(SimpleNamespace(layout=Layout()), bpy.context)
-        route = next(c for c in calls if c[1] == 'Hide by Name...')
-        self.assertEqual(route[0], 'max.scene_selection_dialog')
-        self.assertTrue(route[2].hide)
+    def test_quad_routes_to_the_four_quadrant_owner(self):
+        from notuodesk_3ds_maxxed import max_quad
+        with patch.object(max_quad, 'compatibility') as route:
+            ui_menus.MAX_MT_quad.draw(SimpleNamespace(layout='default-layout'), bpy.context)
+            route.assert_called_once_with('default-layout')
+        with patch.object(max_quad, 'compatibility') as route:
+            ui_menus.MAX_MT_quad_modeling.draw(SimpleNamespace(layout='modeling-layout'), bpy.context)
+            route.assert_called_once_with('modeling-layout', 'MODELING')
 
     def test_offset_reads_the_existing_gizmo_owner(self):
         from notuodesk_3ds_maxxed import max_gizmos, max_rotate
