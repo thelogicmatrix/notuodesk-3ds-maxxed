@@ -271,7 +271,24 @@ def register():
     updater.register_auto_check()
 
 
+def _is_blender_exiting():
+    # WM_exit_ex calls this Python entry after beginning native window teardown.
+    # RNA windows can still look live then. Blender has no public shutdown flag.
+    import sys
+    on_exit = getattr(bpy.utils, '_on_exit', None)
+    exit_code = getattr(on_exit, '__code__', None)
+    frame = sys._getframe(1)
+    while frame is not None:
+        if frame.f_code is exit_code:
+            return True
+        frame = frame.f_back
+    return False
+
+
 def unregister():
+    # Process exit owns resource disposal. Normal Disable still restores the UI.
+    if _is_blender_exiting():
+        return
     symmetry.unregister()
     mode_feedback.unregister()
     cursor_policy.unregister()

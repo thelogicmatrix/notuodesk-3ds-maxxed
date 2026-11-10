@@ -1343,7 +1343,13 @@ def _arrange_workspace(context):
 def restore_layout(context):
     from . import max_editor_windows
     cancel_layout()
-    for window, workspace, name in list(_layout_snapshot.values()):
+    live = {w.as_pointer(): w for w in context.window_manager.windows}
+    for key, (window, workspace, name) in list(_layout_snapshot.items()):
+        # A closed Window's RNA wrapper can survive its native workspace hook.
+        # Check our saved identity before even reading the retained wrapper.
+        if key not in live:
+            continue
+        window = live[key]
         try:
             workspace.name = name
             window.workspace = workspace
