@@ -10,6 +10,11 @@ COLORS = ((1.0, .08, .045, 1), (.18, .95, .055, 1), (.12, .28, 1.0, 1))
 YELLOW = (1.0, .92, .0, 1)
 GREY = (.55, .55, .55, 1)
 FILL = (1.0, .92, .0, .24)
+# Autodesk 2026 Move/Scale state illustrations. Keep the approved Rotate
+# palette separate from these sampled 8-bit colours.
+TRANSFORM_COLORS = ((1, 0, 0, 1), (0, 200/255, 0, 1), (0, 0, 1, 1))
+TRANSFORM_YELLOW = (242/255, 217/255, 0, 1)
+SCREEN_RING_RATIO = 100/76
 _active = {}
 _hover = {}
 _draw_handle = None
@@ -17,6 +22,31 @@ _draw_handle = None
 
 def tripod_color(axis, locked):
     return COLORS["XYZ".index(axis)] if axis in locked else GREY
+
+
+def element_color(operation, element, handle, native, active, locked):
+    """Highlight shafts/labels/regions, never Move cones or Scale point ends."""
+    if operation == "ROTATE":
+        return native
+    highlighted = active if active != "OFF" else locked
+    if operation == "MOVE" and highlighted == "XYZ":
+        highlighted = "OFF"  # Unconstrained Move, not three selected handles.
+    center = highlighted == "CENTER" or (operation == "SCALE" and highlighted == "XYZ")
+    selected = (handle == highlighted or (handle == "CENTER" and center) or
+                (len(handle) == 1 and (handle in highlighted or (operation == "SCALE" and center))))
+    if element == "tip":
+        return native
+    if operation == "SCALE" and center and element == "shaft":
+        return native  # Only the part inside the uniform volume turns yellow.
+    if element == "fill":
+        # The overview centre is about quarter-strength yellow on black.
+        # Linear overlay blending needs 6% alpha for that display brightness.
+        return (*TRANSFORM_YELLOW[:3], .06) if selected else native
+    if operation == "MOVE" and handle == "CENTER":
+        return TRANSFORM_YELLOW
+    if operation == "SCALE" and element == "outline" and center:
+        selected = True
+    return TRANSFORM_YELLOW if selected else native
 
 
 def plane_corners(operation, inner, outer):
@@ -76,11 +106,14 @@ def geometry(context, operation=None, center=None, basis=None):
     ui = context.preferences.system.ui_scale
     prefs = max_rotate.settings(context)
     radius = min(region.width, region.height) * .12 * prefs.size * getattr(prefs,operation.lower()+"_size") / 100
+    radius *= context.preferences.view.ui_scale
     radius = max(36*ui, radius)
     world_radius = (view3d_utils.region_2d_to_location_3d(region, rv, xy+Vector((radius, 0)), center)-center).length
     view_basis = rv.view_rotation.to_matrix()
     data = dict(center=center, xy=xy, radius=radius, world_radius=world_radius, basis=basis,
-                lines=[], faces=[], labels=[], rings={}, operation=operation, ui=ui, state=state)
+                lines=[], faces=[], labels=[], rings={}, operation=operation, ui=ui, state=state,
+                uniform_fraction=prefs.uniform_handle/100,
+                label_height=radius*(6/76 if operation == "ROTATE" else 6/103))
 
     def line(handle, points, color, width=1.25, worlds=None):
         points = [project(p) for p in points]
@@ -104,8 +137,8 @@ def geometry(context, operation=None, center=None, basis=None):
                 color = tripod_color(handle, max_rotate.constraint(context, operation))
                 data["lines"].append(("TRIPOD_"+handle, [xy, end], color, 1))
                 if prefs.show_labels:
-                    data["labels"].append((handle, end+Vector((3*ui, 2*ui)), color))
-        for handle, size, color in (("FREE", 1, GREY), ("VIEW", 1.18, GREY)):
+                    data["labels"].append((handle, end+Vector((-radius*.025, radius*4/76)), color))
+        for handle, size, color in (("FREE", 1, GREY), ("VIEW", SCREEN_RING_RATIO, GREY)):
             if (handle == "FREE" and not prefs.free_rotation) or (handle == "VIEW" and not prefs.screen_handle):
                 continue
             points = [center + world_radius*size*(view_basis.col[0]*math.cos(j*math.tau/128) +
@@ -119,31 +152,29 @@ def geometry(context, operation=None, center=None, basis=None):
             if p is None:
                 continue
             endpoints.append(p)
-            color = tripod_color(key, max_rotate.constraint(context, operation))
-            short = project(center+axis*world_radius*.34)
-            if short is not None:
-                data["lines"].append(("TRIPOD_"+key, [xy, short], color, 1))
-                data["lines"].append((key, [short, p], COLORS[i], 1.25))
+            color = TRANSFORM_COLORS[i]
+            shaft_end = project(center+axis*world_radius*.68) if operation == "MOVE" else p
+            data["lines"].append((key, [xy, shaft_end], color, 1))
             direction = p-xy
             if direction.length > 1e-5:
                 direction.normalize()
                 side = Vector((-direction.y, direction.x))
                 if operation == "MOVE":
-                    # Project a shaded cone around the world axis, not a flat arrow.
-                    u = axis.orthogonal().normalized()*world_radius*.035
-                    v = axis.cross(u).normalized()*world_radius*.035
-                    base = center+axis*world_radius*.78
+                    # The long, narrow Max cone keeps its axis colour even when
+                    # its shaft is yellow (Autodesk's selected-YZ illustration).
+                    u = axis.orthogonal().normalized()*world_radius*.03
+                    v = axis.cross(u).normalized()*world_radius*.03
+                    base = center+axis*world_radius*.68
                     ring = [project(base+u*math.cos(j*math.tau/8)+v*math.sin(j*math.tau/8)) for j in range(8)]
                     for j in range(8):
                         if ring[j] is not None and ring[(j+1)%8] is not None:
-                            shade = .6+.4*j/7
-                            data["faces"].append((key,[p,ring[j],ring[(j+1)%8]],tuple(c*shade for c in COLORS[i][:3])+(1,)))
+                            data["faces"].append((key,[p,ring[j],ring[(j+1)%8]],color))
                 else:
                     # Max Scale uses small point ends, not square box caps.
-                    dot = [p+Vector((math.cos(j*math.tau/8),math.sin(j*math.tau/8)))*2*ui for j in range(8)]
-                    data["faces"].append((key,dot,COLORS[i]))
+                    dot = [p+Vector((math.cos(j*math.tau/8),math.sin(j*math.tau/8)))*radius*.03 for j in range(8)]
+                    data["faces"].append((key,dot,color))
                 if prefs.show_labels:
-                    data["labels"].append((key, p+direction*8*ui-Vector((3*ui, 3*ui)), COLORS[i]))
+                    data["labels"].append((key, p+direction*radius*.0883-Vector((data["label_height"]*.45, data["label_height"]*.4)), color))
         for i, j, key in ((0,1,"XY"), (1,2,"YZ"), (2,0,"ZX")):
             if operation == "MOVE" and not prefs.plane_handles:
                 continue
@@ -153,21 +184,28 @@ def geometry(context, operation=None, center=None, basis=None):
             points = [center+a*x+b*y for x,y in plane_corners(operation,inner,outer)]
             poly = [project(p) for p in points]
             if all(p is not None for p in poly):
-                data["faces"].append((key, poly, (.5,.5,.5,.06)))
+                data["faces"].append((key, poly, (0,0,0,0)))
                 if operation == "MOVE":
                     # Only the connected outside corner is additional geometry.
-                    data["lines"].append((key,poly[1:3],COLORS[j],1))
-                    data["lines"].append((key,poly[2:4],COLORS[i],1))
+                    data["lines"].append((key,poly[1:3],TRANSFORM_COLORS[i],1))
+                    data["lines"].append((key,poly[2:4],TRANSFORM_COLORS[j],1))
                 else:
-                    data["lines"].append((key, poly+[poly[0]], GREY, 1))
+                    # Each triangle edge carries its endpoint's axis colour
+                    # to the midpoint. Shafts supply the two radial boundaries.
+                    for a,b in ((poly[1],poly[2]),(poly[0],poly[3])):
+                        middle = (a+b)*.5
+                        data["lines"].append((key,[a,middle],TRANSFORM_COLORS[i],1))
+                        data["lines"].append((key,[middle,b],TRANSFORM_COLORS[j],1))
         if operation == "MOVE":
-            r = 5*ui
+            r = data["radius"]*.07
             poly = [xy+Vector(t) for t in ((-r,-r),(r,-r),(r,r),(-r,r))]
         else:
             poly = [project(center+axis*world_radius*prefs.uniform_handle/100) for axis in basis.col]
         if all(p is not None for p in poly) and (operation != "MOVE" or prefs.screen_move):
-            data["faces"].append(("CENTER", poly, (.55,.55,.55,.08)))
-            data["lines"].append(("CENTER", poly+[poly[0]], GREY, 1.25))
+            data["faces"].append(("CENTER", poly, (0,0,0,0)))
+            if operation == "MOVE":
+                data["lines"].append(("CENTER", poly+[poly[0]], TRANSFORM_YELLOW, 1.25))
+            # Scale's inner triangle shares the coloured plane edges above.
     return data
 
 
@@ -233,6 +271,7 @@ def tangent(data, handle, co):
 
 
 def begin(context, operator, operation, pivot, orientation, handle):
+    handle = "ZX" if handle == "XZ" else handle
     operator.operation = operation
     operator.gizmo_pivot = pivot.copy()
     operator.orientation = orientation.copy()
@@ -266,7 +305,7 @@ def pie_triangles(data, state):
     if abs(angle) < 1e-7:
         return [], 0
     if state.handle == "VIEW":
-        radial *= 1.18
+        radial *= SCREEN_RING_RATIO
     turns = int(abs(angle)/math.tau)
     sweep = math.copysign(math.tau if turns else abs(angle), angle)
     count = max(2, int(abs(sweep)/math.tau*128)+1)
@@ -337,33 +376,58 @@ def _draw_geometry(data):
             if tris:
                 gpu.state.line_width_set(data["ui"])
                 draw("LINES", [data["xy"],tris[1],data["xy"],tris[-1]],YELLOW)
-        for handle, poly, color in data["faces"]:
-            rgba = FILL if selected(handle) and len(handle) != 1 else YELLOW if selected(handle) else color
+        def draw_face(handle, poly, color):
+            element = "tip" if len(handle) == 1 else "fill"
+            rgba = element_color(data["operation"], element, handle, color, active, locked)
             tris = [p for i in range(1,len(poly)-1) for p in (poly[0],poly[i],poly[i+1])]
             draw("TRIS", tris, rgba)
-        # Plane outlines share segments with axis shafts. Draw shafts last so
-        # an inactive plane cannot paint over the locked yellow axis.
+        for handle, poly, color in data["faces"]:
+            if len(handle) != 1:
+                draw_face(handle, poly, color)
+        # Shafts cover adjoining planar edges. Native-coloured ends cover shafts.
         for handle, points, color, width in sorted(data["lines"],key=lambda item:len(item[0]) == 1):
             gpu.state.line_width_set(width*data["ui"])
-            draw("LINE_STRIP", points, color if handle.startswith("TRIPOD_") else YELLOW if selected(handle) else color)
+            if data["operation"] == "ROTATE":
+                rgba = color if handle.startswith("TRIPOD_") else YELLOW if selected(handle) else color
+            else:
+                rgba = element_color(data["operation"], "shaft" if len(handle) == 1 else "outline",
+                                     handle, color, active, locked)
+            draw("LINE_STRIP", points, rgba)
+            if data["operation"] == "SCALE" and len(handle) == 1 and highlighted in {"CENTER", "XYZ"}:
+                inner = points[0].lerp(points[-1], data["uniform_fraction"])
+                draw("LINE_STRIP", [points[0], inner], TRANSFORM_YELLOW)
+        for handle, poly, color in data["faces"]:
+            if len(handle) == 1:
+                draw_face(handle, poly, color)
         for text, xy, color in data["labels"]:
-            blf.size(0, 11*data["ui"])
+            # Detailed Autodesk illustrations use 6-pixel axis labels at a
+            # 76-pixel Rotate radius or roughly 103-pixel Move/Scale radius.
+            height = data["label_height"]
+            blf.size(0, height*2)
+            blf.size(0, height*2*height/max(blf.dimensions(0, "z")[1], 1))
             blf.position(0, xy.x, xy.y, 0)
-            blf.color(0, *(YELLOW if data["operation"] != "ROTATE" and selected(text) else color))
-            blf.draw(0, text)
+            blf.color(0, *element_color(data["operation"], "label", text, color, active, locked))
+            blf.draw(0, text.lower())
         if state and hasattr(state, "angle_data") and max_rotate.settings(context).angle_data:
-            # The tangent stays fixed throughout Linear Roll, as in Max.
-            t, p = state.tangent, state.start_co
-            gpu.state.line_width_set(data["ui"])
-            draw("LINES", [p-t*160*data["ui"], p+t*160*data["ui"]], YELLOW)
-            normal = Vector((-t.y,t.x))*4*data["ui"]
-            draw("LINES", [p-normal,p+normal,state.cursor-normal,state.cursor+normal], YELLOW)
+            # Autodesk's mid-drag reference shows the slice and angle data,
+            # without the formerly invented 320-UI-pixel crossing guide.
             values = [math.degrees(v) for v in state.angle_data]
             text = "[%.2f, %.2f, %.2f]" % tuple(0 if abs(v)<.0001 else v for v in values)
-            blf.size(0, 13*data["ui"])
-            blf.position(0, data["xy"].x-data["radius"], data["xy"].y+data["radius"]*1.3, 0)
-            blf.color(0, *YELLOW)
-            blf.draw(0, text)
+            # CAE9185F: 95 x 11 px readout above a 76 px main ring.
+            # Fit glyph dimensions, so UI scale does not change its proportions.
+            size = data["radius"]*.2
+            reference_text = "[-416.99, 0.00, 0.00]"
+            blf.size(0, size)
+            width, height = blf.dimensions(0, reference_text)
+            blf.size(0, size*data["radius"]*11/76/max(height, 1))
+            width, height = blf.dimensions(0, reference_text)
+            with gpu.matrix.push_pop():
+                gpu.matrix.translate((data["xy"].x-data["radius"]*.375, data["xy"].y+data["radius"]*1.34, 0))
+                # BLF's advance includes side bearings beyond the visible ink.
+                gpu.matrix.scale((data["radius"]*98/76/max(width, 1), 1, 1))
+                blf.position(0, 0, 0, 0)
+                blf.color(0, *YELLOW)
+                blf.draw(0, text)
     finally:
         gpu.state.line_width_set(1)
         gpu.state.blend_set("NONE")

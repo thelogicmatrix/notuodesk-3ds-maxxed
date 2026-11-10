@@ -1175,14 +1175,24 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                     factor = float(self.number) / 100
                 factor = snap_scale(s, factor)
                 self.scale_factor = factor
+                from . import max_rotate
+                rs = max_rotate.settings(context)
                 if self.constraint_normal is not None:
-                    n = self.constraint_normal
-                    mat = Matrix(tuple(tuple((factor if i == j else 0) + (1 - factor) * n[i] * n[j]
-                                             for j in range(3)) for i in range(3))).to_4x4()
+                    if not rs.uniform_2axis and rs.scale_mode != "SQUASH" and self.number in {"", "-", ".", "-."}:
+                        factors = [1.0, 1.0, 1.0]
+                        for i, enabled in enumerate(self.constraint_axis):
+                            origin = self.reference.dot(self.orientation.col[i])
+                            if enabled and abs(origin) > 1e-8:
+                                factors[i] = snap_scale(s, 1+(point-self.pivot).dot(self.orientation.col[i])/origin)
+                        frame = self.orientation.to_4x4()
+                        mat = frame @ Matrix.Diagonal((*factors, 1)) @ frame.inverted_safe()
+                    else:
+                        n = self.constraint_normal
+                        mat = Matrix(tuple(tuple((factor if i == j else 0) + (1 - factor) * n[i] * n[j]
+                                                 for j in range(3)) for i in range(3))).to_4x4()
                 else:
                     mat = Matrix.Scale(factor, 4, self.axis) if self.axis is not None else Matrix.Scale(factor, 4)
-                from . import max_rotate
-                if max_rotate.settings(context).scale_mode == "SQUASH":
+                if rs.scale_mode == "SQUASH":
                     mat = max_rotate.squash_matrix(factor, self.constraint_axis, self.orientation).to_4x4()
                 self.display_basis = mat.to_3x3() @ self.orientation
             mat = Matrix.Translation(self.pivot) @ mat @ Matrix.Translation(-self.pivot)

@@ -70,13 +70,12 @@ class ReviewRegressions(unittest.TestCase):
                         'Local Scale must display its individual pivot before a centre is explicitly chosen')
         print('R3 PASS Local centre and Move/Scale centre contracts agree', flush=True)
 
-    def test_R4_tripods_are_muted_except_locked_axes(self):
+    def test_R4_rotate_tripod_is_muted_except_locked_axes(self):
         self.assertTrue(hasattr(g, 'tripod_color'), 'tripod needs independent colour treatment')
-        for operation in ('MOVE', 'ROTATE', 'SCALE'):
-            self.assertEqual(g.tripod_color('X', 'Z'), g.GREY)
-            self.assertEqual(g.tripod_color('Y', 'Z'), g.GREY)
-            self.assertEqual(g.tripod_color('Z', 'Z'), g.COLORS[2])
-        print('R4 PASS all tool tripods mute inactive axes and colour locked axis', flush=True)
+        self.assertEqual(g.tripod_color('X', 'Z'), g.GREY)
+        self.assertEqual(g.tripod_color('Y', 'Z'), g.GREY)
+        self.assertEqual(g.tripod_color('Z', 'Z'), g.COLORS[2])
+        print('R4 PASS Rotate-only tripod mutes inactive axes and colours locked axis', flush=True)
 
     def test_R4_rotate_tripod_is_not_a_ring_hit(self):
         data=dict(operation='ROTATE',lines=[('TRIPOD_X',[Vector((0,0)),Vector((30,0))],g.GREY,1)],

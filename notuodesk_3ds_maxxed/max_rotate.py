@@ -98,10 +98,11 @@ class MaxRotateSettings(bpy.types.PropertyGroup):
     rotate_size: FloatProperty(name="Relative Size (%)", default=100, min=1, max=500)
     scale_size: FloatProperty(name="Relative Size (%)", default=100, min=1, max=500)
     plane_handles: BoolProperty(name="Plane Handles", default=True)
-    plane_offset: FloatProperty(name="Offset (%)", default=42, min=0, max=100)
+    plane_offset: FloatProperty(name="Offset (%)", default=33, min=0, max=100)
     screen_move: BoolProperty(name="Move in Screen Space", default=True)
-    uniform_handle: FloatProperty(name="Uniform Handle Size (%)", default=55, min=1, max=90)
-    two_axis_handle: FloatProperty(name="2-Axis Handle Size (%)", default=23, min=1, max=100)
+    uniform_handle: FloatProperty(name="Uniform Handle Size (%)", default=50, min=1, max=90)
+    two_axis_handle: FloatProperty(name="2-Axis Handle Size (%)", default=20, min=1, max=100)
+    uniform_2axis: BoolProperty(name="Uniform 2-Axis Scaling", default=True)
     free_rotation: BoolProperty(name="Free Rotation", default=True)
     show_tripod: BoolProperty(name="Show Tripod", default=True)
     screen_handle: BoolProperty(name="Screen Handle", default=True)
@@ -150,6 +151,7 @@ def constraint(context, operation=None):
 
 
 def set_constraint(context, value, operation=None):
+    value = "ZX" if value == "XZ" else value
     s = settings(context)
     attr = _constraint_attr(context, operation)
     if value == "CYCLE":
@@ -786,7 +788,7 @@ class MAX_PT_gizmo_preferences(bpy.types.Panel):
         groups = (("Transform Gizmos",("show_labels","multiple_gizmos","size","constant")),
                   ("Move Gizmo",("move_size","plane_handles","plane_offset","screen_move")),
                   ("Rotate Gizmo",("rotate_size","free_rotation","show_tripod","screen_handle","show_pie","angle_data","rotation_method","planar_threshold","increment")),
-                  ("Scale Gizmo",("scale_size","uniform_handle","two_axis_handle")),
+                  ("Scale Gizmo",("scale_size","uniform_handle","two_axis_handle","uniform_2axis")),
                   ("Reference Coordinates",("grid","working_location","working_rotation")))
         for title, fields in groups:
             col = self.layout.box().column(align=True)
