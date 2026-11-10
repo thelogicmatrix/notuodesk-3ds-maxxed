@@ -3,6 +3,8 @@ from pathlib import Path
 import bpy
 
 _changes = {}
+# Nathan's dark scheme, video 2 event 6, active TurboSmooth row.
+STACK_BLUE = (100/255, 138/255, 187/255, 1.)
 
 
 def _remember(owner, name, value):
@@ -79,8 +81,8 @@ def apply(context=None):
                 _remember(widget, 'shadetop', 12)
                 _remember(widget, 'shadedown', -12)
         # Stack selection and toolbar pressed state use different categories.
-        _remember(ui.wcol_list_item, 'inner_sel', (1., .85, .0, 1.))
-        _remember(ui.wcol_list_item, 'text_sel', (0., 0., 0., 1.))
+        _remember(ui.wcol_list_item, 'inner_sel', STACK_BLUE)
+        _remember(ui.wcol_list_item, 'text_sel', (1., 1., 1., 1.))
     for window in context.window_manager.windows:
         for area in window.screen.areas:
             if area.type == 'VIEW_3D':

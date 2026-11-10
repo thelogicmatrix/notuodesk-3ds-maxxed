@@ -275,13 +275,14 @@ class ModeFeedbackTests(unittest.TestCase):
         self.assertEqual(bpy.context.mode,'OBJECT')
         self.assertEqual(ob.modifiers.active,mod)
 
-    def test_yellow_stack_theme_and_blue_buttons(self):
+    def test_nathan_blue_stack_theme_and_blue_buttons(self):
         from notuodesk_3ds_maxxed import theme
         theme.apply_theme()
         ui=bpy.context.preferences.themes[0].user_interface
-        self.assertGreater(ui.wcol_list_item.inner_sel[0],.95)
-        self.assertGreater(ui.wcol_list_item.inner_sel[1],.75)
-        self.assertLess(ui.wcol_list_item.inner_sel[2],.1)
+        # Nathan video 2, event 6, TurboSmooth active-row interior.
+        for actual, expected in zip(ui.wcol_list_item.inner_sel, (100/255,138/255,187/255,1)):
+            self.assertAlmostEqual(actual, expected, places=5)
+        self.assertEqual(tuple(ui.wcol_list_item.text_sel), (1,1,1))
         self.assertGreater(ui.wcol_tool.inner_sel[2],ui.wcol_tool.inner_sel[0])
 
     def test_link_preserves_world_and_rejects_cycles(self):
