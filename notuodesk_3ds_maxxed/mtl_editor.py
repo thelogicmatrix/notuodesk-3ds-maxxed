@@ -11,6 +11,9 @@ from bpy_extras.io_utils import ImportHelper, ExportHelper
 from . import max_icons
 
 NUM_SLOTS = 24
+MAX_DEFAULT_DIFFUSE = (.5, .5, .5)
+MATERIAL_PROPS = ('max_diffuse', 'max_specular', 'max_spec_level', 'max_glossiness',
+                  'max_opacity', 'max_ior', 'max_two_sided')
 MAP_PREFIX = 'MaxMap_'
 MAP_CHANNELS = (
     ('AMBIENT', 'Ambient Color', None, True),
@@ -62,6 +65,14 @@ def shader(material, create=False):
                 node = links[0].from_node
                 return node if node.type == 'BSDF_PRINCIPLED' else None
     return next((n for n in tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+
+
+def bsdf(mat):
+    return shader(mat)
+
+
+def ensure_nodes(mat):
+    return shader(mat, create=True)
 
 
 def _socket_read(material, name, fallback):
@@ -186,7 +197,7 @@ def new_default_material(index):
     material = bpy.data.materials.new(f'{index+1:02d} - Default')
     material.use_nodes = True
     material['max_type'] = 'STANDARD'
-    material.max_diffuse = (.5, .5, .5)
+    material.max_diffuse = MAX_DEFAULT_DIFFUSE
     material.max_specular = (1, 1, 1)
     material.max_spec_level = 0
     material.max_glossiness = 10
@@ -987,6 +998,7 @@ class MAX_PT_mtl_editor(_MaterialPanel, bpy.types.Panel):
 
 class MAX_PT_mtl_shader_basic(_MaterialPanel, bpy.types.Panel):
     bl_label = 'Shader Basic Parameters'
+    bl_parent_id = 'MAX_PT_mtl_editor'
 
     def draw(self, context):
         material = active_material(context)
@@ -1001,6 +1013,7 @@ class MAX_PT_mtl_shader_basic(_MaterialPanel, bpy.types.Panel):
 
 class MAX_PT_mtl_blinn(_MaterialPanel, bpy.types.Panel):
     bl_label = 'Blinn Basic Parameters'
+    bl_parent_id = 'MAX_PT_mtl_editor'
 
     def draw(self, context):
         material = active_material(context)
@@ -1012,6 +1025,7 @@ class MAX_PT_mtl_blinn(_MaterialPanel, bpy.types.Panel):
 
 class MAX_PT_mtl_vray(_MaterialPanel, bpy.types.Panel):
     bl_label = 'Basic Parameters (VRayMtl)'
+    bl_parent_id = 'MAX_PT_mtl_editor'
 
     def draw(self, context):
         MAX_PT_mtl_blinn.draw(self, context)
@@ -1023,6 +1037,7 @@ class MAX_PT_mtl_vray(_MaterialPanel, bpy.types.Panel):
 
 class MAX_PT_mtl_extended(_MaterialPanel, bpy.types.Panel):
     bl_label = 'Extended Parameters'
+    bl_parent_id = 'MAX_PT_mtl_editor'
 
     def draw(self, context):
         self.layout.prop(active_material(context), 'max_ior', text='Index of Refraction')
@@ -1030,6 +1045,7 @@ class MAX_PT_mtl_extended(_MaterialPanel, bpy.types.Panel):
 
 class MAX_PT_mtl_maps(_MaterialPanel, bpy.types.Panel):
     bl_label = 'Maps'
+    bl_parent_id = 'MAX_PT_mtl_editor'
 
     def draw(self, context):
         material = active_material(context)
@@ -1518,10 +1534,10 @@ def register_props():
         (bpy.types.Scene, 'max_mtl_editor', PointerProperty(type=MaxMtlEditorState)),
         (bpy.types.Material, 'max_diffuse', FloatVectorProperty(name='Diffuse', size=3, subtype='COLOR', min=0, max=1, get=_diffuse_get, set=_diffuse_set)),
         (bpy.types.Material, 'max_specular', FloatVectorProperty(name='Specular', size=3, subtype='COLOR', min=0, max=1, get=_specular_get, set=_specular_set)),
-        (bpy.types.Material, 'max_spec_level', IntProperty(name='Specular Level', min=0, max=100, get=_level_get, set=_level_set)),
+        (bpy.types.Material, 'max_spec_level', IntProperty(name='Specular Level', min=0, max=999, soft_max=100, get=_level_get, set=_level_set)),
         (bpy.types.Material, 'max_glossiness', IntProperty(name='Glossiness', min=0, max=100, get=_gloss_get, set=_gloss_set)),
-        (bpy.types.Material, 'max_opacity', IntProperty(name='Opacity', min=0, max=100, get=_opacity_get, set=_opacity_set)),
-        (bpy.types.Material, 'max_ior', FloatProperty(name='Index of Refraction', min=1, max=100, get=_ior_get, set=_ior_set)),
+        (bpy.types.Material, 'max_opacity', IntProperty(name='Opacity', min=0, max=100, subtype='PERCENTAGE', get=_opacity_get, set=_opacity_set)),
+        (bpy.types.Material, 'max_ior', FloatProperty(name='Index of Refraction', min=1, max=10, get=_ior_get, set=_ior_set)),
         (bpy.types.Material, 'max_two_sided', BoolProperty(name='2-Sided', get=_two_sided_get, set=_two_sided_set))]
     for owner, key, definition in definitions:
         if not hasattr(owner, key):

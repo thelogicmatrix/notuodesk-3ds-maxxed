@@ -255,6 +255,16 @@ class MaterialTests(unittest.TestCase):
         self.assertFalse(bpy.app.timers.is_registered(mtl._render_previews))
 
     def test_public_identifiers_and_toolbar_policy(self):
+        self.assertEqual(set(mtl.MATERIAL_PROPS), {'max_diffuse', 'max_specular',
+            'max_spec_level', 'max_glossiness', 'max_opacity', 'max_ior', 'max_two_sided'})
+        self.assertEqual(mtl.bsdf(self.material), mtl.shader(self.material))
+        self.assertEqual(mtl.ensure_nodes(self.material), mtl.shader(self.material))
+        fields = bpy.types.Material.bl_rna.properties
+        self.assertEqual((fields['max_spec_level'].hard_max, fields['max_spec_level'].soft_max), (999, 100))
+        self.assertEqual(fields['max_ior'].hard_max, 10)
+        self.assertEqual(fields['max_opacity'].subtype, 'PERCENTAGE')
+        for name in ('shader_basic', 'blinn', 'vray', 'extended', 'maps'):
+            self.assertEqual(getattr(mtl, 'MAX_PT_mtl_'+name).bl_parent_id, 'MAX_PT_mtl_editor')
         self.assertEqual(set(mtl.MAP_INFO), {'AMBIENT', 'DIFFUSE', 'SPECULAR_COLOR', 'SPECULAR_LEVEL',
             'GLOSSINESS', 'SELF_ILLUM', 'OPACITY', 'FILTER', 'BUMP', 'REFLECTION', 'REFRACTION', 'DISPLACEMENT'})
         for name in ['slot', 'get', 'assign', 'reset', 'make_unique', 'put_library', 'select_by',
