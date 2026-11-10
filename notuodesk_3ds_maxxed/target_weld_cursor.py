@@ -9,8 +9,20 @@ from .mode_feedback import draw_cursor_strokes
 
 # Autodesk's 2026 selection capture shows separate, outlined cross arms.
 # Target Weld's own help specifies a + but supplies no cursor bitmap.
-CROSS_STROKES = ((-7, 0), (-3, 0), (3, 0), (7, 0),
-                 (0, -7), (0, -3), (0, 3), (0, 7))
+# Max draws a hollow O at the hotspot (Nathan, 2026-11-10): a ring whose
+# centre stays transparent, so the target vertex shows through.
+RING_RADIUS = 5
+RING_SEGMENTS = 12
+
+
+def _ring(radius=RING_RADIUS, count=RING_SEGMENTS):
+    from math import cos, sin, tau
+    points = [(radius*cos(tau*i/count), radius*sin(tau*i/count)) for i in range(count)]
+    return tuple(p for i in range(count) for p in (points[i], points[(i+1) % count]))
+
+
+CROSS_STROKES = ((-10, 0), (-5, 0), (5, 0), (10, 0),
+                 (0, -10), (0, -5), (0, 5), (0, 10)) + _ring()
 CROSS_PASSES = ((3, (1, 1, 1, 1)), (1, (0, 0, 0, 1)))
 _arrow = None
 _arrow_batch = None

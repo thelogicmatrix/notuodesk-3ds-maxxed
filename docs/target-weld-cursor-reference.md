@@ -17,7 +17,7 @@ Checked 10 November 2026. Scope is Editable Poly Target Weld at Vertex, Edge and
 
 ## What the implementation can claim
 
-The POST_PIXEL overlay uses four separate cross arms with an open centre. At scale 1, the arm coordinates run from 3 to 7 pixels from the hotspot. A 3-pixel white stroke surrounds a 1-pixel black stroke. This construction follows the available screenshots. Those screenshots do not establish a lossless 2026 Target Weld cursor mask. The arrow uses the captured system artwork. Both drawings follow Blender's UI scale.
+The POST_PIXEL overlay uses four separate cross arms around a hollow O. Nathan confirmed Max draws an O with a transparent centre at the hotspot (2026-11-10). At scale 1 the ring has radius 5 and the arms run from 5 to 10 pixels from the hotspot, so a vertex tick stays visible inside the ring. A 3-pixel white stroke surrounds a 1-pixel black stroke. This construction follows the available screenshots. Those screenshots do not establish a lossless 2026 Target Weld cursor mask. The arrow uses the captured system artwork. Both drawings follow Blender's UI scale.
 
 The band remains the pre-existing white line at alpha 0.95, with 5 pixels on and 5 off. Nathan confirmed that Max's band is dotted. No inspected source establishes its exact colour or interval, so the implementation does not change those values or claim a measured match.
 
