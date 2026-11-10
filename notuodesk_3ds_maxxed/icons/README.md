@@ -78,7 +78,7 @@ does not allocate GUI icon IDs. Positive IDs and visible drawing need a GUI run.
 
 ## Scope
 
-The set has 273 drawings, including all 125 previous names. It includes assets
+The set has 321 drawings, including all 125 previous names. It includes assets
 for Max controls that this add-on does not yet display.
 No new controls or tool behavior are introduced. The existing quad menus have
 no built-in icon arguments to replace. Material previews remain live Blender
@@ -99,10 +99,28 @@ Auto Key and Set Key mode controls keep text. Named stack rows keep icon and tex
 The catalog marks reserved drawings for text-only spots so integration does not
 add decorative icons to Max's text controls.
 
-`max_icons.CADDY_FIELDS` maps pending `poly_caddies` field keys to the `caddy_*`
-assets. These include the branch's kind names and field names. The caddy branch
-must use these assets in its GPU draw routine. Its numeric values stay visible,
-and its field names move into hover titles. That branch is not merged here.
+`max_icons.CADDY_OPERATIONS` maps each of the eleven caddies and its fields to
+48 original shaded drawings. Mode fields have separate Group, Local Normal,
+By Polygon, Edge or Face artwork. Bridge ends have large numbered badges.
+`poly_caddies.artwork()` chooses these operation-specific names. The draw routine
+tries `CADDY_FIELDS` and the previous mode artwork if a new icon is unavailable,
+then uses a vector fallback. Numeric values stay visible and field names appear
+in the hover title. Weld Before / After stays text. Its indexed drawing is
+reserved and does not replace the counts.
+
+`tools/draw_caddy_icons.py` authors this family through `draw_max_icons_v2.py`.
+The reference catalog cites the matching Autodesk 2026 Help topics. The review
+sandbox `sb-caddy-icons/references/` holds the downloaded caddy images for
+Extrude, Chamfer, Connect, Bevel, Inset, Bridge, Weld, Tessellate, MeshSmooth and
+Relax. Autodesk's Outline documentation supplies boundary examples but no
+Outline caddy image. Its icon uses that documented outer-boundary idea.
+`tools/preview_caddy_icons.py --sandbox <sb-caddy-icons>` renders every new icon
+beside frozen old artwork at 16, 20 and 32px, plus 150% sizes and the matching
+reference crop. Autodesk pixels stay in the external review sandbox.
+Add `--live` after the sandbox icon tour to write each live caddy comparison.
+
+The caddy draw routine restores GPU blending after BLF text. Without that,
+transparent corners overwrite the viewport and make square holes behind icons.
 The `constraint_*`, `symmetry*` and `ops.transform.*` drawings are ready for
 their feature integrator. WorkSpaceTool `bl_icon` requires Blender's tool-icon
 format or a custom draw route. A preview PNG does not replace its `.dat` file.

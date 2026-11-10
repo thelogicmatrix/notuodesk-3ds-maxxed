@@ -10,14 +10,32 @@ _collection = None
 _textures = {}
 DIRECTORY = Path(__file__).with_name("icons")
 
-# Field keys and tool names match the pending feature branches. Their integrator
-# can use these names without replacing the SVG family or changing the loader.
+# Generic field artwork remains a fallback for missing operation-specific PNGs.
 CADDY_FIELDS = {key: "caddy_" + key for key in (
     "amount", "height", "extrusion_type", "bevel_type", "local_bias", "base_width",
     "threshold", "segments", "open", "tension", "tess_tension", "taper", "bias", "smooth", "twist1", "twist2",
     "bridge_selection", "pinch", "slide", "smoothness", "tessellate_type", "relax", "iterations",
     "hold_boundary", "hold_outer", "individual", "pick1", "pick2", "separate_smoothing",
     "separate_materials", "weld_counts")}
+
+# Per-operation artwork. Generic CADDY_FIELDS stays available for missing assets.
+CADDY_OPERATIONS = {
+    'EXTRUDE': dict(amount='caddy_extrude_height',
+                    **{key: 'caddy_extrude_'+key for key in
+                       ('extrusion_type', 'local_bias', 'base_width')}),
+    'CHAMFER': {key: 'caddy_chamfer_'+key for key in ('amount', 'segments', 'tension', 'open')},
+    'CONNECT': {key: 'caddy_connect_'+key for key in ('segments', 'pinch', 'slide')},
+    'BEVEL': {key: 'caddy_bevel_'+key for key in ('bevel_type', 'height', 'amount', 'local_bias')},
+    'INSET': {key: 'caddy_inset_'+key for key in ('individual', 'amount')},
+    'OUTLINE': dict(amount='caddy_outline_amount'),
+    'BRIDGE': {key: 'caddy_bridge_'+key for key in
+               ('segments', 'taper', 'bias', 'smooth', 'twist1', 'twist2', 'bridge_selection', 'pick1', 'pick2')},
+    'WELD': {key: 'caddy_weld_'+key for key in ('threshold', 'weld_counts')},
+    'TESSELLATE': {key: 'caddy_tessellate_'+key for key in ('tessellate_type', 'tess_tension')},
+    'MSMOOTH': {key: 'caddy_msmooth_'+key for key in
+                ('smoothness', 'separate_smoothing', 'separate_materials')},
+    'RELAX': {key: 'caddy_relax_'+key for key in ('relax', 'iterations', 'hold_boundary', 'hold_outer')},
+}
 
 
 def tooltip(context, label, idname, **properties):

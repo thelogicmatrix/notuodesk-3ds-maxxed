@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_bridge_taper</title>
+<desc>Bridge narrowed at its middle</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,2 6,6 6,10 2,14 8,14 10,10 10,6 8,2" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="8,2 14,4 11,7 11,9 14,12 8,14 10,10 10,6" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M6 6 10 6 M6 10 10 10" fill="none" stroke="#428fcb" stroke-width="1"/>
+</g>
+</svg>

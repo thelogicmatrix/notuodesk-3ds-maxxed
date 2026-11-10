@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_chamfer_tension</title>
+<desc>Curved chamfer profile between two faces</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,14 2,3 14,3" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><path d="M2 3 Q4 12 14 14 L14 3 Z" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M2 3 Q4 12 14 14" fill="none" stroke="#428fcb" stroke-width="2"/>
+</g>
+</svg>

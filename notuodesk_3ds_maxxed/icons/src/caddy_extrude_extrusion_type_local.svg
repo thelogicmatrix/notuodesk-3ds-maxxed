@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_extrude_extrusion_type_local</title>
+<desc>Raised polygon local mode</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="2,5 7,2 14,5 9,8" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><polygon points="2,5 9,8 9,14 2,11" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="9,8 14,5 14,11 9,14" fill="#64757e" stroke="#303b40" stroke-width="1"/><path d="M4 8 1 6 M11 7 15 4" fill="none" stroke="#428fcb" stroke-width="2"/>
+</g>
+</svg>

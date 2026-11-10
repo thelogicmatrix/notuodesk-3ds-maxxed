@@ -51,6 +51,9 @@ REFS = {
     'smooth': ('3DSMax-Modeling', '44BA6ECC-EA8C-405B-8B52-4ABF9430A11C', 'references/mesh-smooth-caddy-04.png and mesh-smooth-caddy-06.png'),
     'relax': ('3DSMax-Modeling', '7E7FC066-7ED7-44B8-858A-5B9426E8715E', 'references/relax-caddy-04.png through relax-caddy-09.png'),
     'tessellate': ('3DSMax-Modeling', 'EAAAD139-33CD-4809-B03B-237533B6E98C', 'references/tessellate-caddy-04.png through tessellate-caddy-08.png'),
+    'bevel': ('3DSMax-Modeling', '4CCA9B3E-8D75-4EE2-BDD3-7493095AF8B5', 'sb-caddy-icons/references/bevel-06.png'),
+    'weld': ('3DSMax-Modeling', '697BAC48-F5F7-4B5B-9E98-DF979887AEA6', 'sb-caddy-icons/references/weld-06.png'),
+    'outline': ('3DSMax-Modeling', 'FF7D7633-03AD-4427-821A-65F8AC484CDD', 'Outline section, polygon boundary example. Autodesk does not supply an Outline caddy image on this page.'),
     'material': ('3DSMax-Lighting-Shading', '93E64F78-67A8-4DEA-9BF5-2F9A9098987B', 'references/material-tools-03.png through material-tools-24.png'),
     'time': ('3DSMax-Animation', '818205DD-D58A-495E-BD0C-DC69BDE8DAC2', 'references/time-00.png and time-02.png through time-14.png'),
     'viewport': ('3DSMax-Basics', 'F8326C68-F2F9-47F7-AC1D-BA41D7825C7C', 'max-ui-reference/images/interface-overview.png, bottom-right navigation controls'),
@@ -483,6 +486,8 @@ def main():
     material()
     poly_tools()
     caddies()
+    from draw_caddy_icons import caddy_icons
+    caddy_icons(add, path, poly, rect, circle)
     navigation_and_features()
     OUT.mkdir(parents=True, exist_ok=True)
     for row in CAT:

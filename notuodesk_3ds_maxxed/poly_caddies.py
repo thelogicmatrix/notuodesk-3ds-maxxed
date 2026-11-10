@@ -217,6 +217,18 @@ def label(session, key):
 
 def artwork(session, key):
     from . import max_icons
+    name = max_icons.CADDY_OPERATIONS.get(session.action, {}).get(key)
+    if name is None:
+        return generic_artwork(session, key)
+    if key in {'extrusion_type', 'bevel_type', 'tessellate_type'}:
+        name += '_'+getattr(session.values, key).lower()
+    elif key == 'individual':
+        name += '_polygon' if session.values.individual else '_group'
+    return name
+
+
+def generic_artwork(session, key):
+    from . import max_icons
     if key == 'amount':
         if session.action == 'EXTRUDE':
             return 'caddy_height'
@@ -229,6 +241,12 @@ def artwork(session, key):
     if key == 'tessellate_type':
         return 'caddy_type_' + session.values.tessellate_type.lower()
     return max_icons.CADDY_FIELDS[key]
+
+
+def draw_field_icon(session, key, cx, cy, size):
+    from . import max_icons
+    return (max_icons.draw(artwork(session, key), cx, cy, size) or
+            max_icons.draw(generic_artwork(session, key), cx, cy, size))
 
 
 def choices(session, key):
@@ -634,7 +652,7 @@ class Caddy:
             batch_for_shader(shader, 'TRI_FAN', {'pos': points}).draw(shader)
 
         def box(x, y, w, h, color, radius=None):
-            radius = min(7*self.scale if radius is None else radius, h/2, w/2)
+            radius = min(h/2 if radius is None else radius, h/2, w/2)
             points = []
             for cx, cy, start in ((x+w-radius, y+h-radius, 0), (x+radius, y+h-radius, 90),
                                   (x+radius, y+radius, 180), (x+w-radius, y+radius, 270)):
@@ -643,10 +661,14 @@ class Caddy:
             polygon(points, color)
 
         def text(x, y, value, color=(.91, .92, .93, 1), size=11):
+            blend = gpu.state.blend_get()
             blf.size(0, size*self.scale)
             blf.color(0, *color)
             blf.position(0, x, y, 0)
             blf.draw(0, value)
+            # BLF leaves blending disabled. Keep subsequent transparent icons
+            # and pill edges from overwriting the viewport with alpha zero.
+            gpu.state.blend_set(blend)
 
         def lines(points, color=(.18, .35, .42, 1)):
             shader.bind()
@@ -699,7 +721,7 @@ class Caddy:
                 lines([(cx-s,cy-s), (cx+s,cy+s)])
 
         def field_mark(key, cx, cy, fallback):
-            if not max_icons.draw(artwork(self.session, key), cx, cy, 20*self.scale):
+            if not draw_field_icon(self.session, key, cx, cy, 20*self.scale):
                 mark(cx, cy, fallback)
 
         from .operators import EDIT_POLY_OPS
@@ -721,16 +743,21 @@ class Caddy:
             title += ': '+label(self.session, self.hover)
         blf.size(0, 11*self.scale)
         tx, ty, tw, th = self.rect(0)
-        title_width = min(self.canvas()[2]-tx, max(tw, blf.dimensions(0, title)[0]+20*self.scale))
-        while title and blf.dimensions(0, title)[0] > title_width-16*self.scale:
+        title_width = min(self.canvas()[2]-tx, max(tw, blf.dimensions(0, title)[0]+30*self.scale))
+        while title and blf.dimensions(0, title)[0] > title_width-28*self.scale:
             title = title[:-1]
-        box(tx, ty, title_width, th, (.045, .05, .052, .96))
-        text(tx+8*self.scale, ty+8*self.scale, title)
+        box(tx, ty, title_width, th, (.045, .05, .052, .96), radius=7*self.scale)
+        lines([(tx+7*self.scale,ty+7*self.scale),(tx+7*self.scale,ty+17*self.scale),
+               (tx+10*self.scale,ty+7*self.scale),(tx+10*self.scale,ty+17*self.scale)],(.4,.42,.43,1))
+        text(tx+16*self.scale, ty+8*self.scale, title)
         for i, key in enumerate(self.keys, 1):
             x, y, w, h = self.rect(i)
             on = enabled(self.session, key)
             box(x, y, w, h, (.04, .045, .05, .9))
             box(x+1, y+1, w-2, h-2, (.51, .53, .54, .98) if on else (.16, .18, .19, .95))
+            # A shallow light upper half gives Max's value pills their bevel.
+            box(x+2*self.scale, y+h/2, w-4*self.scale, h/2-2*self.scale,
+                (.64,.66,.67,.25) if on else (.3,.32,.33,.14))
             if key == 'weld_counts':
                 before = len(self.session.baseline.bm.verts if self.session.level == 1 else self.session.baseline.bm.edges)
                 bm = bmesh.from_edit_mesh(self.session.obj.data)
@@ -752,14 +779,13 @@ class Caddy:
                 polygon([(x+w-17*self.scale,y+14*self.scale), (x+w-7*self.scale,y+14*self.scale),
                          (x+w-12*self.scale,y+8*self.scale)], (.12,.18,.2,1))
             elif prop.type == 'BOOLEAN':
-                tick(x+12*self.scale,y+h/2,value)
-                field_mark(key,x+w-13*self.scale,y+h/2,'hold')
+                field_mark(key,x+13*self.scale,y+h/2,'hold')
+                tick(x+w-12*self.scale,y+h/2,value)
             else:
                 kind = 'height' if self.session.action == 'EXTRUDE' and key == 'amount' else LABELS[key][1]
                 if self.session.action == 'CHAMFER' and key == 'amount':
                     kind = 'chamfer'
                 field_mark(key,x+14*self.scale,y+h/2,kind)
-                lines([(x+26*self.scale,y+3),(x+26*self.scale,y+h-3)])
                 display = self.text if self.edit == key else str(value) if isinstance(value,int) else f'{value:.4g}'
                 if self.edit == key:
                     blf.size(0, 11*self.scale)
@@ -775,9 +801,10 @@ class Caddy:
         x,y,w,h = self.rect(len(self.keys)+1)
         for i, kind in enumerate(('OK','APPLY','CANCEL')):
             cx, cy = x+(i+.5)*w/3, y+h/2
-            box(cx-11*self.scale,cy-11*self.scale,22*self.scale,22*self.scale,(.5,.53,.54,.98),radius=11*self.scale)
-            if max_icons.draw('caddy_'+kind.lower(),cx,cy,20*self.scale):
+            # The SVG already owns its round disc. Do not draw a second ring.
+            if max_icons.draw('caddy_'+kind.lower(),cx,cy,28*self.scale):
                 continue
+            box(cx-11*self.scale,cy-11*self.scale,22*self.scale,22*self.scale,(.5,.53,.54,.98),radius=11*self.scale)
             s = 5*self.scale
             if kind == 'OK':
                 lines([(cx-s,cy),(cx-1,cy-s),(cx-1,cy-s),(cx+s,cy+s)],(.12,.35,.3,1))

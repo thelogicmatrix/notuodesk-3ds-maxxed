@@ -9,6 +9,8 @@ import struct
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import addon_utils
 import bpy
@@ -45,6 +47,50 @@ def run():
             "symmetry", "symmetry_align", "constraint_none", "constraint_edge",
             "constraint_face", "constraint_normal", "planeplus", "loft"} <= names
     assert set(icons.CADDY_FIELDS.values()) <= names
+    from notuodesk_3ds_maxxed import poly_caddies as caddies
+    assert set(icons.CADDY_OPERATIONS) == {
+        'EXTRUDE', 'CHAMFER', 'CONNECT', 'BEVEL', 'INSET', 'OUTLINE',
+        'BRIDGE', 'WELD', 'TESSELLATE', 'MSMOOTH', 'RELAX'}
+    field_icons = set()
+    for action in icons.CADDY_OPERATIONS:
+        for level in (1, 2, 3, 4, 5):
+            session = SimpleNamespace(action=action, level=level,
+                keys=addon.editable_poly.CADDIES[action],
+                values=SimpleNamespace(extrusion_type='GROUP', bevel_type='GROUP',
+                                       individual=False, tessellate_type='EDGE'))
+            for key in caddies.fields(session):
+                actual = caddies.artwork(session, key)
+                assert actual.startswith('caddy_'+action.lower()+'_'), (action, key, actual)
+                assert actual in names, (action, key, actual)
+                field_icons.add(actual)
+            for key, values in {'extrusion_type': ('GROUP','LOCAL','POLYGON'),
+                                'bevel_type': ('GROUP','LOCAL','POLYGON'),
+                                'individual': (False, True),
+                                'tessellate_type': ('EDGE','FACE')}.items():
+                if key not in caddies.fields(session):
+                    continue
+                variants = []
+                for value in values:
+                    setattr(session.values, key, value)
+                    actual = caddies.artwork(session, key)
+                    assert actual in names, actual
+                    variants.append((PACKAGE/'icons'/(actual+'.png')).read_bytes())
+                assert len(set(variants)) == len(values), (action, key, 'identical mode artwork')
+    # Catch a return to the generic duplicates that prompted this change.
+    for group in [('chamfer_amount','extrude_height','inset_amount','outline_amount'),
+                  ('connect_segments','connect_pinch','connect_slide'),
+                  ('bridge_twist1','bridge_twist2'), ('bridge_pick1','bridge_pick2'),
+                  ('relax_hold_boundary','relax_hold_outer'),
+                  ('msmooth_smoothness','msmooth_separate_smoothing')]:
+        pixels = [(PACKAGE/'icons'/('caddy_'+n+'.png')).read_bytes() for n in group]
+        assert len(set(pixels)) == len(group), group
+    session = SimpleNamespace(action='CHAMFER')
+    with patch.object(icons, 'draw', side_effect=[False, True]) as draw:
+        assert caddies.draw_field_icon(session, 'amount', 0, 0, 20)
+        assert [call.args[0] for call in draw.call_args_list] == ['caddy_chamfer_amount','caddy_chamfer']
+    with patch.object(icons, 'draw', return_value=False):
+        assert not caddies.draw_field_icon(session, 'amount', 0, 0, 20)
+    print('ICONS caddies: 11 operations, all fields and mode variants, distinct paired controls, generic fallback', flush=True)
     for name in names:
         source = PACKAGE / "icons/src" / (name + ".svg")
         assert "SPDX-License-Identifier: GPL-3.0-or-later" in source.read_text(encoding="utf-8")
@@ -104,6 +150,8 @@ def run():
         assert preview is not None and tuple(preview.image_size) == (64, 64), f"Preview did not load: {name}"
         assert len(preview.image_pixels_float) == 64 * 64 * 4
         assert any(list(preview.icon_pixels_float)[3::4]), f"Transparent icon thumbnail: {name}"
+        if name == 'caddy_ok':
+            assert preview.image_pixels_float[3] == 0, 'Caddy disc must have a transparent corner'
         if not bpy.app.background:
             assert icons.icon(name) > 0, f"No GUI icon ID: {name}"
     print(f"ICONS artwork: {len(names)} original SVGs, 32/64px PNGs, all previews loaded", flush=True)

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_relax_iterations</title>
+<desc>A relaxed curved patch with a repeat plus</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M2 12 V7 Q2 2 8 2 Q14 2 14 7 V12 Z" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M2 7 Q8 2 14 7" fill="none" stroke="#428fcb" stroke-width="1"/><path d="M12 9 V15 M9 12 H15" fill="none" stroke="#64c6d3" stroke-width="2"/>
+</g>
+</svg>
