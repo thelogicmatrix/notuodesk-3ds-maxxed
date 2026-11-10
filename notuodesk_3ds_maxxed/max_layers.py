@@ -214,19 +214,19 @@ class MAX_OT_layer_action(bpy.types.Operator):
 
 
 def draw_layers(layout, context):
-    layout.operator("max.layer_action", text="New Layer").action = "CREATE"
+    layout.operator("max.layer_action", text="New Layer", icon='ADD').action = "CREATE"
     for layer in catalogue(context.scene):
         row = layout.row(align=True)
         row.label(text=label(layer))
-        for action, text, field in (("HIDE", "Hide", "max_layer_hidden"),
-                                    ("FREEZE", "Freeze", "max_layer_frozen")):
-            op = row.operator("max.layer_action", text=text, depress=bool(layer.get(field)))
+        for action, glyph, field in (("HIDE", 'HIDE_ON' if layer.get('max_layer_hidden') else 'HIDE_OFF', "max_layer_hidden"),
+                                     ("FREEZE", 'LOCKED' if layer.get('max_layer_frozen') else 'UNLOCKED', "max_layer_frozen")):
+            op = row.operator("max.layer_action", text='', icon=glyph, emboss=False, depress=bool(layer.get(field)))
             op.action, op.layer_id, op.value = action, layer[MARKER], not layer.get(field, False)
-        op = row.operator("max.layer_action", text="Move Selection")
+        op = row.operator("max.layer_action", text="", icon='FORWARD')
         op.action, op.layer_id = "ASSIGN", layer[MARKER]
-        op = row.operator("max.layer_action", text="Delete")
+        op = row.operator("max.layer_action", text="", icon='TRASH')
         op.action, op.layer_id = "REMOVE", layer[MARKER]
-        op = row.operator("max.layer_action", text="Rename")
+        op = row.operator("max.layer_action", text="", icon='GREASEPENCIL')
         op.action, op.layer_id = "RENAME", layer[MARKER]
     layout.operator("max.layer_action", text="Move Selection to Layer 0").action = "ASSIGN"
 

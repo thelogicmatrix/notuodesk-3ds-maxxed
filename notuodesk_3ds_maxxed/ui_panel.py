@@ -1,6 +1,6 @@
 """Maxxed Command Panel assembled from the independent feature adapters."""
 import bpy
-from bpy.props import IntProperty
+from bpy.props import IntProperty, StringProperty
 from . import (command_panel_ui as host, create, editable_poly_ui, keyboard_entry,
                line_tool, loft, max_icons, max_widgets as w, modifier_ui, operators,
                plane_plus, prims, symmetry, vray)
@@ -83,6 +83,21 @@ def when(pred):
     return decorate
 
 
+class MAX_OT_rollout_toggle(bpy.types.Operator):
+    bl_idname = 'max.rollout_toggle'
+    bl_label = 'Expand or Collapse Rollout'
+    bl_options = {'INTERNAL'}
+    identifier: StringProperty()
+    default_closed: bpy.props.BoolProperty(default=False)
+
+    def execute(self, context):
+        key = '_max_rollout_' + self.identifier
+        context.workspace[key] = not context.workspace.get(key, self.default_closed)
+        for area in context.screen.areas:
+            area.tag_redraw()
+        return {'FINISHED'}
+
+
 def rollout(label, tabs, order, closed=False):
     def decorate(callback):
         identifier = 'MAX_PT_' + callback.__name__
@@ -99,17 +114,28 @@ def rollout(label, tabs, order, closed=False):
                 return bool(predicate(context))
         def draw(self, context):
             w.compact(self.layout)
+            collapsed = context.workspace.get('_max_rollout_' + identifier, closed)
+            header = self.layout.row(align=True)
+            header.scale_y = .85
+            split = header.split(factor=.08, align=True)
+            for cell, caption in ((split.row(align=True), '+' if collapsed else '-'),
+                                  (split.row(align=True), label)):
+                op = cell.operator('max.rollout_toggle', text=caption)
+                op.identifier, op.default_closed = identifier, closed
+            if collapsed:
+                return
+            body = self.layout.column(align=True)
             ob = host.object_for(context)
             if ob:
-                self.layout.context_pointer_set('object', ob)
-                self.layout.context_pointer_set('active_object', ob)
+                body.context_pointer_set('object', ob)
+                body.context_pointer_set('active_object', ob)
             with context.temp_override(object=ob, active_object=ob):
-                callback(self.layout, context)
+                callback(body, context)
         cls = type(identifier, (bpy.types.Panel,), {
             '__module__': __name__, 'bl_idname': identifier, 'bl_label': label,
             'bl_space_type': 'VIEW_3D', 'bl_region_type': 'UI', 'bl_category': 'Command Panel',
             'bl_parent_id': 'MAX_PT_command_panel', 'bl_order': order,
-            'bl_options': {'DEFAULT_CLOSED'} if closed else set(),
+            'bl_options': {'HIDE_HEADER'},
             'poll': classmethod(poll), 'draw': draw,
         })
         ROLLOUTS.append(cls)
@@ -341,7 +367,8 @@ def hier_link(layout, context):
         row = layout.row(align=True)
         row.label(text=label)
         for index, axis in enumerate('XYZ'):
-            row.prop(ob, prop, index=index, text=axis)
+            row.prop(ob, prop, index=index, text=axis, toggle=False,
+                     icon='CHECKBOX_HLT' if getattr(ob, prop)[index] else 'CHECKBOX_DEHLT', emboss=False)
     layout.label(text='Inherit')
     host.unavailable(layout, 'Position / Rotation / Scale')
     layout.operator('max.object_cmd', text='Unlink Selection').cmd = 'UNLINK'
@@ -386,12 +413,36 @@ def disp_hide(layout, context):
     layout.operator('max.scene_selection_dialog', text='Hide By Name...').hide = True
 
 
+@rollout('Hide By Category', {'DISPLAY'}, 0)
+def disp_categories(layout, context):
+    # Category toggles use the viewport's native visibility filters.
+    space = context.space_data
+    for prop, text in (('show_object_viewport_mesh', 'Geometry'),
+                       ('show_object_viewport_curve', 'Shapes'),
+                       ('show_object_viewport_light', 'Lights'),
+                       ('show_object_viewport_camera', 'Cameras'),
+                       ('show_object_viewport_empty', 'Helpers')):
+        row = layout.row(align=True)
+        if hasattr(space, prop):
+            row.prop(space, prop, text=text, invert_checkbox=True)
+        else:
+            host.unavailable(row, text)
+    for text in ('Space Warps', 'Systems'):
+        host.unavailable(layout, text)
+
+
 @rollout('Freeze', {'DISPLAY'}, 2)
 def disp_freeze(layout, context):
     layout.operator('max.object_cmd', text='Freeze Selection').cmd = 'FREEZE'
+    host.unavailable(layout, 'Freeze Unselected')
     layout.operator('max.object_cmd', text='Unfreeze All').cmd = 'UNFREEZE'
     layout.operator('max.unfreeze_by_name', text='Unfreeze by Name...')
     layout.operator('max.unfreeze_by_hit', text='Unfreeze by Hit')
+
+
+@rollout('Freeze By Category', {'DISPLAY'}, 2, closed=True)
+def disp_freeze_categories(layout, context):
+    host.unavailable(layout, 'Freeze By Category')
 
 
 @rollout('Display Properties', {'DISPLAY'}, 3)
@@ -409,6 +460,11 @@ def disp_props(layout, context):
 @rollout('Link Display', {'DISPLAY'}, 4, closed=True)
 def disp_links(layout, context):
     host.unavailable(layout, 'Display Links')
+
+
+@rollout('Headlight', {'DISPLAY'}, 5, closed=True)
+def disp_headlight(layout, context):
+    host.unavailable(layout, 'Headlight')
 
 
 @rollout('Utilities', {'UTILITIES'}, 1)
@@ -443,4 +499,4 @@ def unregister_props():
         del bpy.types.Object.max_stack_index
 
 
-classes = (*modifier_ui.classes, *host.classes, MAX_UL_stack, MAX_MT_create_subcat, MAX_PT_command_panel)
+classes = (*modifier_ui.classes, *host.classes, MAX_OT_rollout_toggle, MAX_UL_stack, MAX_MT_create_subcat, MAX_PT_command_panel)

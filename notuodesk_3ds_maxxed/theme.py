@@ -52,7 +52,7 @@ def apply(context=None):
             'face_select': (1., .12, .08, .15),
             'face_dot': (1., .12, .08),
             'vertex_size': 4,
-            'grid': (.27, .27, .27),
+            'grid': (.42, .42, .42),
         }.items():
             _remember(view, name, value)
         for section in ('view_3d', 'properties', 'outliner', 'dopesheet_editor', 'topbar', 'statusbar'):
@@ -65,7 +65,7 @@ def apply(context=None):
                                     'text_hi': (1., 1., 1.)}.items():
                     _remember(space, name, value)
         ui = theme.user_interface
-        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_text', 'wcol_menu',
+        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_numslider', 'wcol_option', 'wcol_text', 'wcol_menu',
                      'wcol_pulldown', 'wcol_radio', 'wcol_toggle', 'wcol_tooltip'):
             widget = getattr(ui, name, None)
             if widget:
@@ -75,8 +75,9 @@ def apply(context=None):
                 _remember(widget, 'text_sel', (1., 1., 1., 1.))
                 _remember(widget, 'outline', (.22, .22, .22))
                 _remember(widget, 'roundness', 0.)
-                _remember(widget, 'shadetop', 0)
-                _remember(widget, 'shadedown', 0)
+                _remember(widget, 'show_shaded', True)
+                _remember(widget, 'shadetop', 12)
+                _remember(widget, 'shadedown', -12)
         # Stack selection and toolbar pressed state use different categories.
         _remember(ui.wcol_list_item, 'inner_sel', (1., .85, .0, 1.))
         _remember(ui.wcol_list_item, 'text_sel', (0., 0., 0., 1.))
@@ -105,7 +106,7 @@ def _live_owners(context):
             section_theme = getattr(palette, section, None)
             if section_theme:
                 yield section_theme.space
-        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_text', 'wcol_menu', 'wcol_list_item',
+        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_numslider', 'wcol_option', 'wcol_text', 'wcol_menu', 'wcol_list_item',
                      'wcol_pulldown', 'wcol_radio', 'wcol_toggle', 'wcol_tooltip'):
             yield getattr(palette.user_interface, name)
     for workspace in bpy.data.workspaces:

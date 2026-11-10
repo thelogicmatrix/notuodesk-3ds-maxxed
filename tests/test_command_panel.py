@@ -41,6 +41,22 @@ class CommandPanelTests(unittest.TestCase):
         self.ob.max_stack_index = 0
         self.assertEqual(ui._stack_get(self.ob), 0)
 
+    def test_rollout_toggle_keeps_workspace_state(self):
+        identifier = 'MAX_PT_poly_selection'
+        key = '_max_rollout_' + identifier
+        workspace = bpy.context.workspace
+        try:
+            if key in workspace:
+                del workspace[key]
+            self.assertEqual(bpy.ops.max.rollout_toggle(identifier=identifier), {'FINISHED'})
+            self.assertTrue(workspace[key])
+            self.assertEqual(bpy.ops.max.rollout_toggle(identifier=identifier), {'FINISHED'})
+            self.assertFalse(workspace[key])
+            self.assertTrue(all('HIDE_HEADER' in cls.bl_options for cls in ui.ROLLOUTS))
+        finally:
+            if key in workspace:
+                del workspace[key]
+
     def test_pin_and_end_result_restore(self):
         a = modifier_ui.add_modifier(self.ob, 'BEND')
         b = modifier_ui.add_modifier(self.ob, 'SHELL')
