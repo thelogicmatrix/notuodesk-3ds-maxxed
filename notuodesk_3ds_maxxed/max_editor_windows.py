@@ -87,11 +87,16 @@ def _native_frame(host, handles):
     user32 = ctypes.windll.user32
     host.native_handle = next(iter(handles))
     handle = wintypes.HWND(host.native_handle)
-    user32.SetWindowTextW(handle, 'Material Editor' if host.kind == 'MATERIAL' else TITLES[host.kind])
+    if host.kind == 'MATERIAL':
+        from . import mtl_editor
+        title = mtl_editor.window_title(bpy.context)
+    else:
+        title = TITLES[host.kind]
+    user32.SetWindowTextW(handle, title)
     if host.kind == 'MATERIAL':
         scale = bpy.context.preferences.view.ui_scale
         # Compact is a portrait editor. This is its opening size, not a test override.
-        user32.SetWindowPos(handle, None, 0, 0, round(480*scale), round(820*scale), 0x16)
+        user32.SetWindowPos(handle, None, 0, 0, round(499*scale), round(836*scale), 0x16)
 
 
 def register_material_adapter(open_callback=None):

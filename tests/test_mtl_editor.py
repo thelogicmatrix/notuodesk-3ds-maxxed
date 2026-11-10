@@ -24,11 +24,38 @@ class MaterialTests(unittest.TestCase):
         mtl.ensure_slots(self.context.scene)
         self.material = mtl.active_material(self.context)
 
+    def test_new_samples_are_physical_without_reclassifying_saved_materials(self):
+        self.assertEqual(mtl.material_kind(self.material), 'PHYSICAL')
+        node = mtl.shader(self.material)
+        self.assertAlmostEqual(node.inputs['Roughness'].default_value, 0)
+        self.assertAlmostEqual(node.inputs['IOR'].default_value, 1.52)
+        self.material['max_type'] = 'STANDARD'
+        mtl.ensure_slots(self.context.scene)
+        self.assertEqual(mtl.material_kind(self.material), 'STANDARD')
+
+    def test_physical_controls_drive_principled_and_copy_independently(self):
+        physical = self.material.max_physical
+        physical.base_color = (.2, .4, .6)
+        physical.base_weight = .5
+        physical.roughness = .3
+        physical.metalness = .7
+        physical.transparency = .4
+        physical.coating = .8
+        physical.coat_roughness = .2
+        node = mtl.shader(self.material)
+        self.assertAlmostEqual(node.inputs['Base Color'].default_value[2], .3)
+        for name, value in [('Roughness', .3), ('Metallic', .7),
+                            ('Transmission Weight', .4), ('Coat Weight', .8), ('Coat Roughness', .2)]:
+            self.assertAlmostEqual(node.inputs[name].default_value, value)
+        copy = self.material.copy()
+        copy.max_physical.base_weight = .9
+        self.assertAlmostEqual(self.material.max_physical.base_weight, .5)
+
     def test_initial_slots_and_every_grid_preserve_saved_extras(self):
         editor = mtl.state(self.context)
         self.assertEqual(len(editor.slots), 24)
         self.assertEqual(editor.visible, '6')
-        self.assertEqual((self.material.max_spec_level, self.material.max_glossiness), (0, 10))
+        self.assertEqual((self.material.max_spec_level, self.material.max_glossiness), (50, 100))
         self.assertFalse(self.material.max_two_sided)
         for visible, shape in [('6', (3, 2)), ('15', (5, 3)), ('24', (6, 4))]:
             editor.visible = visible
@@ -172,7 +199,46 @@ class MaterialTests(unittest.TestCase):
         other = editor.slots[3].material
         self.assertEqual(mtl.MAX_OT_mtl_set_type.execute(operator, self.context), {'FINISHED'})
         self.assertEqual(self.material['max_type'], 'PHYSICAL')
-        self.assertEqual(other['max_type'], 'STANDARD')
+        self.assertEqual(other['max_type'], 'PHYSICAL')
+
+    def test_physical_roughness_map_uses_direct_values_and_keeps_legacy_gloss_map(self):
+        image = bpy.data.images.new('Physical roughness', width=4, height=4)
+        mtl.set_map(self.material, 'PHYSICAL_ROUGHNESS', image)
+        tree = self.material.node_tree
+        self.assertNotIn('MaxMap_PHYSICAL_ROUGHNESS_Invert', tree.nodes)
+        mix = tree.nodes['MaxMap_PHYSICAL_ROUGHNESS_Amount']
+        self.assertEqual(mix.inputs[2].links[0].from_node.image, image)
+        mtl.set_map_enabled(self.material, 'PHYSICAL_ROUGHNESS', False)
+        self.assertEqual(mtl.map_badge(self.material, 'PHYSICAL_ROUGHNESS'), 'm')
+        self.assertEqual(mix.inputs[0].default_value, 0)
+        mtl.set_map(self.material, 'GLOSSINESS', image)
+        self.assertIn('MaxMap_GLOSSINESS_Invert', tree.nodes)
+
+    def test_physical_reset_and_material_id_channel_change_real_data(self):
+        self.material.max_physical.transparency = .9
+        self.material.max_physical.base_weight = .3
+        self.material.max_physical.coating = .6
+        self.assertEqual(bpy.ops.max.mtl_reset(), {'FINISHED'})
+        self.assertEqual(mtl.material_kind(self.material), 'PHYSICAL')
+        self.assertEqual(self.material.max_physical.transparency, 0)
+        self.assertEqual(self.material.max_physical.base_weight, 1)
+        self.assertEqual(self.material.max_physical.roughness, 0)
+        self.assertEqual(self.material.max_physical.coating, 0)
+        self.assertEqual(bpy.ops.max.mtl_id_channel(channel=7), {'FINISHED'})
+        self.assertEqual(self.material.pass_index, 7)
+
+    def test_compact_toolbar_order_and_title_follow_reference(self):
+        self.assertEqual([label for _, label, _ in mtl.COMPACT_TOOLS], [
+            'Get Material', 'Put to Scene', 'Assign to Selection', 'Reset', 'Make Copy',
+            'Make Unique', 'Put to Library', 'Material ID Channel',
+            'Show Shaded Material in Viewport', 'Show End Result',
+            'Go to Parent', 'Go Forward to Sibling'])
+        self.assertEqual([label for _, label, _ in mtl.SAMPLE_TOOLS], [
+            'Sample Type', 'Backlight', 'Background', 'Sample UV Tiling',
+            'Video Color Check', 'Make Preview', 'Options', 'Select by Material',
+            'Material/Map Navigator'])
+        self.material.name = 'W2E Title fixture'
+        self.assertEqual(mtl.window_title(self.context), 'Material Editor - W2E Title fixture')
 
     def test_bump_amount_uses_the_saved_bump_parameter(self):
         image = bpy.data.images.new('Bump amount fixture', width=4, height=4)
