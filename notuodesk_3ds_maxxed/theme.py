@@ -1,4 +1,5 @@
-"""Reversible Maxxed appearance. Palette values are an independent approximation."""
+"""Reversible Maxxed appearance sampled from the supplied Max overview."""
+from pathlib import Path
 import bpy
 
 _changes = {}
@@ -28,6 +29,7 @@ def apply(context=None):
     for owner, name, value in (
         (prefs.view, 'show_splash', False),
         (prefs.view, 'show_tooltips_python', False),
+        (prefs.view, 'show_tooltips', True),
         (prefs.view, 'show_statusbar_version', False),
         (prefs.inputs, 'use_emulate_3_button_mouse', True),
         (prefs.inputs, 'view_rotate_method', 'TURNTABLE'),
@@ -35,6 +37,9 @@ def apply(context=None):
         (prefs.inputs, 'use_zoom_to_mouse', True),
     ):
         _remember(owner, name, value)
+    font_path = Path('C:/Windows/Fonts/tahoma.ttf')
+    if font_path.is_file():
+        _remember(prefs.view, 'font_path_ui', str(font_path))
     if prefs.themes:
         theme = prefs.themes[0]
         view = theme.view_3d
@@ -56,19 +61,24 @@ def apply(context=None):
             space = getattr(space, 'space', None)
             if space:
                 for name, value in {'back': (.16, .16, .16),
-                                    'header': (.20, .20, .20, 1.),
+                                    'header': (.267, .267, .267, 1.),
                                     'text': (.85, .85, .85),
                                     'text_hi': (1., 1., 1.)}.items():
                     _remember(space, name, value)
         ui = theme.user_interface
-        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_text', 'wcol_menu'):
+        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_text', 'wcol_menu',
+                     'wcol_pulldown', 'wcol_radio', 'wcol_toggle', 'wcol_tooltip'):
             widget = getattr(ui, name, None)
             if widget:
-                _remember(widget, 'inner', (.25, .25, .25, 1.))
-                _remember(widget, 'inner_sel', (.16, .40, .60, 1.))
-                _remember(widget, 'text', (.88, .88, .88, 1.))
-        # mode_feedback owns the stack state. Its active row needs the yellow
-        # list-selection category while ordinary tool buttons stay blue.
+                _remember(widget, 'inner', (.36, .36, .36, 1.))
+                _remember(widget, 'inner_sel', (.34, .50, .67, 1.))
+                _remember(widget, 'text', (.80, .80, .80, 1.))
+                _remember(widget, 'text_sel', (1., 1., 1., 1.))
+                _remember(widget, 'outline', (.22, .22, .22))
+                _remember(widget, 'roundness', 0.)
+                _remember(widget, 'shadetop', 0)
+                _remember(widget, 'shadedown', 0)
+        # Stack selection and toolbar pressed state use different categories.
         _remember(ui.wcol_list_item, 'inner_sel', (1., .85, .0, 1.))
         _remember(ui.wcol_list_item, 'text_sel', (0., 0., 0., 1.))
     for window in context.window_manager.windows:
@@ -80,6 +90,7 @@ def apply(context=None):
                 _remember(space, 'show_region_toolbar', False)
                 _remember(space.shading, 'background_type', 'VIEWPORT')
                 _remember(space.shading, 'background_color', (.035, .035, .035))
+                _remember(space.shading, 'show_shadows', True)
                 _remember(space.shading, 'show_object_outline', True)
                 area.tag_redraw()
 
@@ -93,7 +104,8 @@ def _live_owners(context):
         yield palette.view_3d
         for section in ('view_3d', 'properties', 'outliner', 'dopesheet_editor'):
             yield getattr(palette, section).space
-        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_text', 'wcol_menu', 'wcol_list_item'):
+        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_text', 'wcol_menu', 'wcol_list_item',
+                     'wcol_pulldown', 'wcol_radio', 'wcol_toggle', 'wcol_tooltip'):
             yield getattr(palette.user_interface, name)
     for workspace in bpy.data.workspaces:
         for screen in workspace.screens:

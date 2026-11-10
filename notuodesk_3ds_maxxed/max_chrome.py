@@ -1,7 +1,8 @@
 """Explicit, reversible installation of Maxxed workspace chrome for the wave-2 host."""
 import bpy
+import blf
 from bpy.app.handlers import persistent
-from bpy.props import BoolProperty, CollectionProperty, EnumProperty
+from bpy.props import BoolProperty, CollectionProperty, EnumProperty, FloatVectorProperty
 from . import max_status, max_timeline, max_toolbar, overlay, theme
 
 _installed = False
@@ -15,6 +16,43 @@ _menus = None
 _explorer_layout = None
 _command_panel_layout = None
 _region_overlap = None
+_label_callbacks = None
+
+
+def _label_regions(context):
+    region = context.region
+    if not region or region.type != 'WINDOW' or context.area.type != 'VIEW_3D':
+        return []
+    scale = max(.5, context.preferences.system.ui_scale)
+    face = max_timeline.font()
+    blf.size(face, round(10*scale))
+    shading = context.space_data.shading
+    quality = ('High Quality' if shading.type in {'MATERIAL', 'RENDERED'} else
+               'Performance' if not shading.show_shadows and not shading.show_cavity else 'Standard')
+    labels = [('MAX_MT_vp_general', '+'), ('MAX_MT_vp_point_of_view', overlay.view_name(context)),
+              ('MAX_MT_vp_quality', quality), ('MAX_MT_vp_shading', overlay.shading_name(context.space_data))]
+    x, y = 4*scale, region.height-14*scale
+    result = []
+    for menu, caption in labels:
+        text = '['+caption+']'
+        width = blf.dimensions(face, text)[0]+2*scale
+        if x+width > region.width-4*scale:
+            break
+        result.append((menu, text, (x, y-2*scale, x+width, y+11*scale)))
+        x += width
+    return result
+
+
+def _draw_labels():
+    context = bpy.context
+    if context.area.type != 'VIEW_3D' or not overlay._visible(context):
+        return
+    entries = _label_regions(context)
+    keys = ('PLUS', 'VIEW', 'QUALITY', 'SHADING')
+    overlay.label_rects[context.region.as_pointer()] = [(key, *rect) for key, (_, _, rect) in zip(keys, entries)]
+    for _, caption, (x, y, _, _) in entries:
+        max_timeline._text(x, y+2*context.preferences.system.ui_scale, caption,
+                           round(10*context.preferences.system.ui_scale), (.72,.72,.72,1))
 
 
 class MAX_OT_chrome_pointer(bpy.types.Operator):
@@ -36,7 +74,11 @@ class MAX_OT_chrome_pointer(bpy.types.Operator):
             if _pointers.get(self.window_id) == self:
                 _pointers.pop(self.window_id, None)
             return {'CANCELLED'}
-        if not active(context) or event.type != 'LEFTMOUSE' or event.value != 'PRESS':
+        if not active(context):
+            return {'PASS_THROUGH'}
+        if max_toolbar.pointer(context, event):
+            return {'RUNNING_MODAL'}
+        if event.type != 'LEFTMOUSE' or event.value != 'PRESS':
             return {'PASS_THROUGH'}
         from . import viewport_menus
         area, region = viewport_menus.region_at(context, event.mouse_x, event.mouse_y)
@@ -44,7 +86,7 @@ class MAX_OT_chrome_pointer(bpy.types.Operator):
             return {'PASS_THROUGH'}
         with context.temp_override(area=area, region=region):
             ctx = bpy.context
-            if timeline_area(area) and event.mouse_y-region.y >= 22*ctx.preferences.system.ui_scale:
+            if timeline_area(area):
                 bpy.ops.max.chrome_scrub('INVOKE_DEFAULT')
                 return {'RUNNING_MODAL'}
             if overlay._visible(ctx) and overlay.hit_test(ctx, event.mouse_x-region.x, event.mouse_y-region.y):
@@ -75,7 +117,8 @@ def _draw_header(self, context):
     if timeline_area(context.area):
         max_timeline.draw_controls(self.layout, context)
     else:
-        max_toolbar.draw(self.layout, context)
+        # Header pixels and hit rectangles come from the same reference cells.
+        self.layout.separator()
 
 
 def _draw_status(self, context):
@@ -88,12 +131,13 @@ def _draw_time(self, context):
 
 def _draw_top(self, context):
     if context.region.alignment == 'RIGHT':
+        row = self.layout.row(align=True)
+        row.label(text='Workspaces:')
+        row.menu('MAX_MT_chrome_layouts', text='Default')
         return
     row = self.layout.row(align=True)
-    row.menu('MAX_MT_chrome_application', text='Maxxed')
     if _menus:
         _menus(row, context)
-    row.menu('MAX_MT_chrome_layouts', text='3ds Max')
 
 
 def _replace(cls, callback, predicate=active):
@@ -134,6 +178,10 @@ def _use_timeline_host(area):
         space.show_region_ui = False
         space.show_region_toolbar = False
         space.show_region_tool_header = False
+        header = next((r for r in area.regions if r.type == 'HEADER'), None)
+        if header and header.alignment != 'BOTTOM':
+            with bpy.context.temp_override(region=header):
+                bpy.ops.screen.region_flip()
 
 
 def _adopt_timelines(screen):
@@ -263,7 +311,7 @@ class MAX_MT_chrome_layouts(bpy.types.Menu):
 def install(*, feedback=None, read_transform=None, write_transform=None, commands=None,
             draw_menus=None, apply_explorer=None, apply_command_panel=None):
     """Install once after shared RNA/classes. Does not apply a layout or theme implicitly."""
-    global _installed, _menus, _explorer_layout, _command_panel_layout
+    global _installed, _menus, _explorer_layout, _command_panel_layout, _label_callbacks
     if _installed:
         return
     _menus, _explorer_layout, _command_panel_layout = draw_menus, apply_explorer, apply_command_panel
@@ -275,15 +323,28 @@ def install(*, feedback=None, read_transform=None, write_transform=None, command
     bpy.types.WindowManager.max_chrome_offset = BoolProperty(name='Absolute / Offset', default=False, options={'SKIP_SAVE'})
     bpy.types.WindowManager.max_chrome_crossing = BoolProperty(name='Window / Crossing', default=False, options={'SKIP_SAVE'},
         description='Crossing intersects projected object bounds. Window encloses them. Applies to rectangular object selection')
+    bpy.types.WindowManager.max_chrome_filter = EnumProperty(name='Selection Filter',
+        items=[('ALL', 'All', 'Select all supported object types')], options={'SKIP_SAVE'})
+    bpy.types.WindowManager.max_chrome_set = EnumProperty(name='Named Selection Sets',
+        items=max_toolbar.set_items, update=max_toolbar.recall_set, options={'SKIP_SAVE'})
+    for field, subtype, unit in (('position', 'TRANSLATION', 'LENGTH'),
+                                 ('rotation', 'EULER', 'ROTATION'), ('scale', 'NONE', 'NONE')):
+        setattr(bpy.types.WindowManager, 'max_chrome_' + field,
+                FloatVectorProperty(name=field.title(), size=3, subtype=subtype, unit=unit,
+                                    precision=3, step=10, get=max_status.get_values,
+                                    set=max_status.set_values, options={'SKIP_SAVE'}))
     _replace(bpy.types.VIEW3D_HT_header, _draw_header)
     _replace(bpy.types.STATUSBAR_HT_header, _draw_status)
     _replace(bpy.types.DOPESHEET_HT_header, _draw_time,
              lambda ctx: active(ctx) and ctx.space_data.mode == 'TIMELINE')
     _replace(bpy.types.TOPBAR_HT_upper_bar, _draw_top)
     _installed = True
+    _label_callbacks = overlay.label_regions, overlay.draw_labels
+    overlay.label_regions, overlay.draw_labels = _label_regions, _draw_labels
     if not bpy.app.background:
         bpy.app.timers.register(_start_pointers, first_interval=.1)
     max_timeline.register()
+    max_toolbar.install_drawing()
     overlay.register()
     bpy.app.handlers.load_post.append(_load)
     bpy.app.handlers.save_pre.append(_before_save)
@@ -304,7 +365,7 @@ def install(*, feedback=None, read_transform=None, write_transform=None, command
 
 def uninstall():
     """Restore only callbacks still owned here, and discard all screen/window state."""
-    global _installed, _menus, _explorer_layout, _command_panel_layout, _region_overlap
+    global _installed, _menus, _explorer_layout, _command_panel_layout, _region_overlap, _label_callbacks
     if not _installed:
         return
     _installed = False
@@ -351,7 +412,14 @@ def uninstall():
         if callback in handlers:
             handlers.remove(callback)
     max_timeline.unregister()
+    max_toolbar.remove_drawing()
     overlay.unregister()
+    if _label_callbacks:
+        if overlay.label_regions is _label_regions:
+            overlay.label_regions = _label_callbacks[0]
+        if overlay.draw_labels is _draw_labels:
+            overlay.draw_labels = _label_callbacks[1]
+        _label_callbacks = None
     max_status.clear()
     max_status.configure()
     max_toolbar.configure()
@@ -360,6 +428,10 @@ def uninstall():
     # Retain saved Scene.max_chrome_sets ID data across disable and re-enable.
     del bpy.types.WindowManager.max_chrome_offset
     del bpy.types.WindowManager.max_chrome_crossing
+    del bpy.types.WindowManager.max_chrome_filter
+    del bpy.types.WindowManager.max_chrome_set
+    for field in ('position', 'rotation', 'scale'):
+        delattr(bpy.types.WindowManager, 'max_chrome_' + field)
     del bpy.types.Scene.max_chrome_sets
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

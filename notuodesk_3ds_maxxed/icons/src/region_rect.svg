@@ -3,7 +3,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>region_rect</title>
 <desc>Dotted rectangular selection boundary</desc>
-<g stroke-linecap="square" stroke-linejoin="miter">
+<g stroke-linecap="butt" stroke-linejoin="miter">
 <g stroke-dasharray="1 1"><rect x="2.5" y="2.5" width="10" height="10" rx="0" fill="none" stroke="#50b9bf" stroke-width="1"/></g>
 </g>
 </svg>
