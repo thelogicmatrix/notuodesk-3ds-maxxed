@@ -1,7 +1,9 @@
 """Screen-pixel snap feedback, separate from magnetic target selection.
 
-Grid Points keeps the Snap Options box/crosshairs. Vertex keeps the 2026
-viewport crosshair. Other shapes follow max-ui-reference/snap-markers.md:
+Grid Points is the Snaps dialog glyph: a box with a half diagonal from the
+centre to the top-right corner (grid-points-dialog-crop.png). Autodesk's
+"box + crosshairs" wording does not match that image, and the image wins
+(Nathan, 2026-11-10). Vertex keeps the 2026 viewport crosshair. Other shapes follow max-ui-reference/snap-markers.md:
 the 2023 Standard Snaps dialog and flylib-fig8-17 show Grid Lines (box),
 Bounding Box (upright triangle), Perpendicular (inverted triangle), Tangent
 (small box), Edge/Segment (corner brackets), Midpoint (extended right angle),
@@ -52,7 +54,7 @@ def segments(kind, center, size):
     if kind in {'vertex', 'center_face'}:
         return cross
     if kind == 'grid_points':
-        return box + cross
+        return box + (((x, y), (x+h, y+h)),)
     if kind in _GLYPHS:
         return tuple(tuple((x+dx*h, y+dy*h) for dx, dy in line)
                      for line in _GLYPHS[kind])
