@@ -426,9 +426,12 @@ def caddies():
             body+=number_badge(2 if n.endswith('2') else 1)
         add('caddy_'+n,body,idea+' ('+n.replace('_',' ')+')','caddies',ref,'icon-only','Caddy '+n.replace('_',' '),note=f"Exact pending branch field key '{n}'. Maps to kind '{kind}'.")
     add('caddy_weld_counts',path('M1 4 H6 M1 8 H6 M10 4 H15 M10 8 H15',G)+path('M7 6 H10 M8 4 10 6 8 8',C),'Before and after count comparison','caddies','poly_vertex','text-only','Weld caddy Before / After counts',note='Max shows Before and After text. This reserved asset must not replace those counts.')
-    add('caddy_ok',circle(8,8,6,F,G)+path('M4 8 7 11 12 5',C,2),'Cyan check on grey OK disc','caddies','caddy',spot='Caddy footer OK (Enter)')
-    add('caddy_apply',circle(8,8,6,F,G)+path('M4 8 H12 M8 4 V12',C,2),'Cyan plus on grey Apply and Continue disc','caddies','caddy',spot='Caddy footer Apply and Continue (Ctrl+Enter)')
-    add('caddy_cancel',circle(8,8,6,F,G)+path('M5 5 11 11 M5 11 11 5',C,2),'Cyan cross on grey Cancel disc','caddies','caddy',spot='Caddy footer Cancel (Esc)')
+    disc = circle(8,8,6.2,'#9ba0a2','#303b40',1)+path('M2.5 8 A5.5 5.5 0 0 1 13.5 8','#aab0b2',1)
+    # add() quantizes strokes to one or two units. Keep the inner stroke at
+    # one unit so the dark outline survives at native caddy size.
+    add('caddy_ok',disc+path('M4.5 8 6.8 10.2 11.3 5.5','#303b40',2)+path('M4.5 8 6.8 10.2 11.3 5.5','#4e9da1',1),'Cyan check on grey OK disc','caddies','caddy',spot='Caddy footer OK (Enter)')
+    add('caddy_apply',disc+path('M5 8 H11 M8 5 V11','#303b40',2)+path('M5 8 H11 M8 5 V11','#4e9da1',1),'Cyan plus on grey Apply and Continue disc','caddies','caddy',spot='Caddy footer Apply and Continue (Ctrl+Enter)')
+    add('caddy_cancel',disc+path('M5.5 5.5 10.5 10.5 M5.5 10.5 10.5 5.5','#303b40',2)+path('M5.5 5.5 10.5 10.5 M5.5 10.5 10.5 5.5','#4e9da1',1),'Cyan cross on grey Cancel disc','caddies','caddy',spot='Caddy footer Cancel (Esc)')
     # Choice flyouts must change their pictogram instead of printing Group/Local.
     for name,body,idea in [
         ('group',rect(2.5,2.5,11,11,'none',C)+path('M6 2.5 V13.5 M10 2.5 V13.5 M2.5 6 H13.5 M2.5 10 H13.5',G),'Single connected group of polygons'),

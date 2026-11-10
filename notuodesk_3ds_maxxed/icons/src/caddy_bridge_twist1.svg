@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_bridge_twist1</title>
-<desc>Twisted bridge with visible end 1 badge</desc>
+<desc>Upright hourglass with a blue 1 badge at lower right</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<polygon points="2,2 8,2 5,8 11,14 5,14 2,8" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="8,2 13,4 10,8 14,12 11,14 5,8" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M2 2 8 2 M5 14 11 14" fill="none" stroke="#428fcb" stroke-width="1"/><rect x="8.5" y="8.5" width="7" height="7" rx="0" fill="#428fcb" stroke="#303b40" stroke-width="1"/><path d="M11 11 12 10 V14 M11 14 H13" fill="none" stroke="#f1f5f6" stroke-width="1"/>
+<polygon points="2,1.5 12,1.5 9,8 12,14 2,14 6,8" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><polygon points="12,1.5 14,1.5 11,8 13,14 12,14 9,8" fill="#64757e" stroke="#303b40" stroke-width="1"/><polygon points="2,1.5 9,8 6,8" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="6,8 12,14 2,14" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><rect x="9" y="9" width="6.5" height="6.5" rx="0" fill="#428fcb" stroke="#d2d8db" stroke-width="1"/><path d="M11 10.5 12 10 V14 M11 14 H13" fill="none" stroke="#f1f5f6" stroke-width="1"/>
 </g>
 </svg>

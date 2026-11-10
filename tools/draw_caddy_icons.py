@@ -1,7 +1,7 @@
-"""Original shaded caddy pictograms on the family's 16-unit grid.
+"""Original caddy pictograms with the field compositions in Max 2026 Help.
 
-Autodesk 2026 Help informs the modeling idea only. No image pixels or paths
-are read by this authoring module. SPDX-License-Identifier: GPL-3.0-or-later
+Drawn on the family's 16-unit grid. Reference images inform the visual idea.
+This module never reads reference pixels or paths. GPL-3.0-or-later.
 """
 
 
@@ -15,129 +15,168 @@ def caddy_icons(add, path, poly, rect, circle):
     def face(points, shade=mid):
         return poly(points, shade, edge)
 
-    def box():
-        return (face('2,5 7,2 14,5 9,8', light) +
-                face('2,5 9,8 9,14 2,11', mid) +
-                face('9,8 14,5 14,11 9,14', dark))
-
-    def slab():
-        return (face('2,5 11,3 14,7 5,10', light) +
-                face('5,10 14,7 14,10 5,13', dark) +
-                face('2,5 5,10 5,13 2,8', mid))
-
-    def raised(bevel=False):
-        return (slab() + face('5,5 8,3 11,5 8,7', cyan) +
-                face('5,5 8,7 8,11 4,9' if bevel else '5,5 8,7 8,11 5,9', mid) +
-                face('8,7 11,5 12,9 8,11' if bevel else '8,7 11,5 11,9 8,11', dark) +
-                line('M13 2 V7', blue) + poly('11,3 13,0 15,3', blue))
-
-    def bias():
-        return (face('2,13 6,9 7,2 9,2 10,9 14,13', mid) +
-                face('7,2 9,2 10,9 14,13 8,11', cyan))
-
-    def chamfer():
-        return (face('2,7 7,2 14,5 9,10', light) +
-                face('2,7 9,10 9,14 2,11', mid) +
-                face('9,10 14,5 14,11 9,14', dark) +
-                face('2,7 4,5 11,8 9,10', cyan))
-
-    def bridge(shape='straight'):
-        if shape == 'taper':
-            return face('2,2 6,6 6,10 2,14 8,14 10,10 10,6 8,2', mid) + face('8,2 14,4 11,7 11,9 14,12 8,14 10,10 10,6', light) + line('M6 6 10 6 M6 10 10 10', blue)
-        if shape == 'bias':
-            return face('2,2 7,2 9,8 7,14 2,14 5,8', mid) + face('7,2 12,4 14,8 12,12 7,14 9,8', light) + line('M5 8 9 8 14 8', blue)
-        if shape == 'twist':
-            return face('2,2 8,2 5,8 11,14 5,14 2,8', mid) + face('8,2 13,4 10,8 14,12 11,14 5,8', light) + line('M2 2 8 2 M5 14 11 14', blue)
-        return face('2,2 8,2 8,14 2,14', mid) + face('8,2 13,5 13,11 8,14', light) + line('M2 6 H8 L13 7 M2 10 H8 L13 9', blue)
-
-    def sphere():
-        return (circle(8,8,6, mid, edge) +
-                path('M3 5 Q8 2 13 5 L14 8 Q8 11 2 8 Z', edge, 1, light) +
-                line('M8 2 C4 5 4 11 8 14 M8 2 C12 5 12 11 8 14', dark) +
-                line('M2 9 Q8 13 14 9', blue))
-
-    def badge(number):
-        # A seven-unit badge stays legible at 16px, unlike a one-pixel tick.
-        digit = 'M11 11 12 10 V14 M11 14 H13' if number == 1 else 'M10 11 V10 H13 V12 L10 14 H13'
-        return rect(8.5,8.5,7,7,blue,edge) + line(digit,'#f1f5f6')
-
-    def pointer():
-        return poly('9,6 9,14 11,12 13,15 15,14 13,11 15,10',light,edge)
-
-    def patch():
-        return face('2,3 12,3 12,11 2,11', light) + rect(4,5,6,4,cyan,blue)
-
-    def inset(individual=False):
-        art = face('2,2 14,2 14,14 2,14', mid)
-        if individual:
-            return art + rect(4,4,3,3,cyan,blue) + rect(9,4,3,3,cyan,blue) + rect(4,9,3,3,cyan,blue) + rect(9,9,3,3,cyan,blue)
-        return art + rect(5,5,6,6,cyan,blue) + line('M2 2 5 5 M14 2 11 5 M2 14 5 11 M14 14 11 11',dark)
-
-    def mode(value, bevel=False):
-        if value == 'polygon':
-            return (face('1,5 5,3 8,5 4,7',cyan) + face('8,10 12,8 15,10 11,12',light) +
-                    line('M4 7 V11 M11 12 V15',blue))
-        if value == 'local':
-            return box() + line('M4 8 1 6 M11 7 15 4',blue,2)
-        return box() + line('M5 6.5 V12.5 M2 8 9 11',blue)
-
     def emit(op, key, body, idea, ref=None, mode='icon-only'):
-        ref = ref or {'msmooth':'smooth','weld':'weld','bevel':'bevel','outline':'outline'}.get(op,op)
+        ref = ref or {'msmooth':'smooth'}.get(op,op)
         add('caddy_'+op+'_'+key,body,idea,'caddies',ref,mode,
             op.title()+' caddy, '+key.replace('_',' '),
             note='Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.')
 
-    for op, bevel in (('extrude',False),('bevel',True)):
-        type_key = 'bevel_type' if bevel else 'extrusion_type'
-        emit(op,type_key,mode('group',bevel),'Connected raised polygons for group mode')
+    def grid():
+        return rect(2,2,12,12,light,edge) + line('M8 2 V14 M2 8 H14', dark)
+
+    def mode(value):
+        if value == 'polygon':
+            return ''.join(rect(x,y,4.5,4.5,mid,edge) for x in (2,9) for y in (2,9))
+        if value == 'local':
+            return (rect(2,10,12,4,mid,edge) +
+                    poly('6,10 6,6 4,6 8,2 12,6 10,6 10,10',cyan,edge))
+        return (line('M5 2 H2 V14 H5 M11 2 H14 V14 H11',cyan,2) +
+                ''.join(rect(x,y,3,4,mid,edge,.7) for x in (5,9) for y in (3,9)))
+
+    def height():
+        return (rect(2,2,5,12,mid,edge) + rect(2.5,2.5,1,11,light,'none') +
+                poly('10,2 14,2 14,4 13,4 13,12 14,12 14,14 10,14 10,12 11,12 11,4 10,4',cyan,edge,.7))
+
+    def bias():
+        return (face('6,2 10,2 10,8 14,13 14,14 2,14 2,13 6,8',cyan) +
+                poly('7,3 8,3 8,9 4,13 3,13 7,8',light) +
+                poly('9,3 10,8 13,13 10,12 8,8',dark))
+
+    def pointer():
+        return poly('8,6 8,14 10,12 12,15 14,14 12,11 15,11',light,edge,.7)
+
+    def patch_pointer():
+        return (rect(1.5,2,12,6.5,mid,edge) +
+                rect(2.5,3,7,4.5,cyan,'none') + pointer())
+
+    def stack(flat=False, pinch=False, slide=False):
+        if flat:
+            return rect(5,1.5,6,13,cyan,edge) + line('M6 6 H10 M6 10 H10',edge)
+        body = (face('3,4 6,1.5 12,1.5 10,4',light) +
+                face('3,4 10,4 10,14 3,14',mid) +
+                face('10,4 12,1.5 12,11.5 10,14',dark))
+        ys = (7,10) if not slide else (10.5,12)
+        body += ''.join(line(f'M3 {y} H10 L12 {y-2.5}',blue) for y in ys)
+        if pinch or slide:
+            body = '<g transform="translate(-1 0)">'+body+'</g>'
+            body += line('M14 3 V8 M12.5 6 H15.5',blue)
+            if pinch:
+                body += line('M14 10 V15 M12.5 12 H15.5',blue)
+        return body
+
+    def sphere():
+        return (circle(8,8,6.5,mid,edge) +
+                path('M2 9 Q8 12 14 9 Q13 15 8 14.5 Q3 15 2 9 Z',blue,.7,cyan) +
+                line('M2 6 Q8 3 14 6 M1.5 9 H14.5',edge,.8) +
+                line('M8 1.5 C3 4 3 10 8 11 M8 1.5 C13 4 13 10 8 11',dark,.8) +
+                line('M8 1.5 V11',light,.8))
+
+    def badge(number):
+        digit = 'M11 10.5 12 10 V14 M11 14 H13' if number == 1 else 'M10.5 11 V10 H13 V12 L10.5 14 H13'
+        return rect(9,9,6.5,6.5,blue,light,.5) + line(digit,'#f1f5f6',.9)
+
+    for op in ('extrude','bevel'):
+        key = 'bevel_type' if op == 'bevel' else 'extrusion_type'
+        emit(op,key,mode('group'),'Bracketed connected polygon grid for Group')
         for value in ('group','local','polygon'):
-            emit(op,type_key+'_'+value,mode(value,bevel),'Raised polygon '+value+' mode')
-        emit(op,'height',raised(bevel),'A face raised above the surrounding mesh with a height indicator')
-        emit(op,'local_bias',bias(),'A flared local-normal base')
-    emit('extrude','base_width',slab()+line('M3 14 H13',blue)+line('M3 12 V15 M13 12 V15',blue),'Extrusion footprint with a horizontal width indicator')
-    emit('bevel','amount',inset()+line('M3 3 5 5 M11 11 14 14',blue,2),'Outline of the beveled top face')
+            emit(op,key+'_'+value,mode(value),
+                 {'group':'Bracketed polygon grid','local':'Up arrow above a flat base',
+                  'polygon':'Four separate square polygons'}[value])
+        emit(op,'height',height(),'Vertical rectangle beside an I-shaped height bar')
+        emit(op,'local_bias',bias(),'Upright stem with a flared foot')
+    emit('extrude','base_width',rect(2,3,12,7,mid,edge)+line('M2 6 H14',light)+
+         line('M2 12 V15 M2 13.5 H14 M14 12 V15',blue),
+         'Horizontal rectangle above a width bar')
+    emit('bevel','amount',rect(2,2,12,12,cyan,edge)+rect(5,5,6,6,mid,edge),
+         'Square outline band surrounding a smaller square')
 
-    emit('chamfer','amount',chamfer(),'A cyan chamfer strip replaces a sharp mesh edge')
-    emit('chamfer','segments',chamfer()+line('M3 6 10 9 M4 5 11 8',blue),'Parallel divisions across a chamfer strip')
-    emit('chamfer','tension',face('2,14 2,3 14,3',mid)+path('M2 3 Q4 12 14 14 L14 3 Z',edge,1,light)+line('M2 3 Q4 12 14 14',blue,2),'Curved chamfer profile between two faces')
-    emit('chamfer','open',face('2,6 6,2 14,5 10,9',light)+face('2,9 10,12 10,15 2,12',mid)+line('M2 7 10 10 14 6',blue),'A visible gap where the chamfer strip is removed')
+    emit('chamfer','amount',patch_pointer(),'Short selected rectangle with a pointer below its right half')
+    emit('chamfer','segments',stack(True),'Upright narrow strip divided into three stacked segments')
+    emit('chamfer','tension',
+         rect(2,2,3,12,mid,edge)+rect(2,2,12,3,mid,edge)+
+         face('3,3 8,5 5,9',cyan)+line('M3 3 6 6',dark)+
+         poly('10,9 15,9 15,11 13.5,11 13.5,15 11.5,15 11.5,11 10,11',cyan,edge,.7),
+         'Right-angle corner with a selected triangular corner and a tension bar')
+    emit('chamfer','open',
+         ''.join(rect(x,y,3,3,cyan if (x,y)==(6.5,6.5) else mid,edge,.6)
+                 for x in (2,6.5,11) for y in (2,6.5,11)),
+         'Nine small square openings in a flat polygon grid')
 
-    emit('connect','segments',box()+line('M2 7 9 10 14 7 M2 10 9 13 14 10',blue),'New parallel edges across a mesh')
-    emit('connect','pinch',box()+line('M2 8 9 11 14 8 M2 9 9 12 14 9',blue)+line('M1 4 V7 M1 12 V10',cyan,2),'Two new edges pinched toward the middle')
-    emit('connect','slide',box()+line('M2 10 9 13 14 10',blue,2)+line('M1 5 V9 M0 8 1 10 2 8',blue),'A connecting edge slid toward one end of the mesh')
+    emit('connect','segments',stack(),'Upright block divided by horizontal segment lines')
+    emit('connect','pinch',stack(pinch=True),'Stacked block with two plus marks along its right edge')
+    emit('connect','slide',stack(slide=True),'Block with low segment lines and an upper right plus mark')
 
-    emit('inset','amount',inset(),'A smaller cyan face inside an unchanged outer polygon')
-    inset_group = rect(2,2,12,12,mid,edge)+rect(4,4,8,8,light,blue)+line('M8 4 V12 M4 8 H12',blue)
-    emit('inset','individual',inset_group,'Connected polygon grid for group inset mode')
-    emit('inset','individual_group',inset_group,'Connected polygon grid for group inset mode')
-    emit('inset','individual_polygon',inset(True),'Separate inset borders inside individual polygons')
-    emit('outline','amount',face('4,4 12,4 12,12 4,12',light)+line('M1 1 H15 V15 H1 Z',blue)+line('M4 4 1 1 M12 12 15 15',blue),'The outer polygon boundary expanded around the original face')
+    emit('inset','amount',rect(2,2,12,12,light,edge)+rect(4.5,4.5,7,7,cyan,blue),
+         'Small cyan square inside a larger square outline')
+    for key,value in (('individual','group'),('individual_group','group'),('individual_polygon','polygon')):
+        emit('inset',key,mode(value),'Bracketed grid for Group' if value=='group' else 'Four separate polygon squares')
+    emit('outline','amount',rect(4,4,8,8,light,edge)+line('M1 1 H15 V15 H1 Z',blue),
+         'Outer polygon boundary around the original face, caddy appearance unverified')
 
-    emit('bridge','segments',bridge(),'A divided strip joining two borders')
-    emit('bridge','taper',bridge('taper'),'Bridge narrowed at its middle')
-    emit('bridge','bias',bridge('bias'),'Bridge waist moved toward one end')
-    emit('bridge','smooth',sphere(),'A rounded bridge surface with a smooth equator')
+    emit('bridge','segments',stack(),'Upright block divided by horizontal segment lines')
+    emit('bridge','taper',face('6,2 10,2 12,14 2,14',light)+
+         face('10,2 14,10 12,14',dark)+line('M6 3 3.5 13',mid),
+         'Upright tapered prism with a narrow top and broad base')
+    emit('bridge','bias',path('M6 2 H9 Q9 9 14 13 L12 14 H2 Q6 9 6 2 Z',edge,1,light)+
+         path('M9 2 Q10 9 14 13 L12 14 Q9 10 8 3 Z',dark,.7,mid),
+         'Flared bell shape with a narrow neck and curved sides')
+    emit('bridge','smooth',sphere(),'Gridded sphere with a cyan lower hemisphere')
+    hourglass = (face('2,1.5 12,1.5 9,8 12,14 2,14 6,8',light) +
+                 face('12,1.5 14,1.5 11,8 13,14 12,14 9,8',dark) +
+                 face('2,1.5 9,8 6,8',mid) + face('6,8 12,14 2,14',mid))
     for number in (1,2):
-        emit('bridge','twist'+str(number),bridge('twist')+badge(number),'Twisted bridge with visible end '+str(number)+' badge')
-        emit('bridge','pick'+str(number),box()+pointer()+badge(number),'Pick bridge end '+str(number)+' with a numbered mesh badge')
-    emit('bridge','bridge_selection',box()+line('M2 5 9 8 14 5',blue,2)+pointer(),'Pick the bridge border or polygon selection')
+        emit('bridge','twist'+str(number),hourglass+badge(number),
+             'Upright hourglass with a blue '+str(number)+' badge at lower right')
+        body = grid()
+        if number == 1:
+            body += rect(2.5,2.5,5,5,cyan,'none')
+        else:
+            body += line('M2 8 H14',blue)
+            body += ''.join(rect(x,y,2.5,2.5,light,edge,.6) for x in (1,12) for y in (1,12))
+        emit('bridge','pick'+str(number),body+badge(number),
+             'Flat polygon grid with a numbered lower right badge and '+('selected face' if number==1 else 'corner points'))
+    emit('bridge','bridge_selection',grid()+line('M8 2 V14',blue)+pointer(),
+         'Flat polygon grid with a pointer over its right side')
+    emit('bridge','pick_cursor',circle(6,6,4.5,light,edge,.8)+pointer(),
+         'Circular pick cursor with an arrow at its lower right')
 
-    emit('weld','threshold',patch()+pointer(),'Weld threshold acts on selected mesh points')
-    emit('weld','weld_counts',line('M1 4 H6 M1 8 H6 M10 4 H15 M10 8 H15',mid)+line('M7 6 H10',blue),'Before and after counts remain text in the caddy',mode='text-only')
+    emit('weld','threshold',patch_pointer(),'Selected rectangular patch and a pointer')
+    emit('weld','weld_counts',line('M1 4 H6 M1 8 H6 M10 4 H15 M10 8 H15',mid)+
+         line('M7 6 H10',blue),'Before and after counts remain text in the caddy',mode='text-only')
 
-    tess = face('2,2 14,2 14,14 2,14',light)
     for value in ('edge','face'):
-        body = tess + line('M8 2 V14 M2 8 H14' if value == 'edge' else 'M2 2 14 14 M14 2 2 14',blue)
-        emit('tessellate','tessellate_type_'+value,body,value.title()+' centre tessellation divisions')
+        divisions = line('M2 2 14 14 M14 2 2 14',blue,.9)
         if value == 'edge':
-            emit('tessellate','tessellate_type',body,'Edge centre tessellation divisions')
-    emit('tessellate','tess_tension',patch()+line('M2 10 Q7 4 12 10',blue)+pointer(),'Tension changes the newly divided surface profile')
+            # Square stroke caps close a one-unit dash gap. Separate tiles
+            # keep Max's dotted cross visibly dotted at native caddy size.
+            divisions = ''.join(rect(x,y,1,1,blue,'none')
+                                for x,y in ([(7.5,p) for p in (2.5,5,7.5,10,12.5)]+
+                                            [(p,7.5) for p in (2.5,5,10,12.5)]))
+        body = rect(2,2,12,12,light,edge)+divisions
+        emit('tessellate','tessellate_type_'+value,body,
+             'Dotted cross in a square' if value=='edge' else 'Diagonal cross in a square')
+        if value == 'edge':
+            emit('tessellate','tessellate_type',body,'Dotted cross in a square')
+    emit('tessellate','tess_tension',patch_pointer(),'Selected rectangular patch and a pointer')
 
-    emit('msmooth','smoothness',sphere(),'Smooth rounded mesh with cyan latitude')
-    emit('msmooth','separate_smoothing',face('1,5 6,2 6,13 1,10',light)+face('10,2 15,5 15,10 10,13',mid)+line('M6 3 V12 M10 3 V12',blue),'Two curved mesh groups divided by a visible gap')
-    emit('msmooth','separate_materials',face('2,2 14,2 14,14 2,14',mid)+rect(3,3,5,5,cyan,'none')+rect(8,8,5,5,blue,'none'),'Separate alternating material patches')
+    emit('msmooth','smoothness',sphere(),'Gridded sphere with a cyan lower hemisphere')
+    # Reserved only. Max leaves both separation pills blank before the check.
+    emit('msmooth','separate_smoothing',rect(2,2,5,12,light,edge)+rect(9,2,5,12,mid,edge),
+         'Reserved separation artwork, Max pill has no field pictogram',mode='text-only')
+    emit('msmooth','separate_materials',grid()+rect(2,2,6,6,cyan,edge),
+         'Reserved material artwork, Max pill has no field pictogram',mode='text-only')
 
-    emit('relax','relax',patch()+line('M2 10 Q7 14 12 10',blue)+pointer(),'Selected mesh points move toward a relaxed profile')
-    emit('relax','iterations',path('M2 12 V7 Q2 2 8 2 Q14 2 14 7 V12 Z',edge,1,light)+line('M2 7 Q8 2 14 7',blue)+line('M12 9 V15 M9 12 H15',cyan,2),'A relaxed curved patch with a repeat plus')
-    emit('relax','hold_boundary',box()+line('M2 5 7 2 14 5 14 11 9 14 2 11 Z',blue)+rect(1,4,3,3,light,edge)+rect(12,4,3,3,light,edge)+rect(7,12,3,3,light,edge),'Pinned points around a mesh boundary')
-    emit('relax','hold_outer',path('M2 3 V14 H14 V3 Q8 12 2 3 Z',edge,1,light)+line('M2 3 Q8 12 14 3',blue)+rect(1,2,3,3,light,edge)+rect(12,2,3,3,light,edge),'Outer corner pins hold a sagging mesh patch')
+    emit('relax','relax',patch_pointer(),'Selected rectangular patch and a pointer')
+    emit('relax','iterations',rect(2,2,11,12,light,dark)+
+         path('M2 9 Q7 0 13 9 V14 H2 Z',blue,.8,cyan)+
+         poly('11,9 14,9 14,11 15.5,11 15.5,14 14,14 14,15.5 11,15.5 11,14 9,14 9,11 11,11','#56bb55',light,.6),
+         'Square curved patch with a green repeat plus at lower right')
+    emit('relax','hold_boundary',rect(2,2,12,12,light,dark)+
+         path('M2 9 Q8 -1 14 9 V14 H2 Z',blue,.8,cyan)+
+         line('M5 7 11 7 11 12 5 12 Z',dark)+
+         ''.join(rect(x,y,2.5,2.5,light,edge,.7) for x in (4,9.5) for y in (6,11)),
+         'Curved patch in a square with four interior boundary pins')
+    emit('relax','hold_outer',rect(2,2,12,12,light,dark)+
+         path('M2 6 Q8 15 14 6 V14 H2 Z',blue,.8,cyan)+
+         rect(1,5,3,3,light,edge,.7)+rect(12,5,3,3,light,edge,.7),
+         'Sagging patch in a square pinned at its two outer sides')

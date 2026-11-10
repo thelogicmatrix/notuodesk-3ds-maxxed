@@ -243,6 +243,10 @@ def generic_artwork(session, key):
     return max_icons.CADDY_FIELDS[key]
 
 
+def has_field_icon(session, key):
+    return not (session.action == 'MSMOOTH' and key in {'separate_smoothing', 'separate_materials'})
+
+
 def draw_field_icon(session, key, cx, cy, size):
     from . import max_icons
     return (max_icons.draw(artwork(session, key), cx, cy, size) or
@@ -765,9 +769,10 @@ class Caddy:
                 text(x+5*self.scale,y+8*self.scale,f'Before: {before}, After: {after}',size=9)
                 continue
             if key in UI_ONLY:
-                field_mark(key,x+13*self.scale,y+h/2,LABELS[key][1])
+                if has_field_icon(self.session, key):
+                    field_mark(key,x+13*self.scale,y+h/2,LABELS[key][1])
                 if key in {'pick1','pick2'}:
-                    text(x+w-15*self.scale,y+8*self.scale,'1' if key=='pick1' else '2',(.5,.52,.53,1))
+                    max_icons.draw('caddy_bridge_pick_cursor',x+w-14*self.scale,y+h/2,20*self.scale)
                 else:
                     tick(x+w-13*self.scale,y+h/2,False)
                 continue

@@ -47,16 +47,17 @@ Selected objects have white edged faces and white wireframe selection. Press J f
 The icon family follows the visual ideas in Autodesk's 3ds Max 2026 Help.
 Move is a four-way arrow, Modify is a curved segment in a control cage, snaps
 use a numeral and magnet, and sub-object buttons highlight part of a small mesh.
-The 321 original GPL SVGs have transparent 32px and 64px renders. Toolbar and
+The 322 original GPL SVGs have transparent 32px and 64px renders. Toolbar and
 Command Panel buttons use icons where Max does. Create, Editable Poly commands,
 viewport labels and Auto Key retain text. Hover a tool for its name and assigned
 shortcut. Artwork references and field mappings are in `icons/README.md`
 inside the add-on package.
 
-All eleven caddies use shaded mini-mesh icons for their own fields. Chamfer
-shows the cut edge, Connect shows new edges, and Bridge shows taper and twist.
-The two Bridge ends have numbered badges. Mode icons change with the choice.
-The drawings use the same visual ideas as Max 2026, with original SVG paths.
+The caddy pictograms follow each field's Max 2026 symbol. Height uses a rectangle
+and height bar. Bridge uses a tapered prism, flared bell and numbered hourglasses.
+Its pick buttons have flat polygon grids and round pick cursors. Mode icons change
+with the choice. MeshSmooth's separation pills stay blank before the check mark.
+The drawings use original SVG paths and shaded faces.
 Value pills have rounded ends, the title has a drag grip, and the round footer
 buttons have one disc each. Missing field artwork falls back to the generic set.
 

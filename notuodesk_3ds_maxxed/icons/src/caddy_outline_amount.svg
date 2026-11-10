@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_outline_amount</title>
-<desc>The outer polygon boundary expanded around the original face</desc>
+<desc>Outer polygon boundary around the original face, caddy appearance unverified</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<polygon points="4,4 12,4 12,12 4,12" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M1 1 H15 V15 H1 Z" fill="none" stroke="#428fcb" stroke-width="1"/><path d="M4 4 1 1 M12 12 15 15" fill="none" stroke="#428fcb" stroke-width="1"/>
+<rect x="4" y="4" width="8" height="8" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M1 1 H15 V15 H1 Z" fill="none" stroke="#428fcb" stroke-width="1"/>
 </g>
 </svg>

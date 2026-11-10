@@ -4,6 +4,6 @@
 <title>caddy_cancel</title>
 <desc>Cyan cross on grey Cancel disc</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<circle cx="8" cy="8" r="6" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M5 5 11 11 M5 11 11 5" fill="none" stroke="#50b9bf" stroke-width="2"/>
+<circle cx="8" cy="8" r="6.2" fill="#9ba0a2" stroke="#303b40" stroke-width="1"/><path d="M2.5 8 A5.5 5.5 0 0 1 13.5 8" fill="none" stroke="#aab0b2" stroke-width="1"/><path d="M5.5 5.5 10.5 10.5 M5.5 10.5 10.5 5.5" fill="none" stroke="#303b40" stroke-width="2"/><path d="M5.5 5.5 10.5 10.5 M5.5 10.5 10.5 5.5" fill="none" stroke="#4e9da1" stroke-width="1"/>
 </g>
 </svg>

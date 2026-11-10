@@ -2527,7 +2527,7 @@
     {
       "name": "caddy_extrude_extrusion_type",
       "section": "caddies",
-      "idea": "Connected raised polygons for group mode",
+      "idea": "Bracketed connected polygon grid for Group",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Extrude caddy, extrusion type",
@@ -2537,7 +2537,7 @@
     {
       "name": "caddy_extrude_extrusion_type_group",
       "section": "caddies",
-      "idea": "Raised polygon group mode",
+      "idea": "Bracketed polygon grid",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Extrude caddy, extrusion type group",
@@ -2547,7 +2547,7 @@
     {
       "name": "caddy_extrude_extrusion_type_local",
       "section": "caddies",
-      "idea": "Raised polygon local mode",
+      "idea": "Up arrow above a flat base",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Extrude caddy, extrusion type local",
@@ -2557,7 +2557,7 @@
     {
       "name": "caddy_extrude_extrusion_type_polygon",
       "section": "caddies",
-      "idea": "Raised polygon polygon mode",
+      "idea": "Four separate square polygons",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Extrude caddy, extrusion type polygon",
@@ -2567,7 +2567,7 @@
     {
       "name": "caddy_extrude_height",
       "section": "caddies",
-      "idea": "A face raised above the surrounding mesh with a height indicator",
+      "idea": "Vertical rectangle beside an I-shaped height bar",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Extrude caddy, height",
@@ -2577,7 +2577,7 @@
     {
       "name": "caddy_extrude_local_bias",
       "section": "caddies",
-      "idea": "A flared local-normal base",
+      "idea": "Upright stem with a flared foot",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Extrude caddy, local bias",
@@ -2587,7 +2587,7 @@
     {
       "name": "caddy_bevel_bevel_type",
       "section": "caddies",
-      "idea": "Connected raised polygons for group mode",
+      "idea": "Bracketed connected polygon grid for Group",
       "reference": "bevel",
       "presentation": "icon-only",
       "spot": "Bevel caddy, bevel type",
@@ -2597,7 +2597,7 @@
     {
       "name": "caddy_bevel_bevel_type_group",
       "section": "caddies",
-      "idea": "Raised polygon group mode",
+      "idea": "Bracketed polygon grid",
       "reference": "bevel",
       "presentation": "icon-only",
       "spot": "Bevel caddy, bevel type group",
@@ -2607,7 +2607,7 @@
     {
       "name": "caddy_bevel_bevel_type_local",
       "section": "caddies",
-      "idea": "Raised polygon local mode",
+      "idea": "Up arrow above a flat base",
       "reference": "bevel",
       "presentation": "icon-only",
       "spot": "Bevel caddy, bevel type local",
@@ -2617,7 +2617,7 @@
     {
       "name": "caddy_bevel_bevel_type_polygon",
       "section": "caddies",
-      "idea": "Raised polygon polygon mode",
+      "idea": "Four separate square polygons",
       "reference": "bevel",
       "presentation": "icon-only",
       "spot": "Bevel caddy, bevel type polygon",
@@ -2627,7 +2627,7 @@
     {
       "name": "caddy_bevel_height",
       "section": "caddies",
-      "idea": "A face raised above the surrounding mesh with a height indicator",
+      "idea": "Vertical rectangle beside an I-shaped height bar",
       "reference": "bevel",
       "presentation": "icon-only",
       "spot": "Bevel caddy, height",
@@ -2637,7 +2637,7 @@
     {
       "name": "caddy_bevel_local_bias",
       "section": "caddies",
-      "idea": "A flared local-normal base",
+      "idea": "Upright stem with a flared foot",
       "reference": "bevel",
       "presentation": "icon-only",
       "spot": "Bevel caddy, local bias",
@@ -2647,7 +2647,7 @@
     {
       "name": "caddy_extrude_base_width",
       "section": "caddies",
-      "idea": "Extrusion footprint with a horizontal width indicator",
+      "idea": "Horizontal rectangle above a width bar",
       "reference": "extrude",
       "presentation": "icon-only",
       "spot": "Extrude caddy, base width",
@@ -2657,7 +2657,7 @@
     {
       "name": "caddy_bevel_amount",
       "section": "caddies",
-      "idea": "Outline of the beveled top face",
+      "idea": "Square outline band surrounding a smaller square",
       "reference": "bevel",
       "presentation": "icon-only",
       "spot": "Bevel caddy, amount",
@@ -2667,7 +2667,7 @@
     {
       "name": "caddy_chamfer_amount",
       "section": "caddies",
-      "idea": "A cyan chamfer strip replaces a sharp mesh edge",
+      "idea": "Short selected rectangle with a pointer below its right half",
       "reference": "chamfer",
       "presentation": "icon-only",
       "spot": "Chamfer caddy, amount",
@@ -2677,7 +2677,7 @@
     {
       "name": "caddy_chamfer_segments",
       "section": "caddies",
-      "idea": "Parallel divisions across a chamfer strip",
+      "idea": "Upright narrow strip divided into three stacked segments",
       "reference": "chamfer",
       "presentation": "icon-only",
       "spot": "Chamfer caddy, segments",
@@ -2687,7 +2687,7 @@
     {
       "name": "caddy_chamfer_tension",
       "section": "caddies",
-      "idea": "Curved chamfer profile between two faces",
+      "idea": "Right-angle corner with a selected triangular corner and a tension bar",
       "reference": "chamfer",
       "presentation": "icon-only",
       "spot": "Chamfer caddy, tension",
@@ -2697,7 +2697,7 @@
     {
       "name": "caddy_chamfer_open",
       "section": "caddies",
-      "idea": "A visible gap where the chamfer strip is removed",
+      "idea": "Nine small square openings in a flat polygon grid",
       "reference": "chamfer",
       "presentation": "icon-only",
       "spot": "Chamfer caddy, open",
@@ -2707,7 +2707,7 @@
     {
       "name": "caddy_connect_segments",
       "section": "caddies",
-      "idea": "New parallel edges across a mesh",
+      "idea": "Upright block divided by horizontal segment lines",
       "reference": "connect",
       "presentation": "icon-only",
       "spot": "Connect caddy, segments",
@@ -2717,7 +2717,7 @@
     {
       "name": "caddy_connect_pinch",
       "section": "caddies",
-      "idea": "Two new edges pinched toward the middle",
+      "idea": "Stacked block with two plus marks along its right edge",
       "reference": "connect",
       "presentation": "icon-only",
       "spot": "Connect caddy, pinch",
@@ -2727,7 +2727,7 @@
     {
       "name": "caddy_connect_slide",
       "section": "caddies",
-      "idea": "A connecting edge slid toward one end of the mesh",
+      "idea": "Block with low segment lines and an upper right plus mark",
       "reference": "connect",
       "presentation": "icon-only",
       "spot": "Connect caddy, slide",
@@ -2737,7 +2737,7 @@
     {
       "name": "caddy_inset_amount",
       "section": "caddies",
-      "idea": "A smaller cyan face inside an unchanged outer polygon",
+      "idea": "Small cyan square inside a larger square outline",
       "reference": "inset",
       "presentation": "icon-only",
       "spot": "Inset caddy, amount",
@@ -2747,7 +2747,7 @@
     {
       "name": "caddy_inset_individual",
       "section": "caddies",
-      "idea": "Connected polygon grid for group inset mode",
+      "idea": "Bracketed grid for Group",
       "reference": "inset",
       "presentation": "icon-only",
       "spot": "Inset caddy, individual",
@@ -2757,7 +2757,7 @@
     {
       "name": "caddy_inset_individual_group",
       "section": "caddies",
-      "idea": "Connected polygon grid for group inset mode",
+      "idea": "Bracketed grid for Group",
       "reference": "inset",
       "presentation": "icon-only",
       "spot": "Inset caddy, individual group",
@@ -2767,7 +2767,7 @@
     {
       "name": "caddy_inset_individual_polygon",
       "section": "caddies",
-      "idea": "Separate inset borders inside individual polygons",
+      "idea": "Four separate polygon squares",
       "reference": "inset",
       "presentation": "icon-only",
       "spot": "Inset caddy, individual polygon",
@@ -2777,7 +2777,7 @@
     {
       "name": "caddy_outline_amount",
       "section": "caddies",
-      "idea": "The outer polygon boundary expanded around the original face",
+      "idea": "Outer polygon boundary around the original face, caddy appearance unverified",
       "reference": "outline",
       "presentation": "icon-only",
       "spot": "Outline caddy, amount",
@@ -2787,7 +2787,7 @@
     {
       "name": "caddy_bridge_segments",
       "section": "caddies",
-      "idea": "A divided strip joining two borders",
+      "idea": "Upright block divided by horizontal segment lines",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, segments",
@@ -2797,7 +2797,7 @@
     {
       "name": "caddy_bridge_taper",
       "section": "caddies",
-      "idea": "Bridge narrowed at its middle",
+      "idea": "Upright tapered prism with a narrow top and broad base",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, taper",
@@ -2807,7 +2807,7 @@
     {
       "name": "caddy_bridge_bias",
       "section": "caddies",
-      "idea": "Bridge waist moved toward one end",
+      "idea": "Flared bell shape with a narrow neck and curved sides",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, bias",
@@ -2817,7 +2817,7 @@
     {
       "name": "caddy_bridge_smooth",
       "section": "caddies",
-      "idea": "A rounded bridge surface with a smooth equator",
+      "idea": "Gridded sphere with a cyan lower hemisphere",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, smooth",
@@ -2827,7 +2827,7 @@
     {
       "name": "caddy_bridge_twist1",
       "section": "caddies",
-      "idea": "Twisted bridge with visible end 1 badge",
+      "idea": "Upright hourglass with a blue 1 badge at lower right",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, twist1",
@@ -2837,7 +2837,7 @@
     {
       "name": "caddy_bridge_pick1",
       "section": "caddies",
-      "idea": "Pick bridge end 1 with a numbered mesh badge",
+      "idea": "Flat polygon grid with a numbered lower right badge and selected face",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, pick1",
@@ -2847,7 +2847,7 @@
     {
       "name": "caddy_bridge_twist2",
       "section": "caddies",
-      "idea": "Twisted bridge with visible end 2 badge",
+      "idea": "Upright hourglass with a blue 2 badge at lower right",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, twist2",
@@ -2857,7 +2857,7 @@
     {
       "name": "caddy_bridge_pick2",
       "section": "caddies",
-      "idea": "Pick bridge end 2 with a numbered mesh badge",
+      "idea": "Flat polygon grid with a numbered lower right badge and corner points",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, pick2",
@@ -2867,7 +2867,7 @@
     {
       "name": "caddy_bridge_bridge_selection",
       "section": "caddies",
-      "idea": "Pick the bridge border or polygon selection",
+      "idea": "Flat polygon grid with a pointer over its right side",
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, bridge selection",
@@ -2875,9 +2875,19 @@
       "baseline": null
     },
     {
+      "name": "caddy_bridge_pick_cursor",
+      "section": "caddies",
+      "idea": "Circular pick cursor with an arrow at its lower right",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, pick cursor",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
       "name": "caddy_weld_threshold",
       "section": "caddies",
-      "idea": "Weld threshold acts on selected mesh points",
+      "idea": "Selected rectangular patch and a pointer",
       "reference": "weld",
       "presentation": "icon-only",
       "spot": "Weld caddy, threshold",
@@ -2897,7 +2907,7 @@
     {
       "name": "caddy_tessellate_tessellate_type_edge",
       "section": "caddies",
-      "idea": "Edge centre tessellation divisions",
+      "idea": "Dotted cross in a square",
       "reference": "tessellate",
       "presentation": "icon-only",
       "spot": "Tessellate caddy, tessellate type edge",
@@ -2907,7 +2917,7 @@
     {
       "name": "caddy_tessellate_tessellate_type",
       "section": "caddies",
-      "idea": "Edge centre tessellation divisions",
+      "idea": "Dotted cross in a square",
       "reference": "tessellate",
       "presentation": "icon-only",
       "spot": "Tessellate caddy, tessellate type",
@@ -2917,7 +2927,7 @@
     {
       "name": "caddy_tessellate_tessellate_type_face",
       "section": "caddies",
-      "idea": "Face centre tessellation divisions",
+      "idea": "Diagonal cross in a square",
       "reference": "tessellate",
       "presentation": "icon-only",
       "spot": "Tessellate caddy, tessellate type face",
@@ -2927,7 +2937,7 @@
     {
       "name": "caddy_tessellate_tess_tension",
       "section": "caddies",
-      "idea": "Tension changes the newly divided surface profile",
+      "idea": "Selected rectangular patch and a pointer",
       "reference": "tessellate",
       "presentation": "icon-only",
       "spot": "Tessellate caddy, tess tension",
@@ -2937,7 +2947,7 @@
     {
       "name": "caddy_msmooth_smoothness",
       "section": "caddies",
-      "idea": "Smooth rounded mesh with cyan latitude",
+      "idea": "Gridded sphere with a cyan lower hemisphere",
       "reference": "smooth",
       "presentation": "icon-only",
       "spot": "Msmooth caddy, smoothness",
@@ -2947,9 +2957,9 @@
     {
       "name": "caddy_msmooth_separate_smoothing",
       "section": "caddies",
-      "idea": "Two curved mesh groups divided by a visible gap",
+      "idea": "Reserved separation artwork, Max pill has no field pictogram",
       "reference": "smooth",
-      "presentation": "icon-only",
+      "presentation": "text-only",
       "spot": "Msmooth caddy, separate smoothing",
       "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
       "baseline": null
@@ -2957,9 +2967,9 @@
     {
       "name": "caddy_msmooth_separate_materials",
       "section": "caddies",
-      "idea": "Separate alternating material patches",
+      "idea": "Reserved material artwork, Max pill has no field pictogram",
       "reference": "smooth",
-      "presentation": "icon-only",
+      "presentation": "text-only",
       "spot": "Msmooth caddy, separate materials",
       "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
       "baseline": null
@@ -2967,7 +2977,7 @@
     {
       "name": "caddy_relax_relax",
       "section": "caddies",
-      "idea": "Selected mesh points move toward a relaxed profile",
+      "idea": "Selected rectangular patch and a pointer",
       "reference": "relax",
       "presentation": "icon-only",
       "spot": "Relax caddy, relax",
@@ -2977,7 +2987,7 @@
     {
       "name": "caddy_relax_iterations",
       "section": "caddies",
-      "idea": "A relaxed curved patch with a repeat plus",
+      "idea": "Square curved patch with a green repeat plus at lower right",
       "reference": "relax",
       "presentation": "icon-only",
       "spot": "Relax caddy, iterations",
@@ -2987,7 +2997,7 @@
     {
       "name": "caddy_relax_hold_boundary",
       "section": "caddies",
-      "idea": "Pinned points around a mesh boundary",
+      "idea": "Curved patch in a square with four interior boundary pins",
       "reference": "relax",
       "presentation": "icon-only",
       "spot": "Relax caddy, hold boundary",
@@ -2997,7 +3007,7 @@
     {
       "name": "caddy_relax_hold_outer",
       "section": "caddies",
-      "idea": "Outer corner pins hold a sagging mesh patch",
+      "idea": "Sagging patch in a square pinned at its two outer sides",
       "reference": "relax",
       "presentation": "icon-only",
       "spot": "Relax caddy, hold outer",

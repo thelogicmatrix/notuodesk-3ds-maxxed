@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_tessellate_tess_tension</title>
-<desc>Tension changes the newly divided surface profile</desc>
+<desc>Selected rectangular patch and a pointer</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<polygon points="2,3 12,3 12,11 2,11" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="4" y="5" width="6" height="4" rx="0" fill="#64c6d3" stroke="#428fcb" stroke-width="1"/><path d="M2 10 Q7 4 12 10" fill="none" stroke="#428fcb" stroke-width="1"/><polygon points="9,6 9,14 11,12 13,15 15,14 13,11 15,10" fill="#d2d8db" stroke="#303b40" stroke-width="1"/>
+<rect x="1.5" y="2" width="12" height="6.5" rx="0" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><rect x="2.5" y="3" width="7" height="4.5" rx="0" fill="#64c6d3" stroke="none" stroke-width="1"/><polygon points="8,6 8,14 10,12 12,15 14,14 12,11 15,11" fill="#d2d8db" stroke="#303b40" stroke-width="1"/>
 </g>
 </svg>

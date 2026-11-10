@@ -78,7 +78,7 @@ does not allocate GUI icon IDs. Positive IDs and visible drawing need a GUI run.
 
 ## Scope
 
-The set has 321 drawings, including all 125 previous names. It includes assets
+The set has 322 drawings, including all 125 previous names. It includes assets
 for Max controls that this add-on does not yet display.
 No new controls or tool behavior are introduced. The existing quad menus have
 no built-in icon arguments to replace. Material previews remain live Blender
@@ -100,8 +100,12 @@ The catalog marks reserved drawings for text-only spots so integration does not
 add decorative icons to Max's text controls.
 
 `max_icons.CADDY_OPERATIONS` maps each of the eleven caddies and its fields to
-48 original shaded drawings. Mode fields have separate Group, Local Normal,
-By Polygon, Edge or Face artwork. Bridge ends have large numbered badges.
+49 original drawings, including a separate circular Bridge pick cursor. Mode
+fields have separate Group, Local Normal, By Polygon, Edge or Face artwork.
+Height has a rectangle and height bar. Bridge has a tapered prism, a flared bell,
+and hourglasses with blue numbered badges. Its selection and pick icons use flat
+polygon grids. MeshSmooth's two separation pills have no field icon in Max.
+Their old assets remain reserved and the caddy leaves those positions blank.
 `poly_caddies.artwork()` chooses these operation-specific names. The draw routine
 tries `CADDY_FIELDS` and the previous mode artwork if a new icon is unavailable,
 then uses a vector fallback. Numeric values stay visible and field names appear

@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_bevel_local_bias</title>
-<desc>A flared local-normal base</desc>
+<desc>Upright stem with a flared foot</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<polygon points="2,13 6,9 7,2 9,2 10,9 14,13" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="7,2 9,2 10,9 14,13 8,11" fill="#64c6d3" stroke="#303b40" stroke-width="1"/>
+<polygon points="6,2 10,2 10,8 14,13 14,14 2,14 2,13 6,8" fill="#64c6d3" stroke="#303b40" stroke-width="1"/><polygon points="7,3 8,3 8,9 4,13 3,13 7,8" fill="#d2d8db" stroke="none" stroke-width="1"/><polygon points="9,3 10,8 13,13 10,12 8,8" fill="#64757e" stroke="none" stroke-width="1"/>
 </g>
 </svg>

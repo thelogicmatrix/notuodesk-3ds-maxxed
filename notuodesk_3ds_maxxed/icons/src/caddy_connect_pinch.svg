@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_connect_pinch</title>
-<desc>Two new edges pinched toward the middle</desc>
+<desc>Stacked block with two plus marks along its right edge</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<polygon points="2,5 7,2 14,5 9,8" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><polygon points="2,5 9,8 9,14 2,11" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="9,8 14,5 14,11 9,14" fill="#64757e" stroke="#303b40" stroke-width="1"/><path d="M2 8 9 11 14 8 M2 9 9 12 14 9" fill="none" stroke="#428fcb" stroke-width="1"/><path d="M1 4 V7 M1 12 V10" fill="none" stroke="#64c6d3" stroke-width="2"/>
+<g transform="translate(-1 0)"><polygon points="3,4 6,1.5 12,1.5 10,4" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><polygon points="3,4 10,4 10,14 3,14" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="10,4 12,1.5 12,11.5 10,14" fill="#64757e" stroke="#303b40" stroke-width="1"/><path d="M3 7 H10 L12 4.5" fill="none" stroke="#428fcb" stroke-width="1"/><path d="M3 10 H10 L12 7.5" fill="none" stroke="#428fcb" stroke-width="1"/></g><path d="M14 3 V8 M12.5 6 H15.5" fill="none" stroke="#428fcb" stroke-width="1"/><path d="M14 10 V15 M12.5 12 H15.5" fill="none" stroke="#428fcb" stroke-width="1"/>
 </g>
 </svg>

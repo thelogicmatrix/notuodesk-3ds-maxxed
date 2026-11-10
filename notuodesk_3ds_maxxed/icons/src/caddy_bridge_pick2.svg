@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_bridge_pick2</title>
-<desc>Pick bridge end 2 with a numbered mesh badge</desc>
+<desc>Flat polygon grid with a numbered lower right badge and corner points</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<polygon points="2,5 7,2 14,5 9,8" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><polygon points="2,5 9,8 9,14 2,11" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="9,8 14,5 14,11 9,14" fill="#64757e" stroke="#303b40" stroke-width="1"/><polygon points="9,6 9,14 11,12 13,15 15,14 13,11 15,10" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="8.5" y="8.5" width="7" height="7" rx="0" fill="#428fcb" stroke="#303b40" stroke-width="1"/><path d="M10 11 V10 H13 V12 L10 14 H13" fill="none" stroke="#f1f5f6" stroke-width="1"/>
+<rect x="2" y="2" width="12" height="12" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M8 2 V14 M2 8 H14" fill="none" stroke="#64757e" stroke-width="1"/><path d="M2 8 H14" fill="none" stroke="#428fcb" stroke-width="1"/><rect x="1" y="1" width="2.5" height="2.5" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="1" y="12" width="2.5" height="2.5" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="12" y="1" width="2.5" height="2.5" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="12" y="12" width="2.5" height="2.5" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="9" y="9" width="6.5" height="6.5" rx="0" fill="#428fcb" stroke="#d2d8db" stroke-width="1"/><path d="M10.5 11 V10 H13 V12 L10.5 14 H13" fill="none" stroke="#f1f5f6" stroke-width="1"/>
 </g>
 </svg>

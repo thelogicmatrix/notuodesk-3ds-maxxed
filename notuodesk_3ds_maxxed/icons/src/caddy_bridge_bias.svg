@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_bridge_bias</title>
-<desc>Bridge waist moved toward one end</desc>
+<desc>Flared bell shape with a narrow neck and curved sides</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<polygon points="2,2 7,2 9,8 7,14 2,14 5,8" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><polygon points="7,2 12,4 14,8 12,12 7,14 9,8" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M5 8 9 8 14 8" fill="none" stroke="#428fcb" stroke-width="1"/>
+<path d="M6 2 H9 Q9 9 14 13 L12 14 H2 Q6 9 6 2 Z" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M9 2 Q10 9 14 13 L12 14 Q9 10 8 3 Z" fill="#9ba8ae" stroke="#64757e" stroke-width="1"/>
 </g>
 </svg>

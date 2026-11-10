@@ -29,7 +29,7 @@ FIELD_REFS = {
     'bevel': {'bevel_type':7,'height':10,'amount':11,'local_bias':12},
     'inset': {'individual':7,'amount':9},
     'bridge': {'segments':9,'taper':10,'bias':11,'smooth':12,'twist1':13,'twist2':14,
-               'bridge_selection':15,'pick1':17,'pick2':18},
+               'bridge_selection':15,'pick1':17,'pick2':18,'pick_cursor':17},
     'weld': {'threshold':8},
     'tessellate': {'tessellate_type':6,'tess_tension':8},
     'msmooth': {'smoothness':6,'separate_smoothing':7,'separate_materials':8},
@@ -44,7 +44,7 @@ ROWS = {
     'inset': {'individual':(2,26,48,51),'amount':(2,55,82,81)},
     'bridge': {'segments':(2,25,78,50),'taper':(85,25,160,50),'bias':(2,54,78,79),'smooth':(85,54,160,79),
                'twist1':(2,83,78,108),'twist2':(85,83,160,108),'bridge_selection':(2,113,50,138),
-               'pick1':(85,113,160,138),'pick2':(48,113,86,138)},
+               'pick1':(85,113,160,138),'pick2':(48,113,86,138),'pick_cursor':(105,113,130,138)},
     'weld': {'threshold':(2,26,108,53),'weld_counts':(2,57,108,80)},
     'tessellate': {'tessellate_type':(2,25,50,52),'tess_tension':(2,57,83,82)},
     'msmooth': {'smoothness':(2,26,98,53),'separate_smoothing':(2,57,50,83),'separate_materials':(52,57,100,83)},
@@ -62,6 +62,8 @@ def split_name(name):
 
 def old_name(name):
     op, key = split_name(name)
+    if key == 'pick_cursor':
+        return 'caddy_pick'
     if key in ('extrusion_type','bevel_type'):
         value = name.rsplit('_',1)[-1]
         return 'caddy_type_'+(value if value in ('group','local','polygon') else 'group')
@@ -77,7 +79,7 @@ def render(source, size):
                                                      skip_system_fonts=True))).convert('RGBA')
 
 
-def live_comparisons(sandbox):
+def live_comparisons(sandbox, tag=''):
     manifest_path=sandbox/'out/caddy-icons-gallery.json'
     if not manifest_path.is_file():
         return
@@ -95,30 +97,38 @@ def live_comparisons(sandbox):
             im=Image.open(source).convert('RGB')
             x,y=row['x'],im.height-row['y']
             crop=im.crop((int(x-8),int(y-2),int(x+row['title_width']+8),int(y+row['height']+12)))
+            # Both live panels and the reference use the same total 3x scale.
+            crop=crop.resize((round(crop.width*3/requested),round(crop.height*3/requested)),Image.Resampling.NEAREST)
             captured.append((row,source,crop))
         max_image=Image.open(sandbox/'references'/reference).convert('RGBA')
         max_large=max_image.resize((max_image.width*3,max_image.height*3),Image.Resampling.NEAREST)
+        dark_footer=Image.open(sandbox/'references/extrude-05.png').convert('RGBA').crop((0,132,88,158))
+        dark_footer=dark_footer.resize((264,78),Image.Resampling.NEAREST)
         widths=[captured[0][2].width,captured[1][2].width,max_large.width]
         height=max(crop.height for _,_,crop in captured)
-        height=max(height,max_large.height)+130
+        height=max(height,max_large.height)+240
         sheet=Image.new('RGB',(sum(widths)+90,height),'#303437');d=ImageDraw.Draw(sheet)
         d.text((15,12),op.title()+' | Blender live caddy beside Autodesk 2026 Help',font=font,fill='white')
         x=15
         for index,(row,source,crop) in enumerate(captured):
-            d.text((x,47),'Live '+str(round(row['scale']*100))+'% (native pixels)',font=small,fill='#d0d7dc')
+            d.text((x,47),'Live '+str(round(row['scale']*100))+'% (normalized 3x)',font=small,fill='#d0d7dc')
             sheet.paste(crop,(x,77));x+=widths[index]+20
         label='Max caddy (3x nearest)' if op!='outline' else 'Max Outline example (3x)'
         d.text((x,47),label,font=small,fill='#d0d7dc');sheet.paste(max_large,(x,77),max_large)
+        d.text((15,height-126),'Footer target: Max 2026 dark theme (Extrude)',font=small,fill='#d0d7dc')
+        sheet.paste(dark_footer,(15,height-102),dark_footer)
         if op=='outline':
             d.text((15,height-34),'Autodesk publishes a boundary example, not an Outline caddy image. Caddy chrome remains unverified.',font=small,fill='#f3c37c')
-        path=sandbox/('compare-'+op+'.png');sheet.save(path)
+        path=sandbox/('compare-'+op+tag+'.png');sheet.save(path)
+        if tag:
+            sheet.save(sandbox/('compare-'+op+'.png'))
         evidence.append(dict(operation=op,comparison=str(path),reference=reference,
                              live=[str(source) for _,source,_ in captured]))
         print('COMPARE',path,flush=True)
     (sandbox/'live-comparison-index.json').write_text(json.dumps(evidence,indent=2)+'\n')
 
 
-def main(sandbox, include_live=False):
+def main(sandbox, include_live=False, tag=''):
     catalog=json.loads((ICONS/'src/catalog.json').read_text())
     names=sorted(row['name'] for row in catalog['icons'] if
         row['section']=='caddies' and row['note'].startswith('Original shaded pictogram.'))
@@ -143,7 +153,8 @@ def main(sandbox, include_live=False):
                 # Same medium-grey pill background as the actual caddies.
                 for dx,src in ((0,sandbox/'baseline/src'/(old+'.svg')),(size+6,ICONS/'src'/(name+'.svg'))):
                     d.rectangle((x+dx-2,y+33,x+dx+size+1,y+33+size),fill='#93999c')
-                    tile=render(src,size);sheet.paste(tile,(x+dx,y+33),tile)
+                    if not (dx and op=='msmooth' and key in {'separate_smoothing','separate_materials'}):
+                        tile=render(src,size);sheet.paste(tile,(x+dx,y+33),tile)
                 d.text((x,y+9),str(size)+'px',font=small,fill='#c6ced2')
                 x += size*2+16
             ref=Image.open(sandbox/'references'/REFERENCES[op]).convert('RGBA')
@@ -169,19 +180,25 @@ def main(sandbox, include_live=False):
                     crop=Image.open(sandbox/'references'/(op+'-'+str(mode_refs[op][choice]).zfill(2)+'.png')).convert('RGBA')
                     crop.thumbnail((200,60))
             sheet.paste(crop,(875,y+15),crop)
+            if op=='msmooth' and key in {'separate_smoothing','separate_materials'}:
+                d.text((320,y+86),'Blank before the check mark in Max. Reserved SVG is not drawn.',font=small,fill='#f3c37c')
             manifest.append(dict(name=name,old=old,reference=REFERENCES[op],field=key))
-        path=sandbox/('caddy-icons-sheet.png' if not pages else 'caddy-icons-sheet-'+str(len(pages)+1)+'.png')
+        stem='caddy-icons-sheet' if not pages else 'caddy-icons-sheet-'+str(len(pages)+1)
+        path=sandbox/(stem+tag+'.png')
         sheet.save(path);pages.append(path)
+        if tag:
+            sheet.save(sandbox/(stem+'.png'))
         print('SHEET',path,flush=True)
     (sandbox/'icon-comparison-index.json').write_text(json.dumps(manifest,indent=2)+'\n')
     print('CADDY SHEETS',len(names),'new drawings in',len(pages),'sheets',flush=True)
     if include_live:
-        live_comparisons(sandbox)
+        live_comparisons(sandbox,tag)
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sandbox',type=Path,required=True)
     parser.add_argument('--live',action='store_true',help='Also compare the completed GUI icon tour')
+    parser.add_argument('--tag',default='',help='Unique render suffix, also refresh the standard comparison filenames')
     args=parser.parse_args()
-    main(args.sandbox,args.live)
+    main(args.sandbox,args.live,args.tag)

@@ -48,6 +48,13 @@ def run():
             "constraint_face", "constraint_normal", "planeplus", "loft"} <= names
     assert set(icons.CADDY_FIELDS.values()) <= names
     from notuodesk_3ds_maxxed import poly_caddies as caddies
+    # Max's MeshSmooth separation pills contain only the state check mark.
+    # No material checker or split mesh belongs on their empty left halves.
+    session = SimpleNamespace(action='MSMOOTH')
+    assert not caddies.has_field_icon(session, 'separate_smoothing')
+    assert not caddies.has_field_icon(session, 'separate_materials')
+    assert caddies.has_field_icon(session, 'smoothness')
+    assert caddies.has_field_icon(SimpleNamespace(action='RELAX'), 'hold_outer')
     assert set(icons.CADDY_OPERATIONS) == {
         'EXTRUDE', 'CHAMFER', 'CONNECT', 'BEVEL', 'INSET', 'OUTLINE',
         'BRIDGE', 'WELD', 'TESSELLATE', 'MSMOOTH', 'RELAX'}
