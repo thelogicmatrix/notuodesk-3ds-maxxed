@@ -26,7 +26,6 @@ class EditorTests(unittest.TestCase):
 
     def test_render_settings_apply_and_invalid_range_is_atomic(self):
         scene = bpy.context.scene
-        before = scene.frame_end
         result = bpy.ops.max.render_setup_dialog(width=800, height=600, percentage=75,
             start=1, end=10, output="//render/", engine=scene.render.engine, format="PNG")
         self.assertEqual(result, {"FINISHED"})
