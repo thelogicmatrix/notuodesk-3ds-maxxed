@@ -9,6 +9,14 @@ editors.install()
 
 
 class EditorTests(unittest.TestCase):
+    def test_detached_editor_listener_preserves_the_next_click(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        listener = SimpleNamespace(_pointer=0, _area_pointer=0)
+        with patch.dict(editors._hosts, {}, clear=True), patch.dict(editors._docked, {}, clear=True):
+            self.assertEqual(editors.MAX_OT_editor_interact.modal(listener, None, None),
+                             {"FINISHED", "PASS_THROUGH"})
+
     def test_registered_editor_dialog_fields(self):
         fields = bpy.ops.max.render_setup_dialog.get_rna_type().properties
         self.assertIn("engine", fields)

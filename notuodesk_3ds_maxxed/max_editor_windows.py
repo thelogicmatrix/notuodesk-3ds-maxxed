@@ -477,7 +477,7 @@ class MAX_OT_editor_interact(bpy.types.Operator):
     def modal(self, context, event):
         host = _docked.get(self._area_pointer) or _hosts.get(self._pointer)
         if not host:
-            return {"FINISHED"}
+            return {"FINISHED", "PASS_THROUGH"}
         if host.original_type:
             region = _region(host.area)
             if not (region.x <= event.mouse_x < region.x+region.width and region.y <= event.mouse_y < region.y+region.height):
