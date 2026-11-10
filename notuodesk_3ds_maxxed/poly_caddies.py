@@ -11,6 +11,48 @@ ACTIONS = {'EXTRUDE', 'CHAMFER', 'CONNECT', 'BEVEL', 'INSET', 'OUTLINE',
 # Autodesk documents these Shift+click shortcuts on the Modeling ribbon.
 SHIFT_ACTIONS = ACTIONS - {'OUTLINE'}
 _active = {}
+_font = None
+_pill_shader = None
+
+
+def pill_shader():
+    """Analytic rounded edges keep 22px pills smooth at either UI scale."""
+    global _pill_shader
+    if _pill_shader is None:
+        import gpu
+        interface = gpu.types.GPUStageInterfaceInfo('max_caddy_pill')
+        interface.smooth('VEC2', 'pixel')
+        info = gpu.types.GPUShaderCreateInfo()
+        info.push_constant('MAT4', 'mvp')
+        info.push_constant('VEC4', 'bounds')
+        info.push_constant('VEC4', 'lower')
+        info.push_constant('VEC4', 'upper')
+        info.push_constant('FLOAT', 'radius')
+        info.vertex_in(0, 'VEC2', 'pos')
+        info.vertex_out(interface)
+        info.fragment_out(0, 'VEC4', 'outColor')
+        info.vertex_source('void main() {pixel=pos; gl_Position=mvp*vec4(pos,0.0,1.0);}')
+        info.fragment_source('''void main() {
+            vec2 halfSize=bounds.zw*0.5;
+            vec2 q=abs(pixel-bounds.xy-halfSize)-halfSize+vec2(radius);
+            float d=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-radius;
+            outColor=mix(lower,upper,clamp((pixel.y-bounds.y)/bounds.w,0.0,1.0));
+            outColor.a*=1.0-smoothstep(-0.5,0.5,d);
+        }''')
+        _pill_shader = gpu.shader.create_from_info(info)
+    return _pill_shader
+
+
+def caddy_font():
+    """Use Max's Windows UI face when installed, with Blender's font elsewhere."""
+    global _font
+    if _font is None:
+        import blf
+        from pathlib import Path
+        import os
+        path = Path(os.environ.get('WINDIR', 'C:/Windows'))/'Fonts/tahoma.ttf'
+        _font = blf.load(str(path)) if path.is_file() else 0
+    return _font
 
 
 class MeshOps:
@@ -167,6 +209,12 @@ LABELS = {
     'separate_smoothing': ('Separate by Smoothing Groups', 'smooth'),
     'separate_materials': ('Separate by Materials', 'material'),
     'weld_counts': ('Before / After', 'weld'),
+    'chamfer_miter': ('Mitering', 'chamfer'), 'chamfer_depth': ('Depth', 'tension'),
+    'end_bias': ('End Bias', 'tension'), 'radial_bias': ('Radial Bias', 'tension'),
+    'invert_open': ('Invert Open', 'open'), 'chamfer_smooth': ('Smooth', 'smooth'),
+    'smooth_type': ('Smooth Type', 'smooth'), 'smooth_threshold': ('Smooth Threshold', 'smooth'),
+    'bridge_adjacent': ('Bridge Adjacent', 'smooth'),
+    'reverse_triangulation': ('Reverse Triangulation', 'type'),
 }
 UI_ONLY = {'pick1', 'pick2', 'separate_smoothing', 'separate_materials', 'weld_counts'}
 
@@ -181,9 +229,16 @@ def fields(session):
         else:
             keys = ['extrusion_type', 'amount', 'local_bias']
     if session.action == 'BRIDGE' and session.level == 2:
-        keys = ['segments', 'smooth', 'bridge_selection']
+        keys = ['segments', 'smooth', 'bridge_adjacent', 'reverse_triangulation', 'bridge_selection']
+    elif session.action == 'BRIDGE':
+        keys = [key for key in keys if key not in {'bridge_adjacent', 'reverse_triangulation'}]
     if session.action == 'CHAMFER':
-        keys = ['amount', 'segments', 'tension', 'open']
+        if session.level == 1:
+            keys = ['amount', 'open']
+        else:
+            profile = 'chamfer_depth' if getattr(session.values, 'chamfer_miter', 'UNIFORM') in {'RADIAL', 'PATCH'} else 'tension'
+            keys = ['chamfer_miter', 'amount', 'segments', profile, 'end_bias', 'radial_bias',
+                    'open', 'invert_open', 'chamfer_smooth', 'smooth_type', 'smooth_threshold']
     if session.action == 'MSMOOTH':
         keys += ['separate_smoothing', 'separate_materials']
     if session.action == 'BRIDGE':
@@ -198,6 +253,15 @@ def enabled(session, key):
         return False
     if key in {'base_width', 'bridge_selection', 'local_bias'}:
         return False
+    if key in {'end_bias', 'radial_bias', 'bridge_adjacent', 'reverse_triangulation'}:
+        return False
+    if session.action == 'CHAMFER':
+        if key == 'invert_open':
+            return session.values.open
+        if key in {'smooth_type', 'smooth_threshold'}:
+            return session.values.chamfer_smooth
+        if key == 'tension':
+            return session.values.chamfer_miter in {'QUAD', 'UNIFORM'}
     if session.action == 'CONNECT' and key in {'pinch', 'slide'}:
         return False
     if session.action == 'TESSELLATE' and key == 'tess_tension':
@@ -215,7 +279,49 @@ def label(session, key):
     return LABELS[key][0]
 
 
+def display_value(session, key, value=None):
+    value = getattr(session.values, key) if value is None else value
+    return math.radians(value) if session.action == 'BRIDGE' and key in {'smooth', 'bridge_adjacent'} else value
+
+
+def stored_value(session, key, value):
+    return math.degrees(value) if session.action == 'BRIDGE' and key in {'smooth', 'bridge_adjacent'} else value
+
+
+def format_value(session, key):
+    value = display_value(session, key)
+    if session.action == 'BRIDGE' and key in {'smooth', 'bridge_adjacent'}:
+        return f'{value:.3f}'
+    if key in {'segments', 'iterations', 'twist1', 'twist2'} or (session.action == 'CONNECT' and key in {'pinch', 'slide'}):
+        return str(round(value))
+    result = f'{value:.3f}'.rstrip('0').rstrip('.')
+    return result if '.' in result else result+'.0'
+
+
+def tooltip(session, key):
+    if key in {'end_bias', 'radial_bias', 'bridge_adjacent', 'reverse_triangulation',
+               'base_width', 'bridge_selection', 'local_bias', 'pinch', 'slide'}:
+        return session.store.bl_rna.properties[key].description
+    if key in {'pick1', 'pick2'}:
+        return 'Blender bridge_edge_loops uses selected loops and has no Max target picker'
+    if key in {'separate_smoothing', 'separate_materials'}:
+        return 'Blender subdivide has no Max adaptive subdivision boundary rule'
+    return ''
+
+
 def artwork(session, key):
+    from . import max_icons
+    name = max_icons.CADDY_OPERATIONS.get(session.action, {}).get(key)
+    if name is None:
+        return generic_artwork(session, key)
+    if key in {'extrusion_type', 'bevel_type', 'tessellate_type'}:
+        name += '_'+getattr(session.values, key).lower()
+    elif key == 'individual':
+        name += '_polygon' if session.values.individual else '_group'
+    return name
+
+
+def generic_artwork(session, key):
     from . import max_icons
     if key == 'amount':
         if session.action == 'EXTRUDE':
@@ -229,6 +335,16 @@ def artwork(session, key):
     if key == 'tessellate_type':
         return 'caddy_type_' + session.values.tessellate_type.lower()
     return max_icons.CADDY_FIELDS[key]
+
+
+def has_field_icon(session, key):
+    return not (session.action == 'MSMOOTH' and key in {'separate_smoothing', 'separate_materials'})
+
+
+def draw_field_icon(session, key, cx, cy, size):
+    from . import max_icons
+    return (max_icons.draw(artwork(session, key), cx, cy, size) or
+            max_icons.draw(generic_artwork(session, key), cx, cy, size))
 
 
 def choices(session, key):
@@ -285,21 +401,15 @@ class Caddy:
         return left+8, bottom+8, right-8, top-12
 
     def layout(self, context):
+        from .caddy_layout import controls, extent
         self.keys = fields(self.session)
-        self.rows = [[key] for key in self.keys]
-        base_width = 104
-        if self.session.action == 'BRIDGE':
-            base_width = 213
-            self.rows = ([['segments', 'smooth']] if self.session.level == 2 else
-                         [['segments', 'taper'], ['bias', 'smooth'], ['twist1', 'twist2']])
-            self.rows += [['bridge_selection', 'pick1', 'pick2']]
-        elif self.session.action in {'RELAX', 'MSMOOTH'}:
-            self.rows = [[key] for key in self.keys[:-2]]+[self.keys[-2:]]
+        self.bounds, self.rows = controls(self.session.action, self.session.level, self.keys)
+        base_width, base_height = extent(self.bounds)
         left, bottom, right, top = self.canvas()
         self.scale = max(.1, min(context.preferences.system.ui_scale,
-                                (right-left)/base_width, (top-bottom)/((len(self.rows)+2)*29)))
-        self.width, self.row, self.gap = base_width*self.scale, 24*self.scale, 5*self.scale
-        self.height = (len(self.rows)+2)*(self.row+self.gap)
+                                (right-left)/base_width, (top-bottom)/base_height))
+        self.width, self.row, self.gap = base_width*self.scale, 22*self.scale, 7*self.scale
+        self.height = base_height*self.scale
         if hasattr(self, 'x'):
             self.x, self.y = self.clamp(self.x, self.y)
 
@@ -323,16 +433,9 @@ class Caddy:
                 max(self.height+bottom, min(y, top)))
 
     def rect(self, index):
-        if index == 0:
-            return (self.x, self.y-self.row-self.gap, self.width, self.row)
-        if index == len(self.keys)+1:
-            return (self.x, self.y-self.height, self.width, self.row)
-        key = self.keys[index-1]
-        for row, keys in enumerate(self.rows):
-            if key in keys:
-                width = (self.width-(len(keys)-1)*self.gap)/len(keys)
-                col = keys.index(key)
-                return (self.x+col*(width+self.gap), self.y-(row+2)*(self.row+self.gap), width, self.row)
+        key = 'TITLE' if index == 0 else 'BUTTONS' if index == len(self.keys)+1 else self.keys[index-1]
+        x, top, width, height = self.bounds[key]
+        return (self.x+x*self.scale, self.y-(top+height)*self.scale, width*self.scale, height*self.scale)
 
     def hit(self, x, y):
         for index, key in enumerate(['TITLE']+self.keys+['BUTTONS']):
@@ -362,7 +465,7 @@ class Caddy:
                 return False
         except ValueError:
             return False
-        self.change(context, self.edit, value)
+        self.change(context, self.edit, stored_value(self.session, self.edit, value))
         self.edit = None
         self.remember()
         return True
@@ -475,7 +578,7 @@ class Caddy:
         try:
             value = float(self.text)
             if math.isfinite(value):
-                self.change(context, self.edit, value)
+                self.change(context, self.edit, stored_value(self.session, self.edit, value))
         except ValueError:
             pass
 
@@ -540,7 +643,8 @@ class Caddy:
                     key, _, start_y, value = self.drag
                     bottom = self.rect(self.keys.index(key)+1)[1]
                     step = 1 if isinstance(value, int) else .01
-                    self.change(context, key, value+(step if start_y > bottom+self.row/2 else -step))
+                    shown = display_value(self.session, key, value)
+                    self.change(context, key, stored_value(self.session, key, shown+(step if start_y > bottom+self.row/2 else -step)))
                 if self.drag:
                     self.remember()
                 self.drag = None
@@ -593,7 +697,7 @@ class Caddy:
                     else:
                         self.begin_gesture()
                         self.edit = hit
-                        self.text = str(value) if isinstance(value, int) else f'{value:.6g}'
+                        self.text = f'{display_value(self.session, hit):.6g}'
                         self.select_all = True
                         self.anchor, self.cursor = 0, len(self.text)
                 elif hit is None:
@@ -606,7 +710,8 @@ class Caddy:
                 prop = self.session.store.bl_rna.properties[key]
                 step = 1 if prop.type == 'INT' else .01
                 step *= 10 if event.ctrl else .1 if event.alt else 1
-                self.change(context, key, value+(y-start_y)*step)
+                shown = display_value(self.session, key, value)
+                self.change(context, key, stored_value(self.session, key, shown+(y-start_y)*step))
         elif not (self.edit or self.drag or self.menu or hit):
             self.select_event(context, event, x, y)
         if self.session.closed:
@@ -626,49 +731,65 @@ class Caddy:
             return
         self.layout(bpy.context)
         shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+        rounded = pill_shader()
+        font = caddy_font()
         gpu.state.blend_set('ALPHA')
 
         def polygon(points, color):
+            from mathutils import Vector
+            from mathutils.geometry import tessellate_polygon
             shader.bind()
             shader.uniform_float('color', color)
-            batch_for_shader(shader, 'TRI_FAN', {'pos': points}).draw(shader)
+            triangles = tessellate_polygon([[Vector((x, y, 0)) for x, y in points]])
+            # Accept both vector- and index-returning Blender tessellators.
+            vertices = [points[v] if isinstance(v, int) else tuple(v)[:2]
+                        for tri in triangles for v in tri]
+            batch_for_shader(shader, 'TRIS', {'pos': vertices}).draw(shader)
 
-        def box(x, y, w, h, color, radius=None):
-            radius = min(7*self.scale if radius is None else radius, h/2, w/2)
-            points = []
-            for cx, cy, start in ((x+w-radius, y+h-radius, 0), (x+radius, y+h-radius, 90),
-                                  (x+radius, y+radius, 180), (x+w-radius, y+radius, 270)):
-                for a in range(start, start+91, 15):
-                    points.append((cx+radius*math.cos(math.radians(a)), cy+radius*math.sin(math.radians(a))))
-            polygon(points, color)
+        def box(x, y, w, h, color, radius=None, upper=None):
+            radius = min(h/2 if radius is None else radius, h/2, w/2)
+            if w <= 0 or h <= 0:
+                return
+            rounded.bind()
+            rounded.uniform_float('mvp',gpu.matrix.get_projection_matrix() @ gpu.matrix.get_model_view_matrix())
+            rounded.uniform_float('bounds',(x,y,w,h))
+            # Custom shaders write scene-linear values to the sRGB viewport.
+            # Built-in UNIFORM_COLOR does this conversion internally.
+            def linear(value):
+                return tuple(c/12.92 if c <= .04045 else ((c+.055)/1.055)**2.4 for c in value[:3])+(value[3],)
+            rounded.uniform_float('lower',linear(color))
+            rounded.uniform_float('upper',linear(color if upper is None else upper))
+            rounded.uniform_float('radius',radius)
+            batch_for_shader(rounded,'TRI_FAN',{'pos':[(x-1,y-1),(x+w+1,y-1),
+                              (x+w+1,y+h+1),(x-1,y+h+1)]}).draw(rounded)
 
         def text(x, y, value, color=(.91, .92, .93, 1), size=11):
-            blf.size(0, size*self.scale)
-            blf.color(0, *color)
-            blf.position(0, x, y, 0)
-            blf.draw(0, value)
+            blend = gpu.state.blend_get()
+            blf.size(font, size*self.scale)
+            blf.color(font, *color)
+            blf.position(font, x, y, 0)
+            blf.draw(font, value)
+            # BLF leaves blending disabled. Keep subsequent transparent icons
+            # and pill edges from overwriting the viewport with alpha zero.
+            gpu.state.blend_set(blend)
 
         def lines(points, color=(.18, .35, .42, 1)):
             shader.bind()
             shader.uniform_float('color', color)
             batch_for_shader(shader, 'LINES', {'pos': points}).draw(shader)
 
-        def tick(cx, cy, checked):
-            # State control only. Field icon artwork is maintained separately.
-            s = 5*self.scale
-            points = [(cx-s,cy), (cx-s/4,cy-s), (cx+s,cy+s)]
-            color = (.08,.24,.28,1) if checked else (.32,.36,.37,1)
-            if checked:
-                for offset in (-self.scale, 0, self.scale):
-                    lines([(points[0][0],points[0][1]+offset),
-                           (points[1][0],points[1][1]+offset),
-                           (points[1][0],points[1][1]+offset),
-                           (points[2][0],points[2][1]+offset)], color)
-            else:
-                outline = [(cx-s,cy+2*self.scale),(cx-s/4,cy-s+2*self.scale),
-                           (cx+s,cy+s+2*self.scale),(cx+s+2*self.scale,cy+s),
-                           (cx-s/4,cy-s-2*self.scale),(cx-s-2*self.scale,cy)]
-                lines([p for i in range(len(outline)) for p in (outline[i],outline[(i+1)%len(outline)])], color)
+        def tick(cx, cy, checked, on=True):
+            from . import max_icons
+            theme = 'dark' if self.session.action in {'EXTRUDE', 'CHAMFER', 'BEVEL'} else 'light'
+            if max_icons.draw('caddy_state_'+theme+('_on' if checked and on else '_off'),cx,cy,16*self.scale):
+                return
+            s = self.scale
+            points = [(-6,-1),(-4.5,1),(-2,-2),(3.5,7),(5.5,5.5),(-2,-6.5)]
+            points = [(cx+px*s,cy+py*s) for px,py in points]
+            polygon(points, (.18,.28,.29,1) if checked else (.48,.48,.48,1))
+            inner = [(-5,-1),(-4.5,-.5),(-2,-3.5),(3.7,5.7),(4.4,5.2),(-2,-5)]
+            polygon([(cx+px*s,cy+py*s) for px,py in inner],
+                    (.34,.61,.62,1) if checked and on else (.78,.78,.78,1))
 
         def mark(cx, cy, kind, hover=False):
             s = 6*self.scale
@@ -699,7 +820,7 @@ class Caddy:
                 lines([(cx-s,cy-s), (cx+s,cy+s)])
 
         def field_mark(key, cx, cy, fallback):
-            if not max_icons.draw(artwork(self.session, key), cx, cy, 20*self.scale):
+            if not draw_field_icon(self.session, key, cx, cy, 16*self.scale):
                 mark(cx, cy, fallback)
 
         from .operators import EDIT_POLY_OPS
@@ -714,77 +835,105 @@ class Caddy:
         elif action == 'CONNECT' and level in (2,3):
             title = 'Connect Edges'
         elif action == 'BEVEL':
-            title = 'Bevel Polygons'
+            title = 'Bevel'
         elif action == 'MSMOOTH':
             title = 'MeshSmooth'
         if self.hover in self.keys:
             title += ': '+label(self.session, self.hover)
-        blf.size(0, 11*self.scale)
+        blf.size(font, 11*self.scale)
         tx, ty, tw, th = self.rect(0)
-        title_width = min(self.canvas()[2]-tx, max(tw, blf.dimensions(0, title)[0]+20*self.scale))
-        while title and blf.dimensions(0, title)[0] > title_width-16*self.scale:
+        hovered = self.hover in self.keys
+        title_width = min(self.canvas()[2]-tx, max(tw, blf.dimensions(font, title)[0]+(26 if th>22*self.scale else 8)*self.scale)) if hovered else tw
+        while title and blf.dimensions(font, title)[0] > title_width-(20 if th>22*self.scale else 8)*self.scale:
             title = title[:-1]
-        box(tx, ty, title_width, th, (.045, .05, .052, .96))
-        text(tx+8*self.scale, ty+8*self.scale, title)
+        box(tx, ty, title_width, th, (.055,.055,.055,1) if th>22*self.scale else (.25,.25,.25,1), radius=7*self.scale)
+        inset = 16 if th>22*self.scale else 4
+        if th>22*self.scale:
+            for offset in (7, 10):
+                box(tx+offset*self.scale,ty+12*self.scale,2*self.scale,12*self.scale,(.22,.22,.22,1),radius=0)
+                box(tx+(offset+1)*self.scale,ty+12*self.scale,self.scale,12*self.scale,(.48,.48,.48,1),radius=0)
+        text(tx+inset*self.scale, ty+th-14*self.scale if th>22*self.scale else ty+4*self.scale, title)
         for i, key in enumerate(self.keys, 1):
             x, y, w, h = self.rect(i)
             on = enabled(self.session, key)
-            box(x, y, w, h, (.04, .045, .05, .9))
-            box(x+1, y+1, w-2, h-2, (.51, .53, .54, .98) if on else (.16, .18, .19, .95))
+            pressed = self.edit == key or (self.drag and self.drag[0] == key)
+            hot = self.hover == key and on
             if key == 'weld_counts':
                 before = len(self.session.baseline.bm.verts if self.session.level == 1 else self.session.baseline.bm.edges)
                 bm = bmesh.from_edit_mesh(self.session.obj.data)
                 after = len(bm.verts if self.session.level == 1 else bm.edges)
-                text(x+5*self.scale,y+8*self.scale,f'Before: {before}, After: {after}',size=9)
+                box(x,y,w,h,(.25,.25,.25,1),radius=7*self.scale)
+                text(x+4*self.scale,y+4*self.scale,f'Before: {before}, After: {after}',size=11)
                 continue
+            box(x,y,w,h,(.10,.10,.10,1) if pressed else (.15,.15,.15,1))
+            lower = (.47,.47,.47,1) if pressed else (.63,.63,.63,1)
+            upper = (.60,.60,.60,1) if pressed else (.73,.73,.73,1) if hot else (.69,.69,.69,1)
+            if key in {'pick1', 'pick2'}:
+                lower, upper = (.46,.46,.46,1), (.53,.53,.53,1)
+            box(x+self.scale,y+self.scale,w-2*self.scale,h-2*self.scale,lower,upper=upper)
+            if hot and not pressed:
+                box(x+2*self.scale,y+2*self.scale,w-4*self.scale,h-4*self.scale,(.68,.68,.68,1),upper=(.78,.78,.78,1))
             if key in UI_ONLY:
-                field_mark(key,x+13*self.scale,y+h/2,LABELS[key][1])
+                if has_field_icon(self.session, key):
+                    field_mark(key,x+13*self.scale,y+h/2,LABELS[key][1])
                 if key in {'pick1','pick2'}:
-                    text(x+w-15*self.scale,y+8*self.scale,'1' if key=='pick1' else '2',(.5,.52,.53,1))
+                    max_icons.draw('caddy_bridge_pick_cursor',x+w-12*self.scale,y+h/2,16*self.scale)
                 else:
-                    tick(x+w-13*self.scale,y+h/2,False)
+                    tick(x+w-12*self.scale,y+h/2,False,on=False)
                 continue
             value = getattr(self.session.values, key)
             opts = choices(self.session, key)
             prop = self.session.store.bl_rna.properties[key]
             if opts:
-                field_mark(key,x+15*self.scale,y+h/2,'type')
-                polygon([(x+w-17*self.scale,y+14*self.scale), (x+w-7*self.scale,y+14*self.scale),
-                         (x+w-12*self.scale,y+8*self.scale)], (.12,.18,.2,1))
+                field_mark(key,x+14*self.scale,y+h/2,'type')
+                cx,cy=x+w-13*self.scale,y+h/2
+                s=self.scale
+                if action in {'EXTRUDE', 'CHAMFER', 'BEVEL'}:
+                    # Dark caddies use an outlined stem rather than a triangle.
+                    polygon([(cx-2*s,cy+5*s),(cx+2*s,cy+5*s),(cx+2*s,cy),
+                             (cx+5*s,cy),(cx,cy-5*s),(cx-5*s,cy),(cx-2*s,cy)],(.27,.27,.27,1))
+                    polygon([(cx-s,cy+4*s),(cx+s,cy+4*s),(cx+s,cy-s),
+                             (cx+3*s,cy-s),(cx,cy-3*s),(cx-3*s,cy-s),(cx-s,cy-s)],(.66,.66,.66,1))
+                else:
+                    polygon([(cx-3*s,cy+2*s),(cx+3*s,cy+2*s),(cx,cy-2*s)],(.27,.27,.27,1))
             elif prop.type == 'BOOLEAN':
-                tick(x+12*self.scale,y+h/2,value)
-                field_mark(key,x+w-13*self.scale,y+h/2,'hold')
+                field_mark(key,x+13*self.scale,y+h/2,'hold')
+                if key == 'invert_open' and not value:
+                    box(x+w-19*self.scale,y+6*self.scale,10*self.scale,10*self.scale,(.5,.5,.5,1),radius=0)
+                else:
+                    tick(x+w-(14 if action == 'CHAMFER' else 12)*self.scale,y+h/2,value,on=on)
             else:
                 kind = 'height' if self.session.action == 'EXTRUDE' and key == 'amount' else LABELS[key][1]
-                if self.session.action == 'CHAMFER' and key == 'amount':
-                    kind = 'chamfer'
                 field_mark(key,x+14*self.scale,y+h/2,kind)
-                lines([(x+26*self.scale,y+3),(x+26*self.scale,y+h-3)])
-                display = self.text if self.edit == key else str(value) if isinstance(value,int) else f'{value:.4g}'
+                display = self.text if self.edit == key else format_value(self.session,key)
                 if self.edit == key:
-                    blf.size(0, 11*self.scale)
-                    lo, hi = (0,len(self.text)) if self.select_all else sorted((self.cursor,self.anchor))
-                    start = blf.dimensions(0,self.text[:lo])[0]
-                    end = blf.dimensions(0,self.text[:hi])[0]
+                    blf.size(font,11*self.scale)
+                    lo,hi=(0,len(self.text)) if self.select_all else sorted((self.cursor,self.anchor))
+                    start=blf.dimensions(font,self.text[:lo])[0]
+                    end=blf.dimensions(font,self.text[:hi])[0]
                     if lo != hi:
-                        box(x+32*self.scale+start,y+3,end-start,h-6,(.19,.37,.5,1))
+                        box(x+28*self.scale+start,y+3*self.scale,end-start,h-6*self.scale,(.19,.37,.5,1),radius=0)
                     else:
-                        caret = blf.dimensions(0,self.text[:self.cursor])[0]
-                        lines([(x+32*self.scale+caret,y+5),(x+32*self.scale+caret,y+h-5)],(.04,.08,.1,1))
-                text(x+32*self.scale,y+8*self.scale, display, (.04,.08,.1,1) if on else (.52,.53,.54,1))
+                        caret=blf.dimensions(font,self.text[:self.cursor])[0]
+                        lines([(x+28*self.scale+caret,y+4*self.scale),(x+28*self.scale+caret,y+h-4*self.scale)],(.04,.08,.1,1))
+                text(x+28*self.scale,y+6*self.scale,display,(.08,.08,.08,1) if on else (.24,.24,.24,1))
         x,y,w,h = self.rect(len(self.keys)+1)
-        for i, kind in enumerate(('OK','APPLY','CANCEL')):
-            cx, cy = x+(i+.5)*w/3, y+h/2
-            box(cx-11*self.scale,cy-11*self.scale,22*self.scale,22*self.scale,(.5,.53,.54,.98),radius=11*self.scale)
-            if max_icons.draw('caddy_'+kind.lower(),cx,cy,20*self.scale):
-                continue
-            s = 5*self.scale
-            if kind == 'OK':
-                lines([(cx-s,cy),(cx-1,cy-s),(cx-1,cy-s),(cx+s,cy+s)],(.12,.35,.3,1))
-            elif kind == 'APPLY':
-                lines([(cx-s,cy),(cx+s,cy),(cx,cy-s),(cx,cy+s)],(.14,.35,.38,1))
-            else:
-                lines([(cx-s,cy-s),(cx+s,cy+s),(cx-s,cy+s),(cx+s,cy-s)],(.45,.16,.16,1))
+        for i,kind in enumerate(('OK','APPLY','CANCEL')):
+            cx,cy=x+(11+29*i)*self.scale,y+h/2
+            if self.hover == kind:
+                box(cx-11*self.scale,cy-11*self.scale,22*self.scale,22*self.scale,(.78,.78,.78,1))
+            if not max_icons.draw('caddy_'+kind.lower(),cx,cy,28*self.scale):
+                box(cx-11*self.scale,cy-11*self.scale,22*self.scale,22*self.scale,(.64,.64,.64,1))
+                if kind == 'OK':
+                    tick(cx,cy,True)
+                else:
+                    s=5*self.scale
+                    points = ([(cx-s,cy),(cx+s,cy),(cx,cy-s),(cx,cy+s)] if kind == 'APPLY' else
+                              [(cx-s,cy-s),(cx+s,cy+s),(cx-s,cy+s),(cx+s,cy-s)])
+                    lines(points,(.34,.61,.62,1))
+        tip = tooltip(self.session,self.hover) if self.hover in self.keys else ''
+        if tip:
+            text(x,y-16*self.scale,tip,size=10)
         if self.hover in {'OK','APPLY','CANCEL'}:
             text(x,y-15*self.scale,{'OK':'OK (Enter)','APPLY':'Apply and Continue (Ctrl+Enter)',
                                   'CANCEL':'Cancel (Esc)'}[self.hover])

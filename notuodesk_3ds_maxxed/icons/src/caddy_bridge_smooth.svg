@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_bridge_smooth</title>
+<desc>Gridded sphere with a cyan lower hemisphere</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<circle cx="8" cy="8" r="6.5" fill="#9ba8ae" stroke="#303b40" stroke-width="1"/><path d="M2 9 Q8 12 14 9 Q13 15 8 14.5 Q3 15 2 9 Z" fill="#64c6d3" stroke="#428fcb" stroke-width="1"/><path d="M2 6 Q8 3 14 6 M1.5 9 H14.5" fill="none" stroke="#303b40" stroke-width="1"/><path d="M8 1.5 C3 4 3 10 8 11 M8 1.5 C13 4 13 10 8 11" fill="none" stroke="#64757e" stroke-width="1"/><path d="M8 1.5 V11" fill="none" stroke="#d2d8db" stroke-width="1"/>
+</g>
+</svg>

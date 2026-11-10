@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_tessellate_tessellate_type_edge</title>
+<desc>Dotted cross in a square</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="2" y="2" width="12" height="12" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="7.5" y="2.5" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/><rect x="7.5" y="5" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/><rect x="7.5" y="7.5" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/><rect x="7.5" y="10" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/><rect x="7.5" y="12.5" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/><rect x="2.5" y="7.5" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/><rect x="5" y="7.5" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/><rect x="10" y="7.5" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/><rect x="12.5" y="7.5" width="1" height="1" rx="0" fill="#428fcb" stroke="none" stroke-width="1"/>
+</g>
+</svg>

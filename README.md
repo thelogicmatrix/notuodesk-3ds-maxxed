@@ -47,11 +47,23 @@ Selected objects have white edged faces and white wireframe selection. Press J f
 The icon family follows the visual ideas in Autodesk's 3ds Max 2026 Help.
 Move is a four-way arrow, Modify is a curved segment in a control cage, snaps
 use a numeral and magnet, and sub-object buttons highlight part of a small mesh.
-The 273 original GPL SVGs have transparent 32px and 64px renders. Toolbar and
+The 336 original GPL SVGs have transparent 32px and 64px renders. Toolbar and
 Command Panel buttons use icons where Max does. Create, Editable Poly commands,
 viewport labels and Auto Key retain text. Hover a tool for its name and assigned
-shortcut. Artwork references and pending-branch mappings are in `icons/README.md`
+shortcut. Artwork references and field mappings are in `icons/README.md`
 inside the add-on package.
+
+The caddy pictograms follow each field's Max 2026 symbol. Height uses a rectangle
+and height bar. Bridge uses a tapered prism, flared bell and numbered hourglasses.
+Its pick buttons have flat polygon grids and round pick cursors. Mode icons change
+with the choice. MeshSmooth's separation pills stay blank before the check mark.
+The drawings use original SVG paths and shaded faces.
+Value pills have rounded ends, the title has a drag grip, and the round footer
+buttons have one disc each. Missing field artwork falls back to the generic set.
+The caddies use the measured Max control sizes and row breaks. At 100% scale,
+pills are 22 pixels high with 7-pixel gaps. Bridge is 155 pixels wide. The footer
+buttons are 22 pixels across on 29-pixel centres. Titles and values use Tahoma
+when Windows supplies it. Other systems use Blender's font.
 
 ## Creating primitives from the keyboard
 
@@ -131,6 +143,15 @@ Extrusion Base Width shows 3 but remains disabled. Relax starts with one iterati
 Stored values take priority over fresh defaults. Tessellate has its own signed
 Tension, starting at zero for flat subdivision. Negative values pull new vertices
 inward and positive values push them outward. Chamfer Tension stays separate.
+
+Chamfer has the 2026 Mitering choices, Depth or Tension, End Bias, Radial Bias,
+Open, Invert Open and smoothing controls. Uniform is the fresh miter default.
+Depth starts at 0.5, End Bias at 0.5, Radial Bias at 0, and Smooth at 30 degrees
+for the entire object. The bevel uses Blender's offset or width mode, profile,
+outer and inner miters, normal hardening and overlap clamp. Open and Invert
+keep complementary sets of faces. Every change previews from the original mesh.
+Bridge Smooth displays radians, as in the Max caddy. Its stored degree values
+stay compatible with existing files.
 
 Material IDs use Blender's material slots, numbered from 1. Smoothing groups use
 the face attribute `max_smoothing_group`, including group 32. Faces that share a
@@ -457,7 +478,7 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 - Cut uses three Blender cursor shapes instead of Max's cursor artwork. Its Undo groups one committed segment per step. Max's exact Undo grouping has not been confirmed.
 - SwiftLoop follows quad rings and stops at triangles, n-gons and hidden faces. Shift uses cubic interpolation of surface normals, so its flow can differ from Max's proprietary result. Sliding needs a regular loop with two bounding edges at each vertex.
 - Imported hotkeys call Blender equivalents. Relax uses vertex smoothing, including Paint Deform Relax. Edit Poly enters mesh editing through the add-on's existing Edit Poly command. Unassignments affect only this add-on's keys. Unknown actions stay in the imported list but get no binding.
-- Caddies expose a subset of Max's controls. Edge and vertex Extrude omit Max's Extrusion Base Width. Vertex extrusion adds connected vertices and edges, rather than Max's polygon base. Surface normals are equal-weight averages in mesh space. Extrusion without an adjacent surface normal uses local Z. Tessellate Tension is signed, with zero flat, negative inward and positive outward. Distances use one Max world unit per Blender unit, without inferring physical scene units.
+- Caddies keep unavailable Max controls visible and disabled. BMesh bevel has no End Bias or spherical Radial Bias parameter. Chamfer maps the five miter names to Blender's offset/width, grid/cutoff and sharp/arc/patch bevel choices. Corner topology can differ from Max's solver. Bridge Edges shows disabled Bridge Adjacent and Reverse Triangulation because `bridge_edge_loops` has neither parameter. Extrusion Base Width, Local Normal Bias, Connect Pinch/Slide and MeshSmooth's adaptive separation rules remain disabled. Vertex extrusion adds connected vertices and edges, rather than Max's polygon base. Surface normals use equal-weight averages in mesh space, with local Z when no face supplies a normal. Distances use one Max world unit per Blender unit. BLF draws grayscale font edges instead of Windows ClearType subpixel text. Autodesk's Outline topic supplies no caddy image, so its measured visual parity remains unverified.
 - Extended Primitives do not include RingWave or Hose. Creation uses the default Corners, Center or Isosceles method. Alternate creation methods and Slice controls are not included.
 - Hedra uses reflection-generated polyhedra. Star1, Star2 and axis scaling approximate Max's shapes. Its facet topology and the other primitives' triangulation can differ from Max. OilTank and Spindle use Blender's bevel for Blend.
 - Generate Mapping Coords on Extended Primitives uses box projection. It does not reproduce Max's UV layouts. Torus Knot uses whole-number winding, twist, warp and lump counts, and Smooth is an on/off setting. Real-World Map Size and mapping offset/tiling controls are not included.

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_weld_weld_counts</title>
+<desc>Before and after counts remain text in the caddy</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<path d="M1 4 H6 M1 8 H6 M10 4 H15 M10 8 H15" fill="none" stroke="#9ba8ae" stroke-width="1"/><path d="M7 6 H10" fill="none" stroke="#428fcb" stroke-width="1"/>
+</g>
+</svg>

@@ -90,6 +90,18 @@
       "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-EAAAD139-33CD-4809-B03B-237533B6E98C.htm",
       "evidence": "references/tessellate-caddy-04.png through tessellate-caddy-08.png"
     },
+    "bevel": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-4CCA9B3E-8D75-4EE2-BDD3-7493095AF8B5.htm",
+      "evidence": "sb-caddy-icons/references/bevel-06.png"
+    },
+    "weld": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-697BAC48-F5F7-4B5B-9E98-DF979887AEA6.htm",
+      "evidence": "sb-caddy-icons/references/weld-06.png"
+    },
+    "outline": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Modeling/files/GUID-FF7D7633-03AD-4427-821A-65F8AC484CDD.htm",
+      "evidence": "Outline section, polygon boundary example. Autodesk does not supply an Outline caddy image on this page."
+    },
     "material": {
       "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Lighting-Shading/files/GUID-93E64F78-67A8-4DEA-9BF5-2F9A9098987B.htm",
       "evidence": "references/material-tools-03.png through material-tools-24.png"
@@ -2433,9 +2445,49 @@
       "baseline": null
     },
     {
+      "name": "caddy_state_dark_off",
+      "section": "caddies",
+      "idea": "Dark caddy checkbox off",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy checkbox state",
+      "note": "Original state glyph. No field pictogram or footer disc.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_state_dark_on",
+      "section": "caddies",
+      "idea": "Dark caddy checkbox on",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy checkbox state",
+      "note": "Original state glyph. No field pictogram or footer disc.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_state_light_off",
+      "section": "caddies",
+      "idea": "Light caddy checkbox off",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy checkbox state",
+      "note": "Original state glyph. No field pictogram or footer disc.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_state_light_on",
+      "section": "caddies",
+      "idea": "Light caddy checkbox on",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy checkbox state",
+      "note": "Original state glyph. No field pictogram or footer disc.",
+      "baseline": null
+    },
+    {
       "name": "caddy_ok",
       "section": "caddies",
-      "idea": "Cyan check on grey OK disc",
+      "idea": "Cyan outlined check on grey OK disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer OK (Enter)",
@@ -2445,7 +2497,7 @@
     {
       "name": "caddy_apply",
       "section": "caddies",
-      "idea": "Cyan plus on grey Apply and Continue disc",
+      "idea": "Cyan outlined plus on grey Apply and Continue disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer Apply and Continue (Ctrl+Enter)",
@@ -2455,7 +2507,7 @@
     {
       "name": "caddy_cancel",
       "section": "caddies",
-      "idea": "Cyan cross on grey Cancel disc",
+      "idea": "Cyan outlined cross on grey Cancel disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer Cancel (Esc)",
@@ -2510,6 +2562,596 @@
       "presentation": "icon-only",
       "spot": "Caddy mode flyout",
       "note": "Choice name appears on hover, not printed beside this pictogram.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_extrude_extrusion_type",
+      "section": "caddies",
+      "idea": "Bracketed connected polygon grid for Group",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Extrude caddy, extrusion type",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_extrude_extrusion_type_group",
+      "section": "caddies",
+      "idea": "Bracketed polygon grid",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Extrude caddy, extrusion type group",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_extrude_extrusion_type_local",
+      "section": "caddies",
+      "idea": "Up arrow above a flat base",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Extrude caddy, extrusion type local",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_extrude_extrusion_type_polygon",
+      "section": "caddies",
+      "idea": "Four separate square polygons",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Extrude caddy, extrusion type polygon",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_extrude_height",
+      "section": "caddies",
+      "idea": "Vertical rectangle beside an I-shaped height bar",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Extrude caddy, height",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_extrude_local_bias",
+      "section": "caddies",
+      "idea": "Upright stem with a flared foot",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Extrude caddy, local bias",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bevel_bevel_type",
+      "section": "caddies",
+      "idea": "Bracketed connected polygon grid for Group",
+      "reference": "bevel",
+      "presentation": "icon-only",
+      "spot": "Bevel caddy, bevel type",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bevel_bevel_type_group",
+      "section": "caddies",
+      "idea": "Bracketed polygon grid",
+      "reference": "bevel",
+      "presentation": "icon-only",
+      "spot": "Bevel caddy, bevel type group",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bevel_bevel_type_local",
+      "section": "caddies",
+      "idea": "Up arrow above a flat base",
+      "reference": "bevel",
+      "presentation": "icon-only",
+      "spot": "Bevel caddy, bevel type local",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bevel_bevel_type_polygon",
+      "section": "caddies",
+      "idea": "Four separate square polygons",
+      "reference": "bevel",
+      "presentation": "icon-only",
+      "spot": "Bevel caddy, bevel type polygon",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bevel_height",
+      "section": "caddies",
+      "idea": "Vertical rectangle beside an I-shaped height bar",
+      "reference": "bevel",
+      "presentation": "icon-only",
+      "spot": "Bevel caddy, height",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bevel_local_bias",
+      "section": "caddies",
+      "idea": "Upright stem with a flared foot",
+      "reference": "bevel",
+      "presentation": "icon-only",
+      "spot": "Bevel caddy, local bias",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_extrude_base_width",
+      "section": "caddies",
+      "idea": "Horizontal rectangle above a width bar",
+      "reference": "extrude",
+      "presentation": "icon-only",
+      "spot": "Extrude caddy, base width",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bevel_amount",
+      "section": "caddies",
+      "idea": "Square outline band surrounding a smaller square",
+      "reference": "bevel",
+      "presentation": "icon-only",
+      "spot": "Bevel caddy, amount",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_amount",
+      "section": "caddies",
+      "idea": "Short selected rectangle with a pointer below its right half",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, amount",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_segments",
+      "section": "caddies",
+      "idea": "Upright narrow strip divided into three stacked segments",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, segments",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_tension",
+      "section": "caddies",
+      "idea": "Right-angle corner with a selected triangular corner and a tension bar",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, tension",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_open",
+      "section": "caddies",
+      "idea": "Nine small square openings in a flat polygon grid",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, open",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_chamfer_miter",
+      "section": "caddies",
+      "idea": "Folded quad corner for the 2026 mitering flyout",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, chamfer miter",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_chamfer_depth",
+      "section": "caddies",
+      "idea": "Corner profile used for chamfer depth",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, chamfer depth",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_end_bias",
+      "section": "caddies",
+      "idea": "Corner profile used for end bias",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, end bias",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_radial_bias",
+      "section": "caddies",
+      "idea": "Corner profile used for radial bias",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, radial bias",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_invert_open",
+      "section": "caddies",
+      "idea": "Inset gridded square for Invert Open",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, invert open",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_chamfer_smooth",
+      "section": "caddies",
+      "idea": "Cylinder with a cyan smooth wall",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, chamfer smooth",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_smooth_type",
+      "section": "caddies",
+      "idea": "Shaded cube for the smoothing scope flyout",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, smooth type",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_smooth_threshold",
+      "section": "caddies",
+      "idea": "Shaded cube with a threshold pointer",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, smooth threshold",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_connect_segments",
+      "section": "caddies",
+      "idea": "Upright block divided by horizontal segment lines",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Connect caddy, segments",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_connect_pinch",
+      "section": "caddies",
+      "idea": "Stacked block with two plus marks along its right edge",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Connect caddy, pinch",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_connect_slide",
+      "section": "caddies",
+      "idea": "Block with low segment lines and an upper right plus mark",
+      "reference": "connect",
+      "presentation": "icon-only",
+      "spot": "Connect caddy, slide",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_inset_amount",
+      "section": "caddies",
+      "idea": "Small cyan square inside a larger square outline",
+      "reference": "inset",
+      "presentation": "icon-only",
+      "spot": "Inset caddy, amount",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_inset_individual",
+      "section": "caddies",
+      "idea": "Bracketed grid for Group",
+      "reference": "inset",
+      "presentation": "icon-only",
+      "spot": "Inset caddy, individual",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_inset_individual_group",
+      "section": "caddies",
+      "idea": "Bracketed grid for Group",
+      "reference": "inset",
+      "presentation": "icon-only",
+      "spot": "Inset caddy, individual group",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_inset_individual_polygon",
+      "section": "caddies",
+      "idea": "Four separate polygon squares",
+      "reference": "inset",
+      "presentation": "icon-only",
+      "spot": "Inset caddy, individual polygon",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_outline_amount",
+      "section": "caddies",
+      "idea": "Outer polygon boundary around the original face, caddy appearance unverified",
+      "reference": "outline",
+      "presentation": "icon-only",
+      "spot": "Outline caddy, amount",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_segments",
+      "section": "caddies",
+      "idea": "Upright block divided by horizontal segment lines",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, segments",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_taper",
+      "section": "caddies",
+      "idea": "Upright tapered prism with a narrow top and broad base",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, taper",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_bias",
+      "section": "caddies",
+      "idea": "Flared bell shape with a narrow neck and curved sides",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, bias",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_smooth",
+      "section": "caddies",
+      "idea": "Gridded sphere with a cyan lower hemisphere",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, smooth",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_bridge_adjacent",
+      "section": "caddies",
+      "idea": "Two adjacent border faces",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, bridge adjacent",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_reverse_triangulation",
+      "section": "caddies",
+      "idea": "Reversed diagonal in a polygon grid",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, reverse triangulation",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_twist1",
+      "section": "caddies",
+      "idea": "Upright hourglass with a blue 1 badge at lower right",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, twist1",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_pick1",
+      "section": "caddies",
+      "idea": "Flat polygon grid with a numbered lower right badge and selected face",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, pick1",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_twist2",
+      "section": "caddies",
+      "idea": "Upright hourglass with a blue 2 badge at lower right",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, twist2",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_pick2",
+      "section": "caddies",
+      "idea": "Flat polygon grid with a numbered lower right badge and corner points",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, pick2",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_bridge_selection",
+      "section": "caddies",
+      "idea": "Flat polygon grid with a pointer over its right side",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, bridge selection",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_pick_cursor",
+      "section": "caddies",
+      "idea": "Circular pick cursor with an arrow at its lower right",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, pick cursor",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_weld_threshold",
+      "section": "caddies",
+      "idea": "Selected rectangular patch and a pointer",
+      "reference": "weld",
+      "presentation": "icon-only",
+      "spot": "Weld caddy, threshold",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_weld_weld_counts",
+      "section": "caddies",
+      "idea": "Before and after counts remain text in the caddy",
+      "reference": "weld",
+      "presentation": "text-only",
+      "spot": "Weld caddy, weld counts",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_tessellate_tessellate_type_edge",
+      "section": "caddies",
+      "idea": "Dotted cross in a square",
+      "reference": "tessellate",
+      "presentation": "icon-only",
+      "spot": "Tessellate caddy, tessellate type edge",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_tessellate_tessellate_type",
+      "section": "caddies",
+      "idea": "Dotted cross in a square",
+      "reference": "tessellate",
+      "presentation": "icon-only",
+      "spot": "Tessellate caddy, tessellate type",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_tessellate_tessellate_type_face",
+      "section": "caddies",
+      "idea": "Diagonal cross in a square",
+      "reference": "tessellate",
+      "presentation": "icon-only",
+      "spot": "Tessellate caddy, tessellate type face",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_tessellate_tess_tension",
+      "section": "caddies",
+      "idea": "Selected rectangular patch and a pointer",
+      "reference": "tessellate",
+      "presentation": "icon-only",
+      "spot": "Tessellate caddy, tess tension",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_msmooth_smoothness",
+      "section": "caddies",
+      "idea": "Gridded sphere with a cyan lower hemisphere",
+      "reference": "smooth",
+      "presentation": "icon-only",
+      "spot": "Msmooth caddy, smoothness",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_msmooth_separate_smoothing",
+      "section": "caddies",
+      "idea": "Reserved separation artwork, Max pill has no field pictogram",
+      "reference": "smooth",
+      "presentation": "text-only",
+      "spot": "Msmooth caddy, separate smoothing",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_msmooth_separate_materials",
+      "section": "caddies",
+      "idea": "Reserved material artwork, Max pill has no field pictogram",
+      "reference": "smooth",
+      "presentation": "text-only",
+      "spot": "Msmooth caddy, separate materials",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_relax_relax",
+      "section": "caddies",
+      "idea": "Selected rectangular patch and a pointer",
+      "reference": "relax",
+      "presentation": "icon-only",
+      "spot": "Relax caddy, relax",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_relax_iterations",
+      "section": "caddies",
+      "idea": "Square curved patch with a green repeat plus at lower right",
+      "reference": "relax",
+      "presentation": "icon-only",
+      "spot": "Relax caddy, iterations",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_relax_hold_boundary",
+      "section": "caddies",
+      "idea": "Curved patch in a square with four interior boundary pins",
+      "reference": "relax",
+      "presentation": "icon-only",
+      "spot": "Relax caddy, hold boundary",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_relax_hold_outer",
+      "section": "caddies",
+      "idea": "Sagging patch in a square pinned at its two outer sides",
+      "reference": "relax",
+      "presentation": "icon-only",
+      "spot": "Relax caddy, hold outer",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
       "baseline": null
     },
     {

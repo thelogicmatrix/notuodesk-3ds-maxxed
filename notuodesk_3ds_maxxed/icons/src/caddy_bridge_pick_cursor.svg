@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_bridge_pick_cursor</title>
+<desc>Circular pick cursor with an arrow at its lower right</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<circle cx="6" cy="6" r="4.5" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><polygon points="8,6 8,14 10,12 12,15 14,14 12,11 15,11" fill="#d2d8db" stroke="#303b40" stroke-width="1"/>
+</g>
+</svg>

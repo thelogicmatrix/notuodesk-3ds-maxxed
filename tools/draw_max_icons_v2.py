@@ -51,6 +51,9 @@ REFS = {
     'smooth': ('3DSMax-Modeling', '44BA6ECC-EA8C-405B-8B52-4ABF9430A11C', 'references/mesh-smooth-caddy-04.png and mesh-smooth-caddy-06.png'),
     'relax': ('3DSMax-Modeling', '7E7FC066-7ED7-44B8-858A-5B9426E8715E', 'references/relax-caddy-04.png through relax-caddy-09.png'),
     'tessellate': ('3DSMax-Modeling', 'EAAAD139-33CD-4809-B03B-237533B6E98C', 'references/tessellate-caddy-04.png through tessellate-caddy-08.png'),
+    'bevel': ('3DSMax-Modeling', '4CCA9B3E-8D75-4EE2-BDD3-7493095AF8B5', 'sb-caddy-icons/references/bevel-06.png'),
+    'weld': ('3DSMax-Modeling', '697BAC48-F5F7-4B5B-9E98-DF979887AEA6', 'sb-caddy-icons/references/weld-06.png'),
+    'outline': ('3DSMax-Modeling', 'FF7D7633-03AD-4427-821A-65F8AC484CDD', 'Outline section, polygon boundary example. Autodesk does not supply an Outline caddy image on this page.'),
     'material': ('3DSMax-Lighting-Shading', '93E64F78-67A8-4DEA-9BF5-2F9A9098987B', 'references/material-tools-03.png through material-tools-24.png'),
     'time': ('3DSMax-Animation', '818205DD-D58A-495E-BD0C-DC69BDE8DAC2', 'references/time-00.png and time-02.png through time-14.png'),
     'viewport': ('3DSMax-Basics', 'F8326C68-F2F9-47F7-AC1D-BA41D7825C7C', 'max-ui-reference/images/interface-overview.png, bottom-right navigation controls'),
@@ -81,9 +84,10 @@ def add(name, body, idea, section='toolbar', ref='toolbar', mode='icon-only', sp
     if name in ART:
         raise ValueError('Duplicate drawing ' + name)
     # Whole-unit stroke widths retain a stable weight at the native 16px size.
-    body = re.sub(r'stroke-width="([\d.]+)"',
-                  lambda m: 'stroke-width="'+str(0 if float(m[1]) == 0 else
-                                                1 if float(m[1]) < 1.5 else 2)+'"', body)
+    if name not in {'caddy_ok', 'caddy_apply', 'caddy_cancel'} and not name.startswith('caddy_state_'):
+        body = re.sub(r'stroke-width="([\d.]+)"',
+                      lambda m: 'stroke-width="'+str(0 if float(m[1]) == 0 else
+                                                    1 if float(m[1]) < 1.5 else 2)+'"', body)
     ART[name] = body
     CAT.append(dict(name=name, section=section, idea=idea, reference=ref, presentation=mode,
                     spot=spot or section.replace('_', ' '), note=note,
@@ -423,9 +427,24 @@ def caddies():
             body+=number_badge(2 if n.endswith('2') else 1)
         add('caddy_'+n,body,idea+' ('+n.replace('_',' ')+')','caddies',ref,'icon-only','Caddy '+n.replace('_',' '),note=f"Exact pending branch field key '{n}'. Maps to kind '{kind}'.")
     add('caddy_weld_counts',path('M1 4 H6 M1 8 H6 M10 4 H15 M10 8 H15',G)+path('M7 6 H10 M8 4 10 6 8 8',C),'Before and after count comparison','caddies','poly_vertex','text-only','Weld caddy Before / After counts',note='Max shows Before and After text. This reserved asset must not replace those counts.')
-    add('caddy_ok',circle(8,8,6,F,G)+path('M4 8 7 11 12 5',C,2),'Cyan check on grey OK disc','caddies','caddy',spot='Caddy footer OK (Enter)')
-    add('caddy_apply',circle(8,8,6,F,G)+path('M4 8 H12 M8 4 V12',C,2),'Cyan plus on grey Apply and Continue disc','caddies','caddy',spot='Caddy footer Apply and Continue (Ctrl+Enter)')
-    add('caddy_cancel',circle(8,8,6,F,G)+path('M5 5 11 11 M5 11 11 5',C,2),'Cyan cross on grey Cancel disc','caddies','caddy',spot='Caddy footer Cancel (Esc)')
+    disc = circle(8,8,6,'#a5a5a5','#343434',.6)+path('M2.5 8 A5.5 5.5 0 0 1 13.5 8','#c2c2c2',.4)
+    # Closed outlines preserve the Max dark-theme glyph's corners and weight.
+    # Coordinates are authored geometry, with no reference pixels in the asset.
+    check = poly('3.8,8.3 5.3,6.8 6.8,8.3 10.4,3.8 12,5.2 7,11.8', '#57989b','#344549',.6)
+    plus = poly('7,4 9,4 9,7 12,7 12,9 9,9 9,12 7,12 7,9 4,9 4,7 7,7', '#57989b','#344549',.6)
+    cross = poly('5.5,4 8,6.5 10.5,4 12,5.5 9.5,8 12,10.5 10.5,12 8,9.5 5.5,12 4,10.5 6.5,8 4,5.5', '#57989b','#344549',.6)
+    glyph_transform = 'translate(8 8) scale(.72) translate(-8 -8)'
+    for theme, points in (
+            ('dark', '2.5,9 4,7.5 6.5,10 11.5,2 13,3 6.5,14'),
+            ('light', '2,8 3.5,6.5 6.5,9 12,3.5 13.5,5 6.5,12')):
+        for checked in (False, True):
+            fill, edge = (('#57989b', '#344549') if theme == 'dark' else ('#626262', '#626262')) if checked else ('#d0d0d0', '#909090')
+            add('caddy_state_'+theme+('_on' if checked else '_off'), poly(points, fill, edge, .7),
+                theme.capitalize()+' caddy checkbox '+('on' if checked else 'off'), 'caddies', 'caddy',
+                spot='Caddy checkbox state', note='Original state glyph. No field pictogram or footer disc.')
+    add('caddy_ok',disc+group(check,glyph_transform),'Cyan outlined check on grey OK disc','caddies','caddy',spot='Caddy footer OK (Enter)')
+    add('caddy_apply',disc+group(plus,glyph_transform),'Cyan outlined plus on grey Apply and Continue disc','caddies','caddy',spot='Caddy footer Apply and Continue (Ctrl+Enter)')
+    add('caddy_cancel',disc+group(cross,glyph_transform),'Cyan outlined cross on grey Cancel disc','caddies','caddy',spot='Caddy footer Cancel (Esc)')
     # Choice flyouts must change their pictogram instead of printing Group/Local.
     for name,body,idea in [
         ('group',rect(2.5,2.5,11,11,'none',C)+path('M6 2.5 V13.5 M10 2.5 V13.5 M2.5 6 H13.5 M2.5 10 H13.5',G),'Single connected group of polygons'),
@@ -483,6 +502,8 @@ def main():
     material()
     poly_tools()
     caddies()
+    from draw_caddy_icons import caddy_icons
+    caddy_icons(add, path, poly, rect, circle)
     navigation_and_features()
     OUT.mkdir(parents=True, exist_ok=True)
     for row in CAT:

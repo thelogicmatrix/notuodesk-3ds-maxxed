@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_relax_hold_boundary</title>
+<desc>Curved patch in a square with four interior boundary pins</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="2" y="2" width="12" height="12" rx="0" fill="#d2d8db" stroke="#64757e" stroke-width="1"/><path d="M2 9 Q8 -1 14 9 V14 H2 Z" fill="#64c6d3" stroke="#428fcb" stroke-width="1"/><path d="M5 7 11 7 11 12 5 12 Z" fill="none" stroke="#64757e" stroke-width="1"/><rect x="4" y="6" width="2.5" height="2.5" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="4" y="11" width="2.5" height="2.5" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="9.5" y="6" width="2.5" height="2.5" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><rect x="9.5" y="11" width="2.5" height="2.5" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/>
+</g>
+</svg>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_bridge_taper</title>
+<desc>Upright tapered prism with a narrow top and broad base</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="6,2 10,2 12,14 2,14" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><polygon points="10,2 14,10 12,14" fill="#64757e" stroke="#303b40" stroke-width="1"/><path d="M6 3 3.5 13" fill="none" stroke="#9ba8ae" stroke-width="1"/>
+</g>
+</svg>

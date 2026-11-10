@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_bridge_bridge_selection</title>
+<desc>Flat polygon grid with a pointer over its right side</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<rect x="2" y="2" width="12" height="12" rx="0" fill="#d2d8db" stroke="#303b40" stroke-width="1"/><path d="M8 2 V14 M2 8 H14" fill="none" stroke="#64757e" stroke-width="1"/><path d="M8 2 V14" fill="none" stroke="#428fcb" stroke-width="1"/><polygon points="8,6 8,14 10,12 12,15 14,14 12,11 15,11" fill="#d2d8db" stroke="#303b40" stroke-width="1"/>
+</g>
+</svg>

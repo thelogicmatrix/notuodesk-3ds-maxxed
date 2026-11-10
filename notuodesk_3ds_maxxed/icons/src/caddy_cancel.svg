@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_cancel</title>
-<desc>Cyan cross on grey Cancel disc</desc>
+<desc>Cyan outlined cross on grey Cancel disc</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<circle cx="8" cy="8" r="6" fill="#656b6e" stroke="#d2d4d5" stroke-width="1"/><path d="M5 5 11 11 M5 11 11 5" fill="none" stroke="#50b9bf" stroke-width="2"/>
+<circle cx="8" cy="8" r="6" fill="#a5a5a5" stroke="#343434" stroke-width="0.6"/><path d="M2.5 8 A5.5 5.5 0 0 1 13.5 8" fill="none" stroke="#c2c2c2" stroke-width="0.4"/><g transform="translate(8 8) scale(.72) translate(-8 -8)"><polygon points="5.5,4 8,6.5 10.5,4 12,5.5 9.5,8 12,10.5 10.5,12 8,9.5 5.5,12 4,10.5 6.5,8 4,5.5" fill="#57989b" stroke="#344549" stroke-width="0.6"/></g>
 </g>
 </svg>
