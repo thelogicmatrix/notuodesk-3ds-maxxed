@@ -19,6 +19,11 @@ class StatusTests(unittest.TestCase):
             return True
         max_chrome.install(read_transform=read,write_transform=write)
         self.assertEqual(max_status.readout(bpy.context)[1], (1,2,3))
+        manager = bpy.context.window_manager
+        self.assertEqual(tuple(manager.max_chrome_position), (1,2,3))
+        manager.max_chrome_position = (7,8,9)
+        self.assertEqual(tuple(bpy.context.active_object.location), (7,8,9))
+        self.assertIn(('write','VIEW_3D',False), calls)
         bpy.ops.max.chrome_typein(move_values=(4,5,6))
         self.assertEqual(tuple(bpy.context.active_object.location), (4,5,6))
         self.assertTrue(all(entry[1] == 'VIEW_3D' for entry in calls))

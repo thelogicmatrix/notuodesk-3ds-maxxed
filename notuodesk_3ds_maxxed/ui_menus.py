@@ -463,9 +463,14 @@ class MAX_OT_workspace_layer_explorer(bpy.types.Operator):
 
 
 def _menus(layout, context):
+    layout.scale_x = .92
     for route, label in MAX_MENUBAR:
         route = {'TOPBAR_MT_file': 'MAX_MT_workspace_file', 'TOPBAR_MT_help': 'MAX_MT_workspace_help'}.get(route, route)
         layout.menu(route, text=label)
+        if label in {'Rendering', 'Scripting'}:
+            unavailable = layout.row(align=True)
+            unavailable.enabled = False
+            unavailable.label(text='Civil View' if label == 'Rendering' else 'Content')
 
 
 def topbar_draw_left(self, context):
@@ -502,7 +507,7 @@ def _workspace_toolbar(layout, context):
     button(row, 'max.object_cmd', 'unlink', 'UNLINKED', cmd='UNLINK')
     button(row, 'max.chrome_unavailable', 'bind_space_warp', reason='Space Warp binding is not supported')
     row.separator()
-    _unavailable(row, 'All', 'Only the All selection filter is supported')
+    max_toolbar.filter_control(row, context)
     button(row, 'wm.tool_set_by_id', 'select_object', 'RESTRICT_SELECT_OFF',
            name='builtin.select_box', pressed=mode_feedback.tool_pressed(context, 'SELECT'))
     optional(row, 'select_by_name', 'select_by_name', 'Select From Scene')
@@ -524,7 +529,7 @@ def _workspace_toolbar(layout, context):
     optional(row, 'shortcut_override', 'shortcut_override', 'Keyboard Shortcut Override')
     snaps.draw_toolbar(row, context)
     row.separator()
-    row.menu('MAX_MT_chrome_sets', text='Named Selection Sets')
+    max_toolbar.sets_control(row, context)
     row.separator()
     optional(row, 'mirror', 'mirror', 'Mirror')
     row.menu('MAX_MT_chrome_align', text='', **max_icons.ui('align', 'ALIGN_CENTER'))

@@ -173,19 +173,55 @@ def grid_text(context):
 
 
 def draw(layout, context):
+    # Max's prompt is below the selection/type-in row. Blender's global status
+    # header is the bottommost row, while the time host owns the row above it.
+    if context.area is None or context.area.type not in {'VIEW_3D', 'DOPESHEET_EDITOR'}:
+        row = layout.row(align=True)
+        row.label(text=prompt_text(context))
+        row.separator_spacer()
+        frame = row.row(align=True)
+        frame.ui_units_x = 4
+        frame.prop(context.scene, 'frame_current', text='')
+        row.operator('max.chrome_time_config', text='', icon='TIME')
+        row.operator('max.chrome_key', text='Set Key').remove = False
+        return
     row = layout.row(align=True)
-    row.label(text=selection_text(context))
+    selection = row.row(align=True)
+    selection.ui_units_x = 20
+    selection.label(text=selection_text(context))
     row.separator()
     offset = getattr(context.window_manager, 'max_chrome_offset', False)
-    row.prop(context.window_manager, 'max_chrome_offset', text='Offset' if offset else 'Absolute', toggle=True)
+    row.prop(context.window_manager, 'max_chrome_offset', text='', icon='DRIVER_TRANSFORM', toggle=True)
     _, values, unit = readout(context, offset)
+    field_name = {'ROTATION': 'rotation', 'PERCENT': 'scale'}.get(unit, 'position')
     for i, name in enumerate('XYZ'):
-        row.label(text=name + ': ' + (format_value(context.scene, values[i], unit) if values is not None else '---'))
-    sub = row.row(align=True)
-    sub.enabled = _writer is not None
-    sub.operator('max.chrome_typein', text='', icon='DRIVER_TRANSFORM')
+        field = row.row(align=True)
+        field.ui_units_x = 4
+        field.enabled = _writer is not None and values is not None
+        field.label(text=name + ':')
+        if values is None:
+            field.operator('max.chrome_unavailable',text=' ',emboss=True).reason = 'No transform selection'
+        else:
+            field.prop(context.window_manager, 'max_chrome_' + field_name, index=i, text='')
     row.separator()
     row.label(text=grid_text(context))
+
+
+def get_values(self):
+    _, values, _ = readout(bpy.context, self.max_chrome_offset)
+    return values if values is not None else (0., 0., 0.)
+
+
+def set_values(self, values):
+    context = bpy.context
+    if _writer is None or readout(context, self.max_chrome_offset)[1] is None:
+        return
+    override = _viewport(context)
+    if override:
+        with context.temp_override(**override):
+            _writer(bpy.context, tuple(values), self.max_chrome_offset)
+    else:
+        _writer(context, tuple(values), self.max_chrome_offset)
 
 
 class MAX_OT_chrome_typein(bpy.types.Operator):

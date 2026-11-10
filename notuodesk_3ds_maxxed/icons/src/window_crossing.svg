@@ -3,7 +3,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>window_crossing</title>
 <desc>Dashed window crossed by a filled cyan tile</desc>
-<g stroke-linecap="square" stroke-linejoin="miter">
+<g stroke-linecap="butt" stroke-linejoin="miter">
 <g stroke-dasharray="2 1"><rect x="1.5" y="1.5" width="10" height="12" rx="0" fill="none" stroke="#d2d4d5" stroke-width="1"/></g><rect x="7" y="6" width="7" height="7" rx="0" fill="#50b9bf" stroke="none" stroke-width="1"/>
 </g>
 </svg>

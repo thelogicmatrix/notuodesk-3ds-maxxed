@@ -1,5 +1,6 @@
 """A time slider and selected-object key track, independent of native timeline drawing."""
 import math
+from pathlib import Path
 
 import blf
 import bpy
@@ -8,6 +9,15 @@ from gpu_extras.batch import batch_for_shader
 
 _handle = None
 _viewport_handle = None
+_font = None
+
+
+def font():
+    global _font
+    if _font is None:
+        path = Path('C:/Windows/Fonts/tahoma.ttf')
+        _font = blf.load(str(path)) if path.is_file() else 0
+    return _font
 
 
 def key_curves(ob):
@@ -44,6 +54,10 @@ def frame_x(scene, frame, width, margin=12):
     return margin + (frame-scene.frame_start)/max(1, scene.frame_end-scene.frame_start) * max(1, width-2*margin)
 
 
+def track_margin(context):
+    return 48*context.preferences.system.ui_scale
+
+
 def owned(context):
     from . import max_chrome
     return (max_chrome.active(context) and (max_chrome.timeline_area(context.area) or
@@ -59,10 +73,11 @@ def _rectangle(x0, y0, x1, y1, color):
 
 
 def _text(x, y, text, size=11, color=(.85,.85,.85,1)):
-    blf.size(0, size)
-    blf.position(0, x, y, 0)
-    blf.color(0, *color)
-    blf.draw(0, text)
+    face = font()
+    blf.size(face, size)
+    blf.position(face, x, y, 0)
+    blf.color(face, *color)
+    blf.draw(face, text)
 
 
 def draw_track():
@@ -72,46 +87,56 @@ def draw_track():
     region, scene = context.region, context.scene
     width, height = region.width, region.height
     scale = context.preferences.system.ui_scale
-    prompt_height = 22 * scale
-    _rectangle(0, 0, width, height, (.23,.07,.07,1) if scene.tool_settings.use_keyframe_insert_auto else (.13,.13,.13,1))
-    _rectangle(0, 0, width, prompt_height, (.19,.19,.19,1))
-    baseline = min(height-12*scale, prompt_height + 27*scale)
-    count = max(1, round((scene.frame_end-scene.frame_start)/max(2, width/(65*scale))))
+    slider_height = 18 * scale
+    track_top = max(0, height-slider_height)
+    _rectangle(0, 0, width, height, (42/255,42/255,42/255,1))
+    _rectangle(0, track_top, width, height, (.27,.27,.27,1))
+    yellow = (.93,.70,.03,1)
+    _rectangle(0, 0, width, 3*scale, (.55,.12,.08,1) if scene.tool_settings.use_keyframe_insert_auto else yellow)
+    margin = track_margin(context)
+    count = max(1, round((scene.frame_end-scene.frame_start)/max(2, (width-2*margin)/(42*scale))))
     step = max(1, 10 ** math.floor(math.log10(count)))
     step *= next((v for v in (1, 2, 5, 10) if step*v >= count), 10)
     first = math.ceil(scene.frame_start/step)*step
     for frame in range(first, scene.frame_end+1, step):
-        x = frame_x(scene, frame, width)
-        _rectangle(x, baseline, x+1, baseline+6*scale, (.45,.45,.45,1))
-        _text(x+2*scale, baseline+8*scale, str(frame), round(10*scale))
+        x = frame_x(scene, frame, width, margin)
+        _rectangle(x, track_top-10*scale, x+1, track_top, (.65,.65,.65,1))
+        _text(x-4*scale, max(4*scale, track_top-20*scale), str(frame), round(9*scale), (.7,.7,.7,1))
+    minor = max(1, step//5)
+    for frame in range(math.ceil(scene.frame_start/minor)*minor, scene.frame_end+1, minor):
+        if frame % step:
+            x = frame_x(scene, frame, width, margin)
+            _rectangle(x, track_top-7*scale, x+1, track_top, (.48,.48,.48,1))
     for frame in key_frames(context):
         if scene.frame_start <= frame <= scene.frame_end:
-            x = frame_x(scene, frame, width)
-            _rectangle(x-2*scale, prompt_height+3*scale, x+2*scale, baseline-3*scale, (.75,.68,.30,1))
-    x = frame_x(scene, scene.frame_current, width)
-    _rectangle(x-1, prompt_height, x+2, height, (1.,.72,.10,1))
-    _text(12*scale, max(prompt_height+2, height-16*scale),
-          f'{scene.frame_current} / {scene.frame_start} to {scene.frame_end}', round(11*scale))
-    from . import max_status
-    _text(10*scale, 6*scale, max_status.prompt_text(context), round(11*scale))
+            x = frame_x(scene, frame, width, margin)
+            _rectangle(x-2*scale, 3*scale, x+2*scale, track_top-3*scale, (.82,.22,.18,1))
+    x = frame_x(scene, scene.frame_current, width, margin)
+    _rectangle(x-2*scale, 3*scale, x+2*scale, track_top, yellow)
+    thumb_width = 130*scale
+    left = max(2*scale, min(width-thumb_width-2*scale,
+                          x-thumb_width/2))
+    _rectangle(left, track_top+2*scale, left+thumb_width, height-2*scale, (.38,.38,.38,1))
+    _text(left+4*scale, track_top+5*scale, '<', round(9*scale))
+    _text(left+thumb_width-10*scale, track_top+5*scale, '>', round(9*scale))
+    caption = f'{scene.frame_current} / {scene.frame_end}'
+    blf.size(font(), round(10*scale))
+    _text(left+(thumb_width-blf.dimensions(font(),caption)[0])/2,
+          track_top+5*scale, caption, round(10*scale))
 
 
 def draw_controls(layout, context):
-    from . import max_icons
+    from . import max_icons, max_status
     row = layout.row(align=True)
-    keys = row.row(align=True)
-    keys.alert = context.scene.tool_settings.use_keyframe_insert_auto
-    keys.prop(context.scene.tool_settings, 'use_keyframe_insert_auto', text='Auto Key', toggle=True)
-    keys.operator('max.chrome_key', text='Set Key').remove = False
-    keys.operator('max.chrome_key', text='', icon='KEY_DEHLT').remove = True
-    row.separator()
+    max_status.draw(row, context)
+    row.separator_spacer()
     for action, art, fallback in (('FIRST','first_frame','REW'), ('PREVIOUS','previous_frame','PREV_KEYFRAME'),
                                   ('PLAY','play','PAUSE' if context.screen.is_animation_playing else 'PLAY'),
                                   ('NEXT','next_frame','NEXT_KEYFRAME'), ('LAST','last_frame','FF')):
         row.operator('max.chrome_transport', text='', **max_icons.ui(art, fallback)).action = action
-    row.prop(context.scene, 'frame_current', text='Frame')
-    row.separator()
-    row.operator('max.chrome_time_config', text='', icon='TIME')
+    keys = row.row(align=True)
+    keys.alert = context.scene.tool_settings.use_keyframe_insert_auto
+    keys.prop(context.scene.tool_settings, 'use_keyframe_insert_auto', text='Auto Key', toggle=True)
 
 
 class MAX_OT_chrome_time_config(bpy.types.Operator):
@@ -181,10 +206,11 @@ class MAX_OT_chrome_scrub(bpy.types.Operator):
     bl_description = 'Drag to change the current animation frame. Right-click cancels'
 
     def invoke(self, context, event):
-        if not owned(context) or event.mouse_region_y < 22*context.preferences.system.ui_scale:
+        if not owned(context):
             return {'PASS_THROUGH'}
         self.original = context.scene.frame_current
-        context.scene.frame_set(frame_from_x(context.scene, event.mouse_region_x, context.region.width))
+        context.scene.frame_set(frame_from_x(context.scene, event.mouse_region_x, context.region.width,
+                                            track_margin(context)))
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
 
@@ -197,7 +223,8 @@ class MAX_OT_chrome_scrub(bpy.types.Operator):
         if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
             return {'FINISHED'}
         if event.type == 'MOUSEMOVE':
-            context.scene.frame_set(frame_from_x(context.scene, event.mouse_region_x, context.region.width))
+            context.scene.frame_set(frame_from_x(context.scene, event.mouse_region_x, context.region.width,
+                                                track_margin(context)))
             context.area.tag_redraw()
         return {'RUNNING_MODAL'}
 
