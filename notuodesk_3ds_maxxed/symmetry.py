@@ -85,14 +85,14 @@ def is_symmetry(mod):
 
 
 def owner(context):
-    ob = context.active_object
+    ob = context.view_layer.objects.active
     if ob is not None and ob.get(HELPER):
         return ob.get('owner')
     return ob
 
 
 def editing(context):
-    ob = context.active_object
+    ob = context.view_layer.objects.active
     return ob is not None and bool(ob.get(HELPER))
 
 
@@ -193,7 +193,7 @@ def leave(context):
     """Restore the mesh selection when leaving the Mirror stack level."""
     if not editing(context):
         return owner(context)
-    plane = context.active_object
+    plane = context.view_layer.objects.active
     ob = plane.get('owner')
     plane.select_set(False)
     plane.hide_set(True)
@@ -276,7 +276,9 @@ def reconcile():
                 used.add(plane)
                 live_tokens.add(plane['token'])
                 _remember(ob, mod)
-                if bpy.context.active_object != plane:
+                # Timers can run while area reconstruction removes the
+                # area-provided active_object context member.
+                if bpy.context.view_layer.objects.active != plane:
                     plane.hide_set(True)
                     plane.hide_select = True
             records = _records(ob)
@@ -288,7 +290,7 @@ def reconcile():
                     del ob[STATE]
         for plane in list(bpy.data.objects):
             if plane.get(HELPER) and plane not in used:
-                if bpy.context.active_object == plane:
+                if bpy.context.view_layer.objects.active == plane:
                     leave(bpy.context)
                 bpy.data.objects.remove(plane, do_unlink=True)
         collection = _collection()

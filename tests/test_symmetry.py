@@ -2,7 +2,9 @@
 import math
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import addon_utils
 import bpy
@@ -52,6 +54,28 @@ class SymmetryTests(unittest.TestCase):
         self.assertFalse(m.show_on_cage)
         self.assertIsNotNone(m.mirror_object)
         self.assertTrue(m.mirror_object.hide_get())
+
+    def test_maintenance_without_area_active_object(self):
+        m = self.add()
+        plane = m.mirror_object
+        name = plane.name
+        layer = bpy.context.view_layer
+        # Area reconstruction can leave timers with view_layer but without
+        # the area-provided active_object context member.
+        timer_bpy = SimpleNamespace(context=SimpleNamespace(view_layer=layer), data=bpy.data)
+        with patch.object(symmetry, 'bpy', timer_bpy):
+            symmetry._maintain()
+            self.assertTrue(plane.hide_get())
+            plane.hide_set(False)
+            plane.hide_select = False
+            plane.select_set(True)
+            layer.objects.active = plane
+            symmetry._maintain()
+            self.assertFalse(plane.hide_get())
+            self.ob.modifiers.remove(symmetry.raw(m))
+            symmetry._maintain()
+        self.assertEqual(layer.objects.active, self.ob)
+        self.assertNotIn(name, bpy.data.objects)
 
     def test_axis_flip_slice_geometry(self):
         m = self.add()
