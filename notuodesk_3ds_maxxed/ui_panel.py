@@ -1,700 +1,446 @@
-"""The 3ds Max Command Panel: tab row on top, collapsible rollouts below."""
-
+"""Maxxed Command Panel assembled from the independent feature adapters."""
 import bpy
 from bpy.props import IntProperty
-from bpy.types import Menu, Panel, UIList
+from . import (command_panel_ui as host, create, editable_poly_ui, keyboard_entry,
+               line_tool, loft, max_icons, max_widgets as w, modifier_ui, operators,
+               plane_plus, prims, symmetry, vray)
 
-from . import create, prims, poly_tools
-from . import keyboard_entry
-from . import max_icons
-from . import loft
-from . import symmetry
-from .operators import EDIT_POLY_OPS, current_level
-
-EP_LABELS = {k: n for k, n, _ in EDIT_POLY_OPS}
-
-TABS = [
-    ("CREATE", "Create", "Create", "ADD", 0),
-    ("MODIFY", "Modify", "Modify", "MODIFIER", 1),
-    ("HIERARCHY", "Hierarchy", "Hierarchy", "OUTLINER", 2),
-    ("MOTION", "Motion", "Motion", "ANIM", 3),
-    ("DISPLAY", "Display", "Display", "RESTRICT_VIEW_OFF", 4),
-    ("UTILITIES", "Utilities", "Utilities", "TOOL_SETTINGS", 5),
-]
-
-CREATE_CATS = [
-    ("GEOMETRY", "Geometry", "Standard Primitives", "MESH_UVSPHERE", 0),
-    ("SHAPES", "Shapes", "Splines", "CURVE_BEZCURVE", 1),
-    ("LIGHTS", "Lights", "Standard", "LIGHT", 2),
-    ("CAMERAS", "Cameras", "Standard", "CAMERA_DATA", 3),
-    ("HELPERS", "Helpers", "Standard", "EMPTY_AXIS", 4),
-]
-
-BASE_NAMES = {
-    "MESH": "Editable Poly", "CURVE": "Editable Spline", "FONT": "Text", "SURFACE": "NURBS Surface",
-    "LIGHT": "Light", "CAMERA": "Camera", "EMPTY": "Dummy", "ARMATURE": "Bones", "META": "Blob Mesh",
-    "LATTICE": "FFD", "GREASEPENCIL": "Grease Pencil", "CURVES": "Hair", "POINTCLOUD": "Point Cloud",
-    "VOLUME": "Volume",
+TABS = [('CREATE', 'Create', 'ADD'), ('MODIFY', 'Modify', 'MODIFIER'),
+        ('HIERARCHY', 'Hierarchy', 'OUTLINER'), ('MOTION', 'Motion', 'ANIM'),
+        ('DISPLAY', 'Display', 'RESTRICT_VIEW_OFF'), ('UTILITIES', 'Utilities', 'TOOL_SETTINGS')]
+CREATE_CATS = [('GEOMETRY', 'Geometry', 'MESH_CUBE'), ('SHAPES', 'Shapes', 'CURVE_DATA'),
+               ('LIGHTS', 'Lights', 'LIGHT'), ('CAMERAS', 'Cameras', 'CAMERA_DATA'),
+               ('HELPERS', 'Helpers', 'EMPTY_DATA'), ('SPACE_WARPS', 'Space Warps', 'FORCE_FORCE'),
+               ('SYSTEMS', 'Systems', 'CONSTRAINT')]
+# RNA enum tuples keep stable integer identities as well as the saved strings.
+TABS = [(key, label, label, fallback, index) for index, (key, label, fallback) in enumerate(TABS)]
+CREATE_CATS = [(key, label, label, fallback, index) for index, (key, label, fallback) in enumerate(CREATE_CATS)]
+SUBTYPES = {
+    'GEOMETRY': [('STANDARD', 'Standard Primitives'), ('EXTENDED', 'Extended Primitives'),
+                 ('COMPOUND', 'Compound Objects'), ('VRAY', 'V-Ray'), ('JOKERMARTINI', 'JokerMartini')],
+    'SHAPES': [('STANDARD', 'Splines')], 'LIGHTS': [('STANDARD', 'Standard'), ('VRAY', 'V-Ray')],
+    'CAMERAS': [('STANDARD', 'Standard'), ('VRAY', 'V-Ray')],
+    'HELPERS': [('STANDARD', 'Standard')], 'SPACE_WARPS': [('STANDARD', 'Space Warps')],
+    'SYSTEMS': [('STANDARD', 'Systems')],
 }
-
-SUBLEVEL_ICONS = {1: "VERTEXSEL", 2: "EDGESEL", 3: "MOD_EDGESPLIT", 4: "FACESEL", 5: "MESH_CUBE"}
-SUBLEVEL_NAMES = {1: "vertex", 2: "edge", 3: "border", 4: "polygon", 5: "element"}
-
-SKIP_PROPS = {
-    "rna_type", "name", "type", "is_active", "is_override_data", "use_apply_on_spline",
-    "persistent_uid", "execution_time", "use_pin_to_last",
-}
+SUBLEVEL_ICONS = {1: 'VERTEXSEL', 2: 'EDGESEL', 3: 'EDGESEL', 4: 'FACESEL', 5: 'FACESEL'}
+SUBLEVEL_NAMES = dict(enumerate(('vertex', 'edge', 'border', 'polygon', 'element'), 1))
+EP_LABELS = {key: label for key, label, _ in operators.EDIT_POLY_OPS}
+ROLLOUTS = []
+BASE_NAMES = {'MESH': 'Editable Poly', 'CURVE': 'Editable Spline', 'FONT': 'Text',
+              'LIGHT': 'Light', 'CAMERA': 'Camera', 'EMPTY': 'Dummy', 'LATTICE': 'FFD'}
+SKIP_PROPS = set()
+MELT_PRESETS = [('Ice', 2.), ('Glass', .5), ('Jelly', .4), ('Plastic', .1)]
 
 
 def base_name(ob):
-    if loft.is_loft(ob):
-        return "Loft"
-    if ob.type == "MESH" and ob.max_prim.kind:
-        return prims.PRIMITIVES[ob.max_prim.kind][0]
-    return BASE_NAMES.get(ob.type, ob.type.title())
+    kind = ob.max_prim.kind if ob and ob.type == 'MESH' else ''
+    return prims.PRIMITIVES[kind][0] if kind in prims.PRIMITIVES else BASE_NAMES.get(ob.type, ob.type.title()) if ob else ''
 
 
 def tab(context):
     return context.window_manager.max_cmd_tab
 
 
-# ---------------------------------------------------------------------------
-# Modifier stack list
-# ---------------------------------------------------------------------------
-
-def _stack_get(ob):
-    if bpy.context.mode.startswith("EDIT"):
-        return -1          # sub-object editing happens at the base of the stack
-    act = ob.modifiers.active
-    from . import editable_poly
-    if editable_poly.is_nurms(act):
-        return -1          # NURMS belongs to the Editable Poly base object
-    if act is not None and act.is_active and not poly_tools.is_font_pivot(act):
-        return ob.modifiers.find(act.name)
-    return -1
-
-
-def _stack_set(ob, value):
-    if 0 <= value < len(ob.modifiers) and not poly_tools.is_font_pivot(ob.modifiers[value]):
-        bpy.ops.max.modifier_set_active(name=ob.modifiers[value].name)
-
-
-class MAX_UL_stack(UIList):
-    """Modifier stack, newest on top like 3ds Max"""
-
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        row = layout.row(align=True)
-        row.context_pointer_set("max_icon_modifier", item)
-        row.operator("wm.context_toggle", text="", emboss=False,
-                     **max_icons.ui("bulb_on" if item.show_viewport else "bulb_off", "RESTRICT_VIEW_OFF" if item.show_viewport else "RESTRICT_VIEW_ON")).data_path = "max_icon_modifier.show_viewport"
-        row.prop(item, "name", text="", emboss=False)
-
-    def filter_items(self, context, data, propname):
-        modifiers = getattr(data, propname)
-        flags = [0 if poly_tools.is_font_pivot(mod) else self.bitflag_filter_item for mod in modifiers]
-        return flags, list(reversed(range(len(modifiers))))
-
-    def draw_filter(self, context, layout):
-        pass
-
-
-SUBTYPES = {
-    "GEOMETRY": (("STANDARD", "Standard Primitives"), ("EXTENDED", "Extended Primitives"), ("VRAY", "V-Ray"), ("JOKERMARTINI", "JokerMartini"), ("COMPOUND", "Compound Objects")),
-    "LIGHTS": (("STANDARD", "Standard"), ("VRAY", "V-Ray")),
-    "CAMERAS": (("STANDARD", "Standard"), ("VRAY", "V-Ray")),
-    "SHAPES": (("STANDARD", "Splines"),),
-    "HELPERS": (("STANDARD", "Standard"),),
-}
-
-
 def subtype_label(context):
     wm = context.window_manager
-    opts = dict(SUBTYPES[wm.max_create_cat])
-    return opts.get(wm.max_create_sub, next(iter(opts.values())))
-
-
-class MAX_MT_create_subcat(Menu):
-    bl_label = "Category"
-    bl_idname = "MAX_MT_create_subcat"
-
-    def draw(self, context):
-        wm = context.window_manager
-        for key, label in SUBTYPES[wm.max_create_cat]:
-            self.layout.prop_enum(wm, "max_create_sub", key, text=label)
-
-
-# ---------------------------------------------------------------------------
-# Command Panel (header area: tabs, name, modifier list, stack)
-# ---------------------------------------------------------------------------
-
-class MAX_PT_command_panel(Panel):
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Command Panel"
-    bl_label = "Command Panel"
-    bl_options = {"HIDE_HEADER"}
-    bl_order = 0
-
-    def draw(self, context):
-        wm = context.window_manager
-        layout = self.layout
-        row = layout.row(align=True)
-        row.alignment = "LEFT"
-        row.prop(wm, "max_cmd_tab", expand=True, icon_only=True)
-        layout.separator(factor=0.3)
-        t = wm.max_cmd_tab
-        ob = symmetry.owner(context)
-
-        if t == "CREATE":
-            row = layout.row(align=True)
-            row.alignment = "LEFT"
-            row.prop(wm, "max_create_cat", expand=True, icon_only=True)
-            layout.menu("MAX_MT_create_subcat", text=subtype_label(context))
-
-        elif t == "MODIFY":
-            if ob is None:
-                return
-            row = layout.row(align=True)
-            split = row.split(factor=0.88, align=True)
-            split.prop(ob, "name", text="")
-            split.prop(ob, "color", text="")
-            row = layout.row(align=True)
-            row.operator_context = "INVOKE_DEFAULT"
-            row.operator("max.modifier_search", text="Modifier List")
-            row.menu("MAX_MT_modifier_list", text="")
-
-            col = layout.column(align=True)
-            if not symmetry.draw_stack(col, context, ob):
-                col.template_list("MAX_UL_stack", "", ob, "modifiers", ob, "max_stack_index",
-                                  rows=3, maxrows=8, sort_lock=True)
-            from . import mode_feedback
-            mode_feedback.draw_stack_levels(col, context, ob, base_name(ob),
-                max_icons.ui("editable_poly" if ob.type == "MESH" else "shapes",
-                             "MESH_DATA" if ob.type == "MESH" else "OBJECT_DATA"))
-
-            # stack tool icons
-            active = ob.modifiers.active if _stack_get(ob) >= 0 else None
-            row = layout.row(align=True)
-            row.alignment = "LEFT"
-            if active:
-                row.prop(active, "show_in_editmode", text="", **max_icons.ui("edit_mode", "EDITMODE_HLT"))
-                row.prop(active, "show_on_cage", text="", **max_icons.ui("editable_poly", "MESH_DATA"))
-                row.operator("object.make_single_user", text="", **max_icons.ui("make_unique", "DUPLICATE")).object = True
-                if symmetry.is_symmetry(active):
-                    op = row.operator("max.symmetry_action", text="", **max_icons.ui("remove_modifier", "TRASH"))
-                    op.name, op.action = active.name, "REMOVE"
-                else:
-                    row.operator("object.modifier_remove", text="", **max_icons.ui("remove_modifier", "TRASH")).modifier = active.name
-                row.separator()
-                if symmetry.is_symmetry(active):
-                    for icon, fallback, action in (("up", "TRIA_UP", "DOWN"), ("down", "TRIA_DOWN", "UP"), ("check", "CHECKMARK", "APPLY")):
-                        op = row.operator("max.symmetry_action", text="", **max_icons.ui(icon, fallback))
-                        op.name, op.action = active.name, action
-                else:
-                    move = row.operator("max.stack_move", text="", **max_icons.ui("up", "TRIA_UP"))
-                    move.modifier, move.direction = active.name, "DOWN"
-                    move = row.operator("max.stack_move", text="", **max_icons.ui("down", "TRIA_DOWN"))
-                    move.modifier, move.direction = active.name, "UP"
-                    row.operator("object.modifier_apply", text="", **max_icons.ui("check", "CHECKMARK")).modifier = active.name
-            else:
-                row.operator("max.object_cmd", text="", **max_icons.ui("check", "CHECKMARK")).cmd = "CONVERT_POLY"
-                row.label(text="")
-
-
-# ---------------------------------------------------------------------------
-# Rollouts
-# ---------------------------------------------------------------------------
-
-def _split_col(layout):
-    col = layout.column(align=True)
-    col.use_property_split = True
-    col.use_property_decorate = False
-    return col
+    return dict(SUBTYPES.get(wm.max_create_cat, ())).get(wm.max_create_sub, 'Standard')
 
 
 def draw_prim_params(layout, ob):
-    if ob.max_prim.kind in prims.extended_primitives.PRIMITIVES:
-        prims.extended_primitives.draw(layout, ob)
-        return
-    if ob.max_prim.kind == "PLANEPLUS":
-        from . import plane_plus
-        plane_plus.draw(layout, ob)
-        return
-    p = ob.max_prim
-    col = _split_col(layout)
-    for field in prims.UI_FIELDS[p.kind]:
-        if field is None:
-            col.separator()
-            continue
-        prop, label = field
-        col.prop(p, prop, text=label)
-
-
-MELT_PRESETS = (("Ice", 2.0), ("Glass", 0.5), ("Jelly", 0.4), ("Plastic", 0.1))
+    return plane_plus.draw(layout, ob) if ob.max_prim.kind == 'PLANEPLUS' else prims.draw(layout, ob)
 
 
 def draw_modifier_params(layout, mod):
-    from . import ffd, turbosmooth
     if symmetry.is_symmetry(mod):
-        symmetry.draw(layout, mod.id_data, mod)
-        return
-    if turbosmooth.is_turbosmooth(mod):
-        turbosmooth.draw(layout, mod.id_data, mod)
-        return
-    if ffd.is_ffd(mod):
-        ffd.draw(layout, mod.id_data, mod)
-        return
-    col = _split_col(layout)
-    if mod.type == "NODES":
-        from . import gn_mods
-        for ident, name in gn_mods.inputs(mod):
-            data, prop = gn_mods.input_ref(mod, ident)
-            try:
-                col.prop(data, prop, text=name)
-            except Exception:
-                pass
-        if gn_mods.is_melt(mod):
-            layout.label(text="Solidity:")
-            g = _grid(layout, 2)
-            for label, val in MELT_PRESETS:
-                g.operator("max.melt_preset", text=label).value = val
-            layout.separator()
-            row = layout.row(align=True)
-            row.scale_y = 1.3
-            row.operator("max.animate_melt", text="Animate Melt", **max_icons.ui("play", "PLAY"))
-            row.operator("max.key_melt", text="", **max_icons.ui("key", "KEY_HLT"))
-            layout.label(text="Tip: Auto Key (N) keys Amount as you drag it", icon="INFO")
-        return
-    for p in mod.bl_rna.properties:
-        ident = p.identifier
-        if (ident in SKIP_PROPS or p.is_readonly or p.type == "COLLECTION"
-                or ident.startswith(("open_", "ui_", "show_"))):
-            continue
-        try:
-            col.prop(mod, ident)
-        except Exception:
-            pass
+        return symmetry.draw(layout, mod.id_data, mod)
+    return modifier_ui.draw_parameters(layout, bpy.context, mod)
 
 
 def draw_base_params(layout, ob):
-    from . import ffd
-    if ob.type == "LATTICE" and ob.get(ffd.OWNER_KEY) in bpy.data.objects:
-        owner = bpy.data.objects[ob[ffd.OWNER_KEY]]
-        mod = next((m for m in owner.modifiers if m.type == "LATTICE" and m.object == ob), None)
-        if mod is not None:
-            ffd.draw(layout, owner, mod, editing_cage=True)
-            return
-    col = _split_col(layout)
-    if ob.type == "MESH":
-        col.prop(ob, "dimensions", text="Size")
-        me = ob.data
-        layout.label(text=f"Verts: {len(me.vertices):,}    Polys: {len(me.polygons):,}")
-    elif ob.type in {"CURVE", "FONT"}:
-        cu = ob.data
-        col.prop(cu, "bevel_depth", text="Thickness")
-        col.prop(cu, "bevel_resolution", text="Sides")
-        col.prop(cu, "extrude", text="Extrude")
-        col.prop(cu, "resolution_u", text="Steps")
-        if ob.type == "FONT":
-            col.prop(cu, "body", text="Text")
-            col.prop(cu, "size")
-            col.prop(cu, "space_character", text="Kerning")
-    elif ob.type == "LIGHT":
-        li = ob.data
-        col.prop(li, "type", text="Type")
-        col.prop(li, "color")
-        col.prop(li, "energy", text="Multiplier")
-        if li.type == "SPOT":
-            col.prop(li, "spot_size", text="Falloff")
-            col.prop(li, "spot_blend", text="Hotspot Blend")
-        col.prop(li, "use_shadow", text="Shadows")
-    elif ob.type == "CAMERA" and ob.data.max_vray.enabled:
-        from . import vray
-        vray.draw_vray_camera(layout, ob.data)
-    elif ob.type == "CAMERA":
-        cam = ob.data
-        col.prop(cam, "lens", text="Lens")
-        col.prop(cam, "sensor_width", text="Film Width")
-        col.prop(cam, "type", text="Type")
-        col.prop(cam, "clip_start", text="Clip Near")
-        col.prop(cam, "clip_end", text="Clip Far")
-        col.prop(cam.dof, "use_dof", text="Depth of Field")
-    elif ob.type == "EMPTY":
-        col.prop(ob, "empty_display_type", text="Display")
-        col.prop(ob, "empty_display_size", text="Size")
-    else:
-        layout.label(text=base_name(ob))
+    with bpy.context.temp_override(object=ob, active_object=ob):
+        return parameters(layout, bpy.context)
 
 
-def _btn(container, op, text=None):
-    container.operator("max.edit_poly", text=text or EP_LABELS[op]).op = op
+def _stack_get(ob):
+    mod = host.active(ob)
+    return list(ob.modifiers).index(mod) if mod else -1
 
 
-def _grid(layout, cols=2):
-    return layout.grid_flow(row_major=True, columns=cols, even_columns=True, align=True)
-
-
-ROLLOUTS = []
-
-
-def rollout(label, tabs, order, closed=False):
-    """Decorator registering a draw function as a collapsible 3ds Max rollout."""
-    def deco(fn):
-        poll_fn = getattr(fn, "poll", None)
-        ns = {
-            "bl_space_type": "VIEW_3D",
-            "bl_region_type": "UI",
-            "bl_category": "Command Panel",
-            "bl_parent_id": "MAX_PT_command_panel",
-            "bl_label": label,
-            "bl_order": order,
-            "bl_options": {"DEFAULT_CLOSED"} if closed else set(),
-            "draw": lambda self, context: fn(self.layout, context),
-            "poll": classmethod(lambda cls, context: tab(context) in tabs and (poll_fn is None or poll_fn(context))),
-        }
-        cls = type("MAX_PT_" + fn.__name__, (Panel,), ns)
-        ROLLOUTS.append(cls)
-        return fn
-    return deco
+def _stack_set(ob, value):
+    mod = ob.modifiers[value] if 0 <= value < len(ob.modifiers) else None
+    if mod and host.internal(mod):
+        return
+    if value == -1 or mod:
+        with bpy.context.temp_override(object=ob, active_object=ob):
+            bpy.ops.max.modifier_set_active(name=mod.name if mod else '')
 
 
 def when(pred):
-    def deco(fn):
-        fn.poll = pred
-        return fn
-    return deco
+    def decorate(callback):
+        callback.max_visible = pred
+        return callback
+    return decorate
 
 
-# ----- Create ---------------------------------------------------------------
+def rollout(label, tabs, order, closed=False):
+    def decorate(callback):
+        identifier = 'MAX_PT_' + callback.__name__
+        if any(cls.__name__ == identifier for cls in ROLLOUTS):
+            return callback
+        predicate = getattr(callback, 'max_visible', lambda context: True)
+        def poll(cls, context):
+            if context.window_manager.max_cmd_tab not in tabs:
+                return False
+            ob = host.object_for(context)
+            if ob == context.object:
+                return bool(predicate(context))
+            with context.temp_override(object=ob, active_object=ob):
+                return bool(predicate(context))
+        def draw(self, context):
+            w.compact(self.layout)
+            ob = host.object_for(context)
+            if ob:
+                self.layout.context_pointer_set('object', ob)
+                self.layout.context_pointer_set('active_object', ob)
+            with context.temp_override(object=ob, active_object=ob):
+                callback(self.layout, context)
+        cls = type(identifier, (bpy.types.Panel,), {
+            '__module__': __name__, 'bl_idname': identifier, 'bl_label': label,
+            'bl_space_type': 'VIEW_3D', 'bl_region_type': 'UI', 'bl_category': 'Command Panel',
+            'bl_parent_id': 'MAX_PT_command_panel', 'bl_order': order,
+            'bl_options': {'DEFAULT_CLOSED'} if closed else set(),
+            'poll': classmethod(poll), 'draw': draw,
+        })
+        ROLLOUTS.append(cls)
+        return callback
+    return decorate
 
-@rollout("Object Type", {"CREATE"}, 1)
+
+def is_poly(context):
+    ob = host.object_for(context)
+    return bool(ob and ob.type == 'MESH' and not ob.max_prim.kind and
+                (_stack_get(ob) == -1 or ob.mode == 'EDIT') and not symmetry.editing(context))
+
+
+_is_poly = is_poly
+
+
+class MAX_UL_stack(bpy.types.UIList):
+    """Compatibility list route. The ordinary host draws a unified tree."""
+    def filter_items(self, context, data, propname):
+        mods = getattr(data, propname)
+        return [0 if host.internal(m) else self.bitflag_filter_item for m in mods], list(reversed(range(len(mods))))
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        if not host.internal(item):
+            layout.operator('max.modifier_set_active', text=item.name, emboss=False).name = item.name
+
+
+class MAX_MT_create_subcat(bpy.types.Menu):
+    bl_label = 'Category'
+    def draw(self, context):
+        wm = context.window_manager
+        for token, label in SUBTYPES.get(wm.max_create_cat, ()):
+            op = self.layout.operator('wm.context_set_enum', text=label)
+            op.data_path, op.value = 'window_manager.max_create_sub', token
+
+
+class MAX_PT_command_panel(bpy.types.Panel):
+    bl_label = 'Command Panel'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Command Panel'
+    bl_options = {'HIDE_HEADER'}
+
+    @classmethod
+    def register(cls):
+        host.install()
+
+    @classmethod
+    def unregister(cls):
+        host.uninstall()
+
+    def draw(self, context):
+        layout = w.compact(self.layout)
+        layout.operator_context = 'INVOKE_DEFAULT'
+        wm = context.window_manager
+        host.tabs(layout, context, TABS)
+        ob = host.object_for(context)
+        if ob:
+            layout.context_pointer_set('object', ob)
+            layout.context_pointer_set('active_object', ob)
+        if wm.max_cmd_tab == 'CREATE':
+            row = layout.row(align=True)
+            for key, label, description, fallback, index in CREATE_CATS:
+                row.prop_enum(wm, 'max_create_cat', key, text='')
+            label = dict(SUBTYPES.get(wm.max_create_cat, ())).get(wm.max_create_sub,
+                next(iter(SUBTYPES.get(wm.max_create_cat, (('', ''),))))[1])
+            layout.menu('MAX_MT_create_subcat', text=label)
+        elif wm.max_cmd_tab == 'MODIFY':
+            host.name_color(layout, ob)
+            row = layout.row(align=True)
+            row.enabled = bool(ob and ob.type in {'MESH', 'CURVE', 'FONT'})
+            row.operator_context = 'INVOKE_DEFAULT'
+            row.operator('max.modifier_search', text='Modifier List', icon='DOWNARROW_HLT')
+            if ob:
+                host.draw_stack(layout, context, ob)
+        elif wm.max_cmd_tab == 'HIERARCHY':
+            layout.prop(wm, 'max_hierarchy_tab', expand=True)
+
+
+@rollout('Object Type', {'CREATE'}, 1)
 def create_object_type(layout, context):
     wm = context.window_manager
-    cat = wm.max_create_cat
-    g = _grid(layout)
-    vray_sub = wm.max_create_sub == "VRAY" and len(SUBTYPES[cat]) > 1
-    if cat == "GEOMETRY" and wm.max_create_sub == "JOKERMARTINI":
-        from . import plane_plus
-        g.operator("max.plane_plus", text="PlanePlus", depress=plane_plus.MAX_OT_plane_plus.active)
-    elif vray_sub and cat == "GEOMETRY":
-        g.operator("max.vray_plane", text="VRayPlane")
-    elif vray_sub and cat == "LIGHTS":
-        for k, label in (("PLANE", "VRayLight"), ("DISC", "VRayLight Disc"), ("SPHERE", "VRayLight Sphere"),
-                         ("DOME", "VRayLight Dome"), ("SUN", "VRaySun"), ("IES", "VRayIES")):
-            g.operator("max.vray_light", text=label).kind = k
-    elif vray_sub and cat == "CAMERAS":
-        g.operator("max.vray_camera", text="VRayPhysicalCamera")
-    elif cat == "GEOMETRY" and wm.max_create_sub == "COMPOUND":
-        g.operator("max.loft_start", text="Loft", depress=wm.max_loft_active)
-    elif cat == "GEOMETRY":
-        kinds = (prims.extended_primitives.DISPLAY_ORDER if wm.max_create_sub == "EXTENDED"
-                 else prims.PRIMITIVES)
-        for k in kinds:
-            if k == "PLANEPLUS":
-                continue
-            if (k in prims.extended_primitives.PRIMITIVES) != (wm.max_create_sub == "EXTENDED"):
-                continue
-            label = prims.PRIMITIVES[k][0]
-            g.operator("max.create", text=label, depress=(create.MAX_OT_create.active_kind == k)).kind = k
-    elif cat == "SHAPES":
-        g.operator_context = "INVOKE_DEFAULT"
-        for k, label, icon in create.SHAPES:
-            g.operator("max.create_shape", text=label, depress=(k == "LINE" and line_tool.MAX_OT_line.active is not None)).kind = k
-    elif cat == "LIGHTS":
-        for k, label, icon in create.LIGHTS:
-            g.operator("max.create_light", text=label).kind = k
-    elif cat == "CAMERAS":
-        g.operator("max.create_camera", text="Target").target = True
-        g.operator("max.create_camera", text="Physical").target = False
-        layout.operator("max.camera_from_view", text="Create Camera From View")
-    elif cat == "HELPERS":
-        for k, label, icon in create.HELPERS:
-            g.operator("max.create_helper", text=label).kind = k
+    if wm.max_create_sub == 'JOKERMARTINI' and wm.max_create_cat == 'GEOMETRY':
+        layout.operator('max.plane_plus', text='PlanePlus')
+    elif wm.max_create_sub == 'COMPOUND' and wm.max_create_cat == 'GEOMETRY':
+        layout.operator('max.loft_start', text='Loft')
+    elif wm.max_create_sub == 'VRAY' and wm.max_create_cat in {'GEOMETRY', 'LIGHTS', 'CAMERAS'}:
+        route = {'GEOMETRY': 'max.vray_plane', 'CAMERAS': 'max.vray_camera', 'LIGHTS': 'max.vray_light'}[wm.max_create_cat]
+        if wm.max_create_cat == 'LIGHTS':
+            for kind, label in (('PLANE', 'VRayLight'), ('DOME', 'VRayDomeLight'), ('IES', 'VRayIES')):
+                layout.operator(route, text=label).kind = kind
+        else:
+            layout.operator(route, text='VRayPlane' if wm.max_create_cat == 'GEOMETRY' else 'VRayPhysicalCamera')
+    else:
+        create.draw_object_types(layout, context)
 
 
-@rollout("Name and Color", {"CREATE"}, 2)
+@rollout('Name and Color', {'CREATE'}, 2)
+@when(lambda c: c.object is not None)
 def create_name_color(layout, context):
-    ob = context.active_object
-    if ob is None:
-        return
-    row = layout.row(align=True)
-    split = row.split(factor=0.88, align=True)
-    split.prop(ob, "name", text="")
-    split.prop(ob, "color", text="")
+    host.name_color(layout, context.object)
 
 
-# ----- Creation Method and Keyboard Entry -----------------------------------
-
-@rollout("Creation Method", {"CREATE"}, 3)
+@rollout('Creation Method', {'CREATE'}, 3)
 @when(keyboard_entry.visible)
 def creation_method(layout, context):
     keyboard_entry.draw_method(layout, context)
 
 
-@rollout("Keyboard Entry", {"CREATE"}, 4, closed=True)
+@rollout('Keyboard Entry', {'CREATE'}, 4, closed=True)
 @when(keyboard_entry.visible)
 def keyboard_entry_rollout(layout, context):
     keyboard_entry.draw_keyboard(layout, context)
 
 
-# ----- Parameters (Create right after creation, and Modify) -------------------
-
-def _has_params(context):
-    ob = symmetry.owner(context)
-    if ob is None:
+def parameter_visible(context):
+    ob = context.object
+    if not ob or loft.params_visible(context):
         return False
-    if loft.is_loft(ob) and (_stack_get(ob) < 0 or ob.modifiers.active == loft.modifier(ob)):
-        return False
-    if tab(context) == "CREATE":
-        return ob.type == "MESH" and bool(ob.max_prim.kind)
-    if context.mode == "EDIT_MESH" or (ob.type == "MESH" and not ob.max_prim.kind and _stack_get(ob) < 0):
-        return False   # Editable Poly shows Selection / Edit Geometry instead
-    return True
+    return bool(host.active(ob) or (ob.type == 'MESH' and ob.max_prim.kind) or ob.type in {'LIGHT', 'CAMERA', 'FONT'})
 
 
-@rollout("Parameters", {"CREATE", "MODIFY"}, 5)
-@when(_has_params)
+@rollout('Parameters', {'CREATE', 'MODIFY'}, 5)
+@when(parameter_visible)
 def parameters(layout, context):
-    ob = symmetry.owner(context)
-    idx = _stack_get(ob)
-    if idx >= 0:
-        draw_modifier_params(layout, ob.modifiers[idx])
-    elif ob.type == "MESH" and ob.max_prim.kind:
-        draw_prim_params(layout, ob)
-    else:
-        draw_base_params(layout, ob)
+    ob = context.object
+    mod = host.active(ob) if context.window_manager.max_cmd_tab == 'MODIFY' else None
+    if mod:
+        if symmetry.is_symmetry(mod):
+            symmetry.draw(layout, ob, mod)
+        else:
+            modifier_ui.draw_parameters(layout, context, mod)
+    elif ob.type == 'MESH' and ob.max_prim.kind:
+        if ob.max_prim.kind == 'PLANEPLUS':
+            plane_plus.draw(layout, ob)
+        else:
+            prims.draw(layout, ob)
+    elif ob.type == 'CAMERA':
+        vray.draw_camera(layout, context)
+    elif ob.type == 'LIGHT':
+        w.spinner(layout, ob.data, 'energy', 'Multiplier')
+        layout.prop(ob.data, 'color', text='Color')
+    elif ob.type == 'FONT':
+        layout.prop(ob.data, 'body', text='Text')
+        w.spinner(layout, ob.data, 'size', 'Size')
 
 
-@rollout("Creation Method", {"CREATE", "MODIFY"}, 3)
-@when(loft.creation_visible)
-def loft_creation(layout, context):
-    loft.draw_creation(layout, context)
+for callback, label, order, predicate, closed in (
+    (line_tool.draw_rendering, 'Rendering', 3, line_tool.spline_poll, True),
+    (line_tool.draw_interpolation, 'Interpolation', 4, line_tool.spline_poll, True),
+    (line_tool.draw_method, 'Creation Method', 5, line_tool.line_poll, False),
+    (line_tool.draw_keyboard, 'Keyboard Entry', 6, line_tool.line_poll, True),
+):
+    rollout(label, {'CREATE', 'MODIFY'} if 'render' in callback.__name__ or 'interpolation' in callback.__name__ else {'CREATE'},
+            order, closed)(when(predicate)(callback))
+
+for name, label, callback, predicate, order in (
+    ('loft_creation', 'Creation Method', loft.draw_creation, loft.creation_visible, 3),
+    ('loft_skin', 'Skin Parameters', loft.draw_skin, loft.params_visible, 4),
+    ('loft_surface', 'Surface Parameters', loft.draw_surface, loft.params_visible, 5),
+    ('loft_path', 'Path Parameters', loft.draw_path, loft.params_visible, 6),
+    ('loft_deformations', 'Deformations', loft.draw_deformations, loft.params_visible, 7),
+):
+    def draw(layout, context, callback=callback):
+        callback(layout, context)
+    draw.__name__ = name
+    rollout(label, {'CREATE', 'MODIFY'}, order, name != 'loft_creation')(when(predicate)(draw))
+    globals()[name] = draw
 
 
-@rollout("Skin Parameters", {"CREATE", "MODIFY"}, 4)
-@when(loft.params_visible)
-def loft_skin(layout, context):
-    loft.draw_skin(layout, context)
-
-
-@rollout("Surface Parameters", {"CREATE", "MODIFY"}, 5)
-@when(loft.params_visible)
-def loft_surface(layout, context):
-    loft.draw_surface(layout, context)
-
-
-@rollout("Path Parameters", {"CREATE", "MODIFY"}, 6)
-@when(loft.params_visible)
-def loft_path(layout, context):
-    loft.draw_path(layout, context)
-
-
-@rollout("Deformations", {"MODIFY"}, 7)
-@when(loft.params_visible)
-def loft_deformations(layout, context):
-    loft.draw_deformations(layout, context)
-
-
-# ----- Material (VRayMtl) ---------------------------------------------------------
-
-from . import line_tool
-
-rollout("Rendering", {"CREATE", "MODIFY"}, 4, closed=True)(when(line_tool.spline_poll)(line_tool.draw_rendering))
-rollout("Interpolation", {"CREATE", "MODIFY"}, 5, closed=True)(when(line_tool.spline_poll)(line_tool.draw_interpolation))
-rollout("Creation Method", {"CREATE"}, 6)(when(line_tool.line_poll)(line_tool.draw_method))
-rollout("Keyboard Entry", {"CREATE"}, 7, closed=True)(when(line_tool.line_poll)(line_tool.draw_keyboard))
-
-@rollout("Material", {"MODIFY"}, 9, closed=True)
-@when(lambda c: c.active_object is not None and c.active_object.type in {"MESH", "CURVE", "FONT", "SURFACE", "META"})
+@rollout('Material', {'CREATE', 'MODIFY'}, 11, closed=True)
+@when(lambda c: c.object is not None and c.object.active_material is not None)
 def material_rollout(layout, context):
-    from . import vray
-    ob = context.active_object
-    mat = ob.active_material
-    row = layout.row(align=True)
-    row.operator_menu_enum("max.vray_material", "preset", text="New VRayMtl")
-    if mat is None:
-        layout.label(text="No material")
-        return
-    layout.prop(mat, "name", text="")
-    row = layout.row(align=True)
-    bitmap = mat.get("max_bitmap")
-    has_img = mat.use_nodes and any(n.type == "TEX_IMAGE" and n.image for n in mat.node_tree.nodes)
-    if bitmap and not has_img:
-        row.alert = True
-        row.label(text=f"Missing bitmap: {bitmap}", icon="ERROR")
-        row = layout.row(align=True)
-    row.operator("max.load_bitmap", text="Load Bitmap...", **max_icons.ui("bitmap", "IMAGE_DATA"))
-    if mat.get("max_vray"):
-        vray.draw_vraymtl(layout, mat)
-    else:
-        col = _split_col(layout)
-        col.prop(mat, "diffuse_color", text="Viewport Color")
-        layout.label(text="Not a VRayMtl: edit in Material Editor (M)")
+    layout.prop(context.object.active_material, 'name', text='')
+    layout.operator('max.open_editor', text='Material Editor').editor = 'MATERIAL'
 
 
-# ----- Editable Poly ------------------------------------------------------------
-
-def _is_poly(context):
-    ob = context.active_object
-    if ob is None or ob.type != "MESH":
-        return False
-    if loft.is_loft(ob):
-        return False
-    if context.mode == "EDIT_MESH":
-        return True
-    return not ob.max_prim.kind and _stack_get(ob) < 0
-
-
-@rollout("Selection", {"MODIFY"}, 4)
-@when(_is_poly)
+@rollout('Selection', {'MODIFY'}, 4)
+@when(is_poly)
 def poly_selection(layout, context):
-    from . import editable_poly_ui
     editable_poly_ui.selection(layout, context)
 
 
-@rollout("Edit Geometry", {"MODIFY"}, 7)
-@when(_is_poly)
+@rollout('Edit Geometry', {'MODIFY'}, 7)
+@when(is_poly)
 def poly_edit_geometry(layout, context):
-    from . import editable_poly_ui
     editable_poly_ui.geometry(layout, context)
 
 
-from . import editable_poly_ui
-editable_poly_ui.install(rollout, when, _is_poly)
+editable_poly_ui.install(rollout, when, is_poly)
 
-# ----- Hierarchy ---------------------------------------------------------------
 
-@rollout("Adjust Pivot", {"HIERARCHY"}, 10)
+def pivot_tab(context):
+    return context.window_manager.max_hierarchy_tab == 'PIVOT'
+
+
+@rollout('Adjust Pivot', {'HIERARCHY'}, 1)
+@when(pivot_tab)
 def hier_pivot(layout, context):
-    ts = context.tool_settings
-    col = layout.column(align=True)
-    col.prop(ts, "use_transform_data_origin", text="Affect Pivot Only", toggle=True)
-    col.prop(ts, "use_transform_skip_children", text="Don't Affect Children", toggle=True)
-    layout.label(text="Alignment:")
-    col = layout.column(align=True)
-    col.operator("max.pivot_bounds", text="Pivot to Bottom").mode = "BOTTOM"
-    col.operator("max.pivot_bounds", text="Pivot to Center").mode = "CENTER"
-    col.operator("max.object_cmd", text="Center to Object").cmd = "CENTER_PIVOT"
-    col.operator("max.object_cmd", text="Align to World").cmd = "PIVOT_TO_WORLD"
-    col.operator("max.object_cmd", text="Center Object to Pivot").cmd = "OBJECT_TO_PIVOT"
-
-
-@rollout("Adjust Transform", {"HIERARCHY"}, 11)
-def hier_transform(layout, context):
-    col = layout.column(align=True)
-    col.operator("max.object_cmd", text="Reset XForm").cmd = "RESET_XFORM"
-    col.operator("object.transform_apply", text="Reset Transform").location = True
-
-
-@rollout("Link Info", {"HIERARCHY"}, 12)
-def hier_link(layout, context):
-    ob = context.active_object
-    if ob:
-        _split_col(layout).prop(ob, "parent", text="Parent")
-    g = _grid(layout)
-    g.operator("max.object_cmd", text="Select and Link").cmd = "LINK"
-    g.operator("max.object_cmd", text="Unlink Selection").cmd = "UNLINK"
-    layout.operator("object.select_hierarchy", text="Select Children").direction = "CHILD"
-
-
-# ----- Motion ----------------------------------------------------------------
-
-@rollout("Animation", {"MOTION"}, 20)
-def motion_anim(layout, context):
-    scene = context.scene
-    ts = context.tool_settings
     row = layout.row(align=True)
-    row.prop(ts, "use_keyframe_insert_auto", text="Auto Key", toggle=True)
-    row.operator("max.set_key", text="Set Key")
-    layout.operator("anim.keyframe_delete_v3d", text="Delete Keys")
-    col = _split_col(layout)
-    col.prop(scene, "frame_current", text="Frame")
-    col.prop(scene, "frame_start", text="Start Time")
-    col.prop(scene, "frame_end", text="End Time")
-    col.prop(scene.render, "fps", text="Frame Rate")
+    row.enabled = context.object is not None
+    if context.object:
+        host.unavailable(row, 'Affect Pivot Only')
+    for text, token in (('Center to Object', 'CENTER_PIVOT'), ('Center Object to Pivot', 'OBJECT_TO_PIVOT')):
+        layout.operator('max.object_cmd', text=text).cmd = token
+    layout.operator('max.workspace_align_world', text='Align to World')
+    host.unavailable(layout, 'Align to Object')
+    host.unavailable(layout, 'Reset Pivot')
+    row = layout.row(align=True)
+    row.operator('max.pivot_bounds', text='Pivot to Bottom').mode = 'BOTTOM'
+    row.operator('max.pivot_bounds', text='Pivot to Center').mode = 'CENTER'
 
 
-@rollout("Editors", {"MOTION"}, 21, closed=True)
+@rollout('Adjust Transform', {'HIERARCHY'}, 2, closed=True)
+@when(pivot_tab)
+def hier_transform(layout, context):
+    layout.operator('max.object_cmd', text='Reset XForm').cmd = 'RESET_XFORM'
+    host.unavailable(layout, 'Working Pivot')
+
+
+@rollout('Link Info', {'HIERARCHY'}, 3)
+@when(lambda c: c.window_manager.max_hierarchy_tab == 'LINK')
+def hier_link(layout, context):
+    ob = context.object
+    if not ob:
+        return
+    layout.label(text='Locks')
+    for prop, label in (('lock_location', 'Move'), ('lock_rotation', 'Rotate'), ('lock_scale', 'Scale')):
+        row = layout.row(align=True)
+        row.label(text=label)
+        for index, axis in enumerate('XYZ'):
+            row.prop(ob, prop, index=index, text=axis)
+    layout.label(text='Inherit')
+    host.unavailable(layout, 'Position / Rotation / Scale')
+    layout.operator('max.object_cmd', text='Unlink Selection').cmd = 'UNLINK'
+
+
+@rollout('IK', {'HIERARCHY'}, 1)
+@when(lambda c: c.window_manager.max_hierarchy_tab == 'IK')
+def hier_ik(layout, context):
+    for text in ('IK Chain', 'IK Solver', 'Pick IK Solver', 'Assign Controller'):
+        host.unavailable(layout, text)
+
+
+@rollout('Parameters', {'MOTION'}, 1)
+def motion_anim(layout, context):
+    ob = context.object
+    if not ob:
+        return
+    host.unavailable(layout, 'Assign Controller')
+    layout.label(text='PRS Parameters')
+    for prop, label in (('location', 'Position'), ('rotation_euler', 'Rotation'), ('scale', 'Scale')):
+        layout.label(text=label)
+        for index, axis in enumerate('XYZ'):
+            w.spinner(layout, ob, prop, axis, index=index)
+
+
+@rollout('Key Info', {'MOTION'}, 2, closed=True)
 def motion_editors(layout, context):
-    layout.operator("max.open_editor", text="Curve Editor").editor = "CURVE_EDITOR"
-    layout.operator("max.open_editor", text="Dope Sheet").editor = "DOPE_SHEET"
+    layout.operator('max.set_key', text='Set Key')
+    layout.operator('max.open_editor', text='Track View - Curve Editor').editor = 'CURVE_EDITOR'
+    layout.operator('max.open_editor', text='Track View - Dope Sheet').editor = 'DOPE_SHEET'
 
 
-@rollout("Trajectories", {"MOTION"}, 22, closed=True)
+@rollout('Trajectories', {'MOTION'}, 3, closed=True)
 def motion_traj(layout, context):
-    g = _grid(layout)
-    g.operator("object.paths_calculate", text="Show")
-    g.operator("object.paths_clear", text="Hide")
+    host.unavailable(layout, 'Trajectories')
 
 
-# ----- Display ---------------------------------------------------------------
-
-@rollout("Hide", {"DISPLAY"}, 30)
+@rollout('Hide', {'DISPLAY'}, 1)
 def disp_hide(layout, context):
-    g = _grid(layout)
-    g.operator("max.object_cmd", text="Hide Selected").cmd = "HIDE_SEL"
-    g.operator("max.object_cmd", text="Hide Unselected").cmd = "HIDE_UNSEL"
-    g.operator("max.select_by_name", text="Hide by Name...")
-    g.operator("max.object_cmd", text="Unhide All").cmd = "UNHIDE"
+    for text, token in (('Hide Selected', 'HIDE_SEL'), ('Hide Unselected', 'HIDE_UNSEL'), ('Unhide All', 'UNHIDE')):
+        layout.operator('max.object_cmd', text=text).cmd = token
+    layout.operator('max.scene_selection_dialog', text='Hide By Name...').hide = True
 
 
-@rollout("Freeze", {"DISPLAY"}, 31)
+@rollout('Freeze', {'DISPLAY'}, 2)
 def disp_freeze(layout, context):
-    g = _grid(layout)
-    g.operator("max.object_cmd", text="Freeze Selection").cmd = "FREEZE"
-    g.operator("max.object_cmd", text="Unfreeze All").cmd = "UNFREEZE"
-    g.operator("max.unfreeze_by_name", text="Unfreeze by Name...")
-    g.operator("max.unfreeze_by_hit", text="Unfreeze by Hit")
+    layout.operator('max.object_cmd', text='Freeze Selection').cmd = 'FREEZE'
+    layout.operator('max.object_cmd', text='Unfreeze All').cmd = 'UNFREEZE'
+    layout.operator('max.unfreeze_by_name', text='Unfreeze by Name...')
+    layout.operator('max.unfreeze_by_hit', text='Unfreeze by Hit')
 
 
-@rollout("Display Properties", {"DISPLAY"}, 32)
-@when(lambda c: c.active_object is not None)
+@rollout('Display Properties', {'DISPLAY'}, 3)
 def disp_props(layout, context):
-    ob = context.active_object
-    col = layout.column(align=True)
-    col.prop(ob, "display_type", text="")
-    col.prop(ob, "show_in_front", text="See-Through")
-    col.prop(ob, "show_wire", text="Edges Only")
-    col.prop(ob, "show_name", text="Display Name")
-    col.prop(ob, "show_axis", text="Show Pivot")
-    col.prop(ob, "show_bounds", text="Display as Box Outline")
-    col.prop(ob, "max_show_frozen_gray")
-    if context.space_data and context.space_data.type == "VIEW_3D":
-        col.prop(context.space_data.shading, "show_backface_culling", text="Backface Cull")
-
-
-# ----- Utilities ---------------------------------------------------------------
-
-@rollout("Utilities", {"UTILITIES"}, 40)
-def util_main(layout, context):
-    g = _grid(layout)
-    g.operator("max.object_cmd", text="Reset XForm").cmd = "RESET_XFORM"
-    g.operator("max.object_cmd", text="Collapse").cmd = "CONVERT_POLY"
-    ob = context.active_object
+    ob = context.object
     if ob:
-        layout.label(text="Measure:")
-        _split_col(layout).prop(ob, "dimensions", text="Dimensions")
+        w.checkbox(layout, ob, 'max_show_frozen_gray', 'Show Frozen in Gray')
+        for text, token in (('Display as Box', 'DISPLAY_BOX'), ('See-Through', 'SEE_THROUGH'),
+                            ('Show Wireframe', 'EDGES_ONLY')):
+            layout.operator('max.object_cmd', text=text).cmd = token
+        w.checkbox(layout, ob, 'show_name', 'Object Name')
+    host.unavailable(layout, 'Viewport Configuration')
 
 
-@rollout("NotuoDesk 3ds Maxxed", {"UTILITIES"}, 41)
+@rollout('Link Display', {'DISPLAY'}, 4, closed=True)
+def disp_links(layout, context):
+    host.unavailable(layout, 'Display Links')
+
+
+@rollout('Utilities', {'UTILITIES'}, 1)
+def util_main(layout, context):
+    for text, token in (('Reset XForm', 'RESET_XFORM'), ('Collapse', 'CONVERT_POLY')):
+        layout.operator('max.object_cmd', text=text).cmd = token
+    layout.menu('MAX_MT_xview', text='xView')
+    host.unavailable(layout, 'Viewport Configuration')
+    layout.operator('max.open_editor', text='Scene Explorer').editor = 'SCENE_EXPLORER'
+    for text in ('Measure', 'Channel Info', 'Rescale World Units', 'More...'):
+        host.unavailable(layout, text)
+
+
+@rollout('RappaTools3', {'UTILITIES'}, 2, closed=True)
 def util_maxxed(layout, context):
-    col = layout.column(align=True)
-    col.operator("max.apply", text="Apply 3ds Max Look", **max_icons.ui("check", "CHECKMARK"))
-    col.operator("max.apply", text="Theme Only", icon="COLOR").layout_ = False
-    col.operator("max.restore", text="Restore Blender Look", **max_icons.ui("undo", "LOOP_BACK"))
-    layout.operator("max.toggle_quad", text="Maximize Viewport Toggle (Alt+W)")
-    layout.operator("preferences.addon_show", text="Hotkeys & Settings").module = __package__
-    from . import updater
-    updater.draw_update_box(layout)
-
-
-classes = (MAX_UL_stack, MAX_MT_create_subcat, MAX_PT_command_panel)
+    layout.label(text='Selection')
+    editable_poly_ui.grid(layout, ('LOOP', 'RING', 'SHRINK', 'GROW'))
+    layout.label(text='Modeling')
+    editable_poly_ui.grid(layout, ('CHAMFER', 'CONNECT', 'BRIDGE', 'WELD'))
 
 
 def register_props():
-    bpy.types.Object.max_stack_index = IntProperty(
-        get=_stack_get, set=_stack_set, options={"SKIP_SAVE"})
+    bpy.types.Object.max_stack_index = IntProperty(get=_stack_get, set=_stack_set, options={'SKIP_SAVE'})
+    modifier_ui.register_props()
+    host.install()
 
 
 def unregister_props():
-    del bpy.types.Object.max_stack_index
+    host.uninstall()
+    modifier_ui.unregister_props()
+    if hasattr(bpy.types.Object, 'max_stack_index'):
+        del bpy.types.Object.max_stack_index
+
+
+classes = (*modifier_ui.classes, *host.classes, MAX_UL_stack, MAX_MT_create_subcat, MAX_PT_command_panel)
