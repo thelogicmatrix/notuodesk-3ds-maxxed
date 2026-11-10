@@ -37,6 +37,9 @@ class QuadMenuTests(unittest.TestCase):
         self.assertEqual((max_quad.WIDTH,max_quad.ROW), (179,15))
         ctx=quad_sets.QuadContext('MESH',4,True,True,tool='SELECT')
         self.assertFalse(any(row.checked for row in quad_sets.build(ctx)[3].entries))
+        self.assertEqual(quad_sets.build(ctx)[3].entries[-1].label,'Convert To:')
+        self.assertIn('Quickslice',[r.label for r in quad_sets.build(ctx)[0].entries])
+        self.assertIn('Hinge from Edge',[r.label for r in quad_sets.build(ctx)[2].entries])
         self.assertFalse(any(row.checked for row in quad_sets.build(ctx,'ANIMATION')[1].entries))
 
     def test_mesh_authority_and_empty_selection_at_every_level(self):

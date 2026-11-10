@@ -158,7 +158,7 @@ def _transform(ctx):
              action('Curve Editor...', 'max.open_editor', editor='CURVE_EDITOR'),
              action('Dope Sheet...', 'max.open_editor', editor='DOPE_SHEET'),
              unavailable('Wire Parameters...'), SEPARATOR,
-             Entry('convert', 'Convert To', children=_convert(ctx))]
+             Entry('convert', 'Convert To:', children=_convert(ctx))]
     return tuple(rows)
 
 
@@ -208,7 +208,7 @@ def _tools(ctx):
              replace(poly('Attach', 'ATTACH', ctx, levels=(0, 1, 2, 3, 4, 5)),
                      settings=command('max.poly_attach_list')), SEPARATOR,
              poly('Cut', 'CUT', ctx, levels=(0, 1, 2, 3, 4, 5)),
-             poly('QuickSlice', 'QUICK_SLICE', ctx, levels=(0, 1, 2, 3, 4, 5)), SEPARATOR,
+             poly('Quickslice', 'QUICK_SLICE', ctx, levels=(0, 1, 2, 3, 4, 5)), SEPARATOR,
              unavailable('Repeat'), SEPARATOR, unavailable('Convert to Edge'), unavailable('Convert to Vertex'),
              SEPARATOR) + _sublevels(ctx)
     lower = tuple(poly(label, token, ctx, settings=token in SETTING_TOKENS) if token
@@ -218,7 +218,7 @@ def _tools(ctx):
         lower = (poly('Create', 'CREATE', ctx), SEPARATOR, poly('Insert Vertex', 'INSERT_VERTEX', ctx), SEPARATOR,
                  poly('Extrude', 'EXTRUDE', ctx, settings=True), poly('Bevel', 'BEVEL', ctx, settings=True),
                  poly('Outline', 'OUTLINE', ctx, settings=True), poly('Inset', 'INSET', ctx, settings=True), SEPARATOR,
-                 unavailable('Hinge From Edge', settings=command('max.poly_settings', action='HINGE')),
+                 unavailable('Hinge from Edge', settings=command('max.poly_settings', action='HINGE')),
                  unavailable('Extrude along Spline', settings=command('max.poly_settings', action='SPLINE_EXTRUDE')), SEPARATOR,
                  unavailable('Edit Triangulation'), poly('Flip Normals', 'FLIP', ctx))
     return upper, lower

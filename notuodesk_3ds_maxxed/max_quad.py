@@ -18,7 +18,31 @@ TITLE = 15
 COLORS = {'body': (70/255,)*3+(1,), 'title': (60/255,)*3+(1,), 'border': (0, 0, 0, 1),
           'text': (159/255,)*3+(1,), 'disabled': (35/255,)*3+(1,),
           'hover_text': (1, 1, 1, 1), 'hover': (70/255,)*3+(1,),
-          'centre': (60/255, 130/255, 220/255, 1)}
+          'centre': (60/255, 130/255, 220/255, 1),
+          'animation_frame': (199/255, 199/255, 194/255, 1)}
+
+
+def framebuffer_color(color):
+    """Compensate the UI's sRGB decode and gamma-2.2 framebuffer encode."""
+    def encode(value):
+        linear = value ** 2.2
+        return 12.92*linear if linear <= .0031308 else 1.055*linear**(1/2.4)-.055
+    return tuple(encode(value) for value in color[:3])+(color[3],)
+
+
+# Black runs sampled from the reference's checked Polygon row, at 1x.
+TICK_RECTS = ((7, 0, 2, 2), (6, 2, 2, 2), (1, 4, 2, 1),
+              (5, 4, 2, 2), (1, 5, 3, 1), (2, 6, 4, 1), (3, 7, 3, 1))
+
+
+def level_tick(canvas, x, y):
+    for dx, dy, width, height in TICK_RECTS:
+        canvas.rect(x+dx, y+dy, width, height, COLORS['border'])
+
+
+def submenu_arrow(canvas, x, y):
+    for dy, width in enumerate((1, 2, 3, 4, 5, 4, 3, 2, 1)):
+        canvas.rect(x, y+dy, width, 1, COLORS['border'])
 
 
 @dataclass(frozen=True)
@@ -383,36 +407,37 @@ class MAX_OT_quad_menu(bpy.types.Operator):
         from .max_ui_draw import Canvas
         gpu.state.blend_set('ALPHA')
         c = Canvas(*self.anchor, self.scale, 'tahoma')
+        colors = {key: framebuffer_color(value) for key, value in COLORS.items()}
         for cell in self.cells+self.subcells:
             x, y, w, h = cell.rect
             row = cell.entry
-            c.rect(x, y, w, h, COLORS['title'] if cell.title else COLORS['body'])
+            c.rect(x, y, w, h, colors['title'] if cell.title else colors['body'])
             if row is None:
                 if cell.title:
-                    c.border(x, y, w, h, COLORS['border'])
-                    c.text(x+2, y-1, cell.title, COLORS['text'], 11,
+                    c.border(x, y, w, h, colors['border'])
+                    c.text(x+2, y-1, cell.title, colors['text'], 11,
                            align='LEFT' if cell.quadrant % 2 == 0 else 'RIGHT', width=w-4)
                 continue
             if not row.label:
-                c.rect(x, y, w, 1, COLORS['border'])
+                c.rect(x, y, w, 1, colors['border'])
                 continue
             focused = self.focus is not None and self.focus[0] == cell and row.enabled
             if focused:
-                c.rect(x+1, y, w-2, h, COLORS['hover'])
+                c.rect(x+1, y, w-2, h, colors['hover'])
             remembered = _history.get((self.set_name, self.quadrants[cell.quadrant].title), (None,))[0] == row.key
-            color = COLORS['hover_text'] if row.enabled and (focused or remembered) else COLORS['text'] if row.enabled else COLORS['disabled']
+            color = colors['hover_text'] if row.enabled and (focused or remembered) else colors['text'] if row.enabled else colors['disabled']
             left = cell.quadrant % 2 == 0 and cell not in self.subcells
             c.text(x+14, y, row.label, color, 11, align='RIGHT' if left else 'LEFT', width=w-29)
             if row.checked:
-                c.tick(x+w-11 if left else x+3, y+4, COLORS['border'])
+                level_tick(c, x+w-11 if left else x+3, y+4)
             if row.children:
-                c.arrow(x+w-11, y+3, color=COLORS['border'])
+                submenu_arrow(c, x+w-13, y+4)
             if row.settings:
                 sx = x+3 if left else x+w-11
-                c.border(sx, y+5, 8, 8, COLORS['border'])
-                c.rect(sx+1, y+6, 6, 1, COLORS['text'])
+                c.border(sx, y+5, 9, 8, colors['border'])
+                c.rect(sx+1, y+6, 7, 1, colors['border'])
                 if focused and self.focus[1] == 'settings':
-                    c.border(sx-2, y+2, 12, 12, COLORS['hover_text'])
+                    c.border(sx-2, y+2, 12, 12, colors['hover_text'])
         # A single-pixel frame encloses each quadrant, including the title strip.
         for i in range(4):
             cells = [cell for cell in self.cells if cell.quadrant == i]
@@ -420,13 +445,18 @@ class MAX_OT_quad_menu(bpy.types.Operator):
                 x = min(cell.rect[0] for cell in cells)
                 y = min(cell.rect[1] for cell in cells)
                 bottom = max(cell.rect[1]+cell.rect[3] for cell in cells)
-                c.border(x, y, self.quadrants[i].width, bottom-y, COLORS['border'])
+                c.border(x, y, self.quadrants[i].width, bottom-y,
+                         colors['animation_frame'] if self.set_name == 'ANIMATION' else colors['border'])
+        if self.set_name == 'ANIMATION':
+            # Pale exposed frame, black shared edges, as photographed.
+            c.rect(0, -75, 1, 151, colors['border'])
+            c.rect(-153, 0, 307, 1, colors['border'])
         for x in (-13, 1):
             for y in (-13, 1):
-                c.rect(x, y, 13, 13, COLORS['centre'])
+                c.rect(x, y, 13, 13, colors['centre'])
         if self.subcells:
             x, y, w, _ = self.subcells[0].rect
-            c.border(x, y, w, height(self.submenu.entry.children), COLORS['border'])
+            c.border(x, y, w, height(self.submenu.entry.children), colors['border'])
         gpu.state.blend_set('NONE')
 
 
