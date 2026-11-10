@@ -314,7 +314,7 @@ class Caddy:
             base_width = 213
             self.rows = ([['segments', 'smooth']] if self.session.level == 2 else
                          [['segments', 'taper'], ['bias', 'smooth'], ['twist1', 'twist2']])
-            self.rows += [['bridge_selection', 'pick1', 'pick2']]
+            self.rows += [['bridge_selection', 'pick2', 'pick1']]
         elif self.session.action in {'RELAX', 'MSMOOTH'}:
             self.rows = [[key] for key in self.keys[:-2]]+[self.keys[-2:]]
         left, bottom, right, top = self.canvas()
