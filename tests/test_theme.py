@@ -57,9 +57,8 @@ class ThemeTests(unittest.TestCase):
         self.assertFalse(cursor.show_cursor)
         self.assertGreater(view.vertex_select[0], .9)
         selected = prefs.themes[0].user_interface.wcol_list_item.inner_sel
-        self.assertGreater(selected[0], .6)
-        self.assertGreater(selected[1], .4)
-        self.assertLess(selected[2], .15)
+        for actual, expected in zip(selected, (100/255, 138/255, 187/255, 1)):
+            self.assertAlmostEqual(actual, expected, places=5)
         self.assertFalse(prefs.view.show_tooltips_python)
         self.assertEqual(prefs.view.ui_scale, scale)
         theme.restore()
