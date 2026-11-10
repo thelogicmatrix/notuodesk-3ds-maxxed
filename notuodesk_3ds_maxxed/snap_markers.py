@@ -19,7 +19,7 @@ SNAPPED = (1, 1, 0, 1)
 REFERENCED_TYPES = frozenset({'grid_points', 'vertex'})
 
 # Coordinates are fractions of half the Size setting, in viewport Y-up space.
-# Open boxes mean unfilled outlines. Tangent is smaller than Grid Lines.
+# Open boxes mean unfilled outlines.
 _GLYPHS = {
     'pivot': (((-1, -1), (1, -1)), ((1, -1), (1, 1)),
               ((1, 1), (-1, 1)), ((-1, 1), (-1, -1)), ((-1, -1), (1, 1))),
@@ -27,8 +27,9 @@ _GLYPHS = {
                      ((1, -1), (-1, -1))),
     'perpendicular': (((-1, 1), (1, 1)), ((1, 1), (0, -1)),
                       ((0, -1), (-1, 1))),
-    'tangent': (((-.6, -.6), (.6, -.6)), ((.6, -.6), (.6, .6)),
-                ((.6, .6), (-.6, .6)), ((-.6, .6), (-.6, -.6))),
+    # The dialog's Tangent glyph is the same full open square as Grid Lines.
+    'tangent': (((-1, -1), (1, -1)), ((1, -1), (1, 1)),
+                ((1, 1), (-1, 1)), ((-1, 1), (-1, -1))),
     # Measured from endpoint-dialog-crop.png (11x12 px): stem to just below
     # centre, then 45-degree arms to the bottom corners.
     'endpoint': (((0, 1), (0, -.125)), ((0, -.125), (-.875, -1)),
