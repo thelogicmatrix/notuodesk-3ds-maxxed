@@ -93,6 +93,17 @@ Create-menu object icons use the same set. Missing artwork falls back to Blender
 icons. The set includes artwork for all 11 supported Extended Primitives.
 Material sample slots still show their real material previews.
 
+The Compact Material Editor opens in its own full-area window. Click a sample
+to edit it, drag a sample onto a viewport object to assign it, or use the
+eyedropper to get an object's material. Options switches between 3 x 2, 5 x 3
+and 6 x 4 samples. Extra saved slots stay available under Extensions.
+Replacing samples leaves materials assigned to scene objects intact.
+Map shortcuts show M for an enabled bitmap and m for a disabled bitmap.
+Ambient and Displacement retain their bitmap data without claiming a rendered
+connection. Standard, Physical and V-Ray-labelled materials use Principled
+shading equivalents. Wire, Faceted, Face Map and Soften have no renderer mapping
+in this editor and stay disabled.
+
 ## Shift-drag cloning
 
 With Move (W), Rotate (E) or Scale (R) active, hold Shift and drag a gizmo handle or the selected geometry. The original stays put. Release to open **Clone Options** with **Copy**, **Instance**, **Reference**, **Number of Copies** and **Name**. Extra copies repeat the same move, rotation or scale. The dialog remembers your choices during the Blender session.

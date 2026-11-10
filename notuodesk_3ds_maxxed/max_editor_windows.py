@@ -91,8 +91,22 @@ def _live_hosts():
     windows = {w.as_pointer(): w for w in bpy.context.window_manager.windows}
     for pointer, host in list(_hosts.items()):
         if pointer not in windows:
+            _dispose_host(host)
             del _hosts[pointer]
     return list(_hosts.values())
+
+
+def is_host_area(area):
+    """Auxiliary canvases are never modeling viewports."""
+    pointer = area.as_pointer()
+    return pointer in _docked or any(h.area.as_pointer() == pointer for h in _live_hosts())
+
+
+def _dispose_host(host):
+    _cancel_setup(host)
+    if host.kind == "MATERIAL":
+        from . import mtl_editor
+        mtl_editor.close_host(host)
 
 
 def attach_explorer(context, area):
@@ -152,6 +166,13 @@ def open_editor(context, kind):
         return None
     if kind == "MATERIAL":
         return _material_adapter(context)
+    return open_host(context, kind)
+
+
+def open_host(context, kind):
+    """Create one full-area host. Material adapters use this without recursion."""
+    if kind not in TITLES or bpy.app.background or not _installed:
+        return None
     for host in _live_hosts():
         if host.kind == kind:
             return host.window
@@ -197,6 +218,9 @@ def _prepare_host(host):
     # Use its owning context so area-type updates initialize the correct regions.
     with bpy.context.temp_override(window=host.window, area=host.area):
         _configure(host)
+        if host.kind == "MATERIAL":
+            from . import mtl_editor
+            mtl_editor.prepare_host(host, bpy.context)
         _start_interaction(bpy.context, host)
         host.ready = True
         host.area.tag_redraw()
@@ -207,7 +231,7 @@ def close_editor(window):
     host = _hosts.pop(pointer, None)
     if not host:
         return
-    _cancel_setup(host)
+    _dispose_host(host)
     windows = list(bpy.context.window_manager.windows)
     if pointer in {w.as_pointer() for w in windows}:
         fallback = next((w for w in windows if w != window and w.as_pointer() not in _hosts), None)
@@ -450,6 +474,9 @@ def _draw():
         _button(host, width-(35 if small else 90)*scale, height-32*scale, (25 if small else 78)*scale, "X" if small else "Close", close, scale=scale)
         if host.kind == "SCENE_EXPLORER":
             _draw_explorer(host, context, width, height, scale)
+        elif host.kind == "MATERIAL":
+            from . import mtl_editor
+            mtl_editor.draw_host(host, context, width, height, scale)
         elif host.kind == "SCHEMATIC":
             _draw_schematic(host, context, width, height, scale)
         elif host.kind in {"RENDER_SETUP", "ENVIRONMENT", "SNAPS"}:
@@ -478,6 +505,12 @@ class MAX_OT_editor_interact(bpy.types.Operator):
         host = _docked.get(self._area_pointer) or _hosts.get(self._pointer)
         if not host:
             return {"FINISHED", "PASS_THROUGH"}
+        if not context.window or context.window.as_pointer() != self._pointer:
+            return {"PASS_THROUGH"}
+        if host.kind == "MATERIAL":
+            from . import mtl_editor
+            if mtl_editor.host_event(host, context, event):
+                return {"RUNNING_MODAL"}
         if host.original_type:
             region = _region(host.area)
             if not (region.x <= event.mouse_x < region.x+region.width and region.y <= event.mouse_y < region.y+region.height):

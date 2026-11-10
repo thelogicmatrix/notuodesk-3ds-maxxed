@@ -687,8 +687,6 @@ class MAX_OT_open_editor(bpy.types.Operator):
 
     def execute(self, context):
         from . import max_editor_windows
-        if self.editor == 'MATERIAL':
-            return {'FINISHED'} if open_material_compat(context) else {'CANCELLED'}
         window = max_editor_windows.open_editor(context, self.editor)
         if window is None:
             self.report({'WARNING'}, 'This editor needs an interactive window')
@@ -972,45 +970,16 @@ def _scale_pivots(context):
 
 
 def open_material_compat(context):
-    """Temporary Compact sidebar host. W2.E replaces only this adapter."""
+    """Preserved W2.A adapter name, now opening the full Compact window."""
     from . import mtl_editor
-    if bpy.app.background or context.window is None:
-        return None
-    live = {w.as_pointer(): w for w in context.window_manager.windows}
-    for key in list(_material_windows):
-        if key in live:
-            return live[key]
-        _material_windows.pop(key)
-    mtl_editor.ensure_slots(context.scene)
-    state = mtl_editor.state(context)
-    slot = state.slots[state.active]
-    if slot.material is None:
-        slot.material = (context.active_object.active_material if context.active_object else None) or mtl_editor.new_default_material(state.active)
-    source = context.area or find_view3d(context)[0]
-    if source is None:
-        return None
-    with context.temp_override(area=source):
-        result = bpy.ops.screen.area_dupli('INVOKE_DEFAULT')
-    added = [w for w in context.window_manager.windows if w.as_pointer() not in live]
-    if result != {'FINISHED'} or len(added) != 1:
-        return None
-    window = added[0]
-    area = max(window.screen.areas, key=lambda a: a.width * a.height)
-    with context.temp_override(window=window, area=area):
-        area.ui_type = 'ShaderNodeTree'
-        area.spaces.active.show_region_ui = True
-        area.spaces.active.show_region_toolbar = False
-    _material_windows[window.as_pointer()] = window
-    return window
+    return mtl_editor.open_editor(context)
 
 
 def close_material_compat(*_):
-    live = {w.as_pointer(): w for w in bpy.context.window_manager.windows}
-    for key in list(_material_windows):
-        window = live.get(key)
-        if window:
-            with bpy.context.temp_override(window=window):
-                bpy.ops.wm.window_close()
+    from . import max_editor_windows
+    for host in list(max_editor_windows._live_hosts()):
+        if host.kind == 'MATERIAL':
+            max_editor_windows.close_editor(host.window)
     _material_windows.clear()
 
 
