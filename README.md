@@ -168,7 +168,10 @@ their tooltip.
 Target Weld works from the panel and quad menu at Vertex, Edge and Border levels.
 Start with one selected source, or click a source in the viewport. Move without
 holding a button, then click a valid target. The dashed line follows the mouse
-and the cursor changes over valid targets. Vertices must share an edge. Edges
+and an outlined pick cross appears over valid targets. Target Weld draws its
+own pointer while it owns the viewport. The normal pick arrow returns away
+from targets, and the system pointer returns outside the viewport. Vertices must
+share an edge. Edges
 must each have one polygon attached, and the weld must preserve valid topology.
 The source moves onto the target's exact position. Keep welding until you
 right-click in the viewport or click Target Weld again. Invalid targets explain
@@ -466,6 +469,12 @@ Editable Poly settings shortcuts open the same floating caddies as the panel. Br
 Keep Scene Upright also controls clicked views. Turn it off to carry the current roll into an edge or corner view. Dark text and outlines use slightly higher opacity than the faces so they stay readable over bright viewports. Opening a saved file rebuilds the cube's drawing resources. Files keep each viewport's original navigation gizmo setting, so turning the ViewCube or add-on off after reopening restores that setting.
 
 ## Known differences from 3ds Max
+
+- Target Weld uses an outlined selection cross drawn from Autodesk's published
+  selection screenshot and an older recorded Target Weld session. The 2026
+  Target Weld help supplies no cursor bitmap or pixel dimensions. Exact 2026
+  cursor raster parity and rubber-band spacing remain unverified. The existing
+  white 5-on/5-off band stays unchanged. [Cursor evidence](docs/target-weld-cursor-reference.md).
 
 - Symmetry uses Blender's exact Boolean and mesh-merge operations. Cut-aware welding uses a coordinate-relative numerical tolerance, limited by Weld Threshold. This is not Autodesk's private vertex-tracking implementation. Unmatched radial boundaries can stay open with Mirror Symmetry off. Blender supplies the spinners and transform gizmos. A helper collection remains visible in the Outliner. Pick Object samples the reference transform once. Radial starts at Count 2, Z and Mirror Symmetry off. Autodesk's 2026 help states X as the general default axis but does not separately explain the switch to Radial. These Radial startup values remain unverified against Max.
 - Blender does not expose Max's native cursor artwork or Nitrous selection-preview silhouette. The add-on draws transform/link cursor symbols and yellow hovered mesh edges. Blender draws the native blue selection outline and sub-object dots. Small antialias fringes can remain around the white wireframe overlay. Helper and un-bevelled spline Link targets use their projected origins because Blender's scene ray cast has no pick surface there.

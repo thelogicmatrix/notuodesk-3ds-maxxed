@@ -16,6 +16,12 @@ def teardown(*args):
     """Release viewport resources before undo, file load or class removal."""
     for key in list(_resources):
         release(key)
+    from . import target_weld_cursor
+    target_weld_cursor.clear()
+
+
+def remove_draw_handler(handler):
+    bpy.types.SpaceView3D.draw_handler_remove(handler, "WINDOW")
 
 
 def release(key):
@@ -23,16 +29,25 @@ def release(key):
     operator = _active.pop(key, None)
     if operator is not None:
         from . import snaps
-        snaps.clear_preview(operator.region)
+        try:
+            snaps.clear_preview(operator.region)
+        except (ReferenceError, RuntimeError):
+            pass
     if state is None:
         return
-    bpy.types.SpaceView3D.draw_handler_remove(state.handler, "WINDOW")
-    for cleanup in (state.window.cursor_modal_restore,
-                    lambda: state.workspace.status_text_set(None), state.area.tag_redraw):
+    cleanups = [lambda: remove_draw_handler(state.handler)]
+    if state.cursor_hidden:
+        cleanups.append(lambda: state.window.cursor_modal_restore())
+        state.cursor_hidden = False
+    cleanups.extend((lambda: state.workspace.status_text_set(None), lambda: state.area.tag_redraw()))
+    for cleanup in cleanups:
         try:
             cleanup()
         except (ReferenceError, RuntimeError):
             pass
+    if not _resources:
+        from . import target_weld_cursor
+        target_weld_cursor.clear()
 
 
 @persistent
@@ -152,12 +167,17 @@ class MAX_OT_target_weld(Operator):
         self.source = selected[0] if len(selected) == 1 else None
         self.mouse = Vector((event.mouse_x-self.region.x, event.mouse_y-self.region.y))
         self.stop_requested = False
+        self.inside = False
+        self.hover_valid = False
         self.handler = bpy.types.SpaceView3D.draw_handler_add(self.draw_safe, (), "WINDOW", "POST_PIXEL")
         self.key = key
         _resources[key] = SimpleNamespace(handler=self.handler, window=self.window,
-                                         workspace=self.workspace, area=self.area)
+                                         workspace=self.workspace, area=self.area, cursor_hidden=False)
         _active[key] = self
-        self.window.cursor_modal_set("DEFAULT")
+        self.update_pointer(self.pointer_inside(event))
+        if self.inside:
+            with context.temp_override(area=self.area, region=self.region):
+                self.hover_target()
         self.workspace.status_text_set("Target Weld: pick target" if self.source else "Target Weld: pick source. Right-click to finish")
         context.window_manager.modal_handler_add(self)
         self.area.tag_redraw()
@@ -165,6 +185,36 @@ class MAX_OT_target_weld(Operator):
 
     def project(self, co):
         return view3d_utils.location_3d_to_region_2d(self.region, self.region.data, self.obj.matrix_world @ co)
+
+    def pointer_inside(self, event):
+        if not (0 <= self.mouse.x < self.region.width and 0 <= self.mouse.y < self.region.height):
+            return False
+        return not any(r.type in {"UI", "TOOLS"} and r.width > 1
+                       and r.x <= event.mouse_x < r.x+r.width and r.y <= event.mouse_y < r.y+r.height
+                       for r in self.area.regions)
+
+    def update_pointer(self, inside):
+        state = _resources.get(self.key)
+        self.inside = inside
+        if not inside:
+            self.hover_valid = False
+        if state is None or state.cursor_hidden == inside:
+            return
+        if inside:
+            state.window.cursor_modal_set("NONE")
+        else:
+            state.window.cursor_modal_restore()
+        state.cursor_hidden = inside
+
+    def hover_target(self):
+        if self.source is not None and not self.source.is_valid:
+            self.source = None
+        target = self.pick()
+        reason = invalid_reason(self.bm, self.source, target, self.level) if self.source else (
+            "Pick a visible vertex" if self.level == 1 and target is None else
+            "Pick a border edge with exactly one polygon attached" if self.level != 1 and (target is None or len(target.link_faces) != 1) else "")
+        self.hover_valid = target is not None and not reason
+        return target, reason
 
     def pick(self):
         from . import snaps
@@ -221,17 +271,26 @@ class MAX_OT_target_weld(Operator):
         for i in range(0, int(length), 10):
             points.extend((start+unit*i, start+unit*min(i+5, length)))
         shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+        previous_blend = gpu.state.blend_get()
+        previous_width = gpu.state.line_width_get()
         gpu.state.blend_set("ALPHA")
         try:
+            gpu.state.line_width_set(1)
             shader.bind()
             shader.uniform_float("color", (1, 1, 1, .95))
             batch_for_shader(shader, "LINES", {"pos": points}).draw(shader)
         finally:
-            gpu.state.blend_set("NONE")
+            gpu.state.line_width_set(previous_width)
+            gpu.state.blend_set(previous_blend)
 
     def draw_safe(self):
         try:
+            if (self.key not in _resources or not self.inside or bpy.context.window != self.window
+                    or bpy.context.area != self.area or bpy.context.region != self.region):
+                return
             self.draw_band()
+            from . import target_weld_cursor
+            target_weld_cursor.draw(self.mouse, self.hover_valid, bpy.context.preferences.system.ui_scale)
         except (ReferenceError, RuntimeError, ValueError):
             release(self.key)
 
@@ -256,11 +315,11 @@ class MAX_OT_target_weld(Operator):
                 or current_level(context) != self.level or self.area not in context.screen.areas[:]):
             return self.finish()
         self.mouse = Vector((event.mouse_x-self.region.x, event.mouse_y-self.region.y))
-        inside = 0 <= self.mouse.x < self.region.width and 0 <= self.mouse.y < self.region.height
-        for r in self.area.regions:
-            if r.type in {"UI", "TOOLS"} and r.width > 1 and r.x <= event.mouse_x < r.x+r.width and r.y <= event.mouse_y < r.y+r.height:
-                inside = False
-        if not inside:
+        self.update_pointer(self.pointer_inside(event))
+        self.area.tag_redraw()
+        if event.type == "ESC" and event.value == "PRESS":
+            return self.finish()
+        if not self.inside:
             return {"PASS_THROUGH"}
         from . import snaps
         if snaps.override_event(self, context, event, dragging=False):
@@ -269,13 +328,7 @@ class MAX_OT_target_weld(Operator):
             return self.finish()
         if event.type not in {"MOUSEMOVE", "LEFTMOUSE"}:
             return {"PASS_THROUGH"}
-        if self.source is not None and not self.source.is_valid:
-            self.source = None
-        target = self.pick()
-        reason = invalid_reason(self.bm, self.source, target, self.level) if self.source else (
-            "Pick a visible vertex" if self.level == 1 and target is None else
-            "Pick a border edge with exactly one polygon attached" if self.level != 1 and (target is None or len(target.link_faces) != 1) else "")
-        self.window.cursor_modal_set("CROSSHAIR" if target is not None and not reason else "DEFAULT")
+        target, reason = self.hover_target()
         self.workspace.status_text_set("Target Weld: " + (reason or ("click target. Right-click to finish" if self.source else "click source. Right-click to finish")))
         if event.type == "LEFTMOUSE" and event.value == "PRESS" and target is not None and not reason:
             snaps.consume_override(context)
@@ -288,6 +341,7 @@ class MAX_OT_target_weld(Operator):
                 update_mesh(context)
                 self.source = None
                 bpy.ops.ed.undo_push(message="Target Weld")
+            self.hover_target()
         self.area.tag_redraw()
         return {"RUNNING_MODAL"}
 

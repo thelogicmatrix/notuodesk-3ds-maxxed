@@ -465,6 +465,9 @@ def _draw_cursor():
     if not ctx.workspace or ctx.workspace.name != '3ds Max':
         return
     _draw_view_border(ctx)
+    from . import target_weld
+    if target_weld.is_active(ctx):
+        return
     link = _link_drags.get(ctx.window.as_pointer())
     if link and link.window == ctx.window and link.area == ctx.area and link.region == ctx.region:
         _draw_link_drag(link)
@@ -496,18 +499,25 @@ def _draw_cursor():
             for angle in (i*.25, (i+1)*.25):
                 strokes.append((7*math.cos(angle),7*math.sin(angle)))
         strokes += [(7,0),(10,4),(7,0),(3,3)]
+    draw_cursor_strokes(xy, strokes)
+
+def draw_cursor_strokes(xy, strokes, scale=1, passes=((3,(0,0,0,1)),(1,(1,1,1,1)))):
+    """Draw cursor strokes in region pixels, restoring the caller's GPU state."""
+    x, y = xy
     shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+    previous_blend = gpu.state.blend_get()
+    previous_width = gpu.state.line_width_get()
     try:
         gpu.state.blend_set('ALPHA')
         shader.bind()
-        batch = batch_for_shader(shader, 'LINES', {'pos': [(x+a,y+b) for a,b in strokes]})
-        for width, color in ((3,(0,0,0,1)),(1,(1,1,1,1))):
-            gpu.state.line_width_set(width)
+        batch = batch_for_shader(shader, 'LINES', {'pos': [(x+a*scale,y+b*scale) for a,b in strokes]})
+        for width, color in passes:
+            gpu.state.line_width_set(width*scale)
             shader.uniform_float('color', color)
             batch.draw(shader)
     finally:
-        gpu.state.line_width_set(1)
-        gpu.state.blend_set('NONE')
+        gpu.state.line_width_set(previous_width)
+        gpu.state.blend_set(previous_blend)
 
 def _draw_view_border(context):
     if _active_views.get(context.window.as_pointer()) != (context.area.as_pointer(), context.region.as_pointer()):
