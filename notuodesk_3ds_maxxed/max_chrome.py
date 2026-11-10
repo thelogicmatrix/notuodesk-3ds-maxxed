@@ -191,8 +191,9 @@ def _load(_):
                 _adopt_timelines(window.screen)
         max_timeline.unregister()
         max_timeline.register()
-        if not bpy.app.background and not bpy.app.timers.is_registered(_start_pointers):
-            bpy.app.timers.register(_start_pointers, first_interval=.1)
+        # Windows already exist at load_post. Routing needs only a window, so
+        # restore it before another persistent timer can observe the loaded UI.
+        _start_pointers()
 
 
 @persistent

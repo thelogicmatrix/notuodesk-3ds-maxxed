@@ -714,6 +714,7 @@ def sync_gizmos():
     p = _prefs()
     active = bool(_enabled and p and p.show_viewcube)
     live = set()
+    spaces = {}
     for ws in bpy.data.workspaces:
         for screen in ws.screens:
             for area in screen.areas:
@@ -721,20 +722,22 @@ def sync_gizmos():
                     if space.type != 'VIEW_3D':
                         continue
                     key = space.as_pointer()
+                    spaces[key] = space
                     if active and ws.name == '3ds Max':
                         live.add(key)
                         if key not in _gizmos:
-                            _gizmos[key] = (space, space.show_gizmo_navigate)
+                            _gizmos[key] = space.show_gizmo_navigate
                         if space.show_gizmo_navigate:
                             space.show_gizmo_navigate = False
                             area.tag_redraw()
     for key in list(_gizmos):
         if key not in live:
-            space, original = _gizmos.pop(key)
-            try:
+            original = _gizmos.pop(key)
+            # Nested RNA wrappers can outlive their freed Screen owner without
+            # raising ReferenceError. Reacquire live spaces before any write.
+            space = spaces.get(key)
+            if space is not None:
                 space.show_gizmo_navigate = original
-            except ReferenceError:
-                pass
 
 
 def update(self, context):
@@ -781,11 +784,12 @@ def _load_pre(_):
 def _save_pre(_):
     # Serialize the user's setting, not our temporary replacement. The native
     # space field follows its viewport across reloads without storing RNA.
-    for space, original in _gizmos.values():
-        try:
-            space.show_gizmo_navigate = original
-        except ReferenceError:
-            pass
+    for ws in bpy.data.workspaces:
+        for screen in ws.screens:
+            for area in screen.areas:
+                for space in area.spaces:
+                    if space.type == 'VIEW_3D' and space.as_pointer() in _gizmos:
+                        space.show_gizmo_navigate = _gizmos[space.as_pointer()]
 
 
 @persistent

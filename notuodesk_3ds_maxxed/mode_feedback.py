@@ -319,7 +319,9 @@ def refresh():
     """Tool switches do not always emit depsgraph updates. Watch actual state."""
     global _last_state
     ctx = bpy.context
-    if not ctx.window_manager or not hasattr(ctx.window_manager, 'max_sublevel'):
+    # Timers can run during shutdown after selection context has disappeared.
+    if (not ctx.window_manager or not hasattr(ctx.window_manager, 'max_sublevel')
+            or not hasattr(ctx, 'selected_objects')):
         return .1
     from .operators import sync_sublevel
     sync_sublevel(ctx)

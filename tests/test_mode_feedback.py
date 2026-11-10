@@ -7,6 +7,18 @@ import bmesh
 addon_utils.enable('notuodesk_3ds_maxxed', default_set=True)
 
 class ModeFeedbackTests(unittest.TestCase):
+    def test_refresh_waits_when_shutdown_removes_selection_context(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from notuodesk_3ds_maxxed import mode_feedback as mf, operators
+        ctx = SimpleNamespace(mode='OBJECT', window_manager=SimpleNamespace(
+            max_sublevel=0, windows=[]))
+        with patch.object(mf, 'bpy', SimpleNamespace(context=ctx, data=bpy.data)), \
+             patch.object(mf, 'level', return_value=0), \
+             patch.object(operators, 'sync_sublevel') as sync:
+            self.assertEqual(mf.refresh(), .1)
+            sync.assert_not_called()
+
     def setUp(self):
         if bpy.context.object and bpy.context.object.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')

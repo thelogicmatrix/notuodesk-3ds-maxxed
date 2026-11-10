@@ -69,6 +69,56 @@ class ViewCubeTests(unittest.TestCase):
         finally:
             ws.name = name
 
+    def test_gizmo_cleanup_never_writes_a_closed_spaces_rna(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        class Space:
+            type = 'VIEW_3D'
+            valid = True
+            value = True
+
+            def as_pointer(self):
+                return 123
+
+            @property
+            def show_gizmo_navigate(self):
+                if not self.valid:
+                    raise AssertionError('read through expired RNA owner')
+                return self.value
+
+            @show_gizmo_navigate.setter
+            def show_gizmo_navigate(self, value):
+                if not self.valid:
+                    raise AssertionError('write through expired RNA owner')
+                self.value = value
+
+        for removed in (False, True):
+            with self.subTest(removed=removed):
+                old = Space()
+                area = SimpleNamespace(spaces=[old], tag_redraw=lambda: None)
+                ws = SimpleNamespace(name='3ds Max', screens=[SimpleNamespace(areas=[area])])
+                data = SimpleNamespace(data=SimpleNamespace(workspaces=[ws]))
+                prefs = SimpleNamespace(show_viewcube=True)
+                with patch.object(viewcube, 'bpy', data), patch.object(viewcube, '_enabled', True), \
+                        patch.object(viewcube, '_prefs', return_value=prefs), patch.object(viewcube, '_gizmos', {}):
+                    viewcube.sync_gizmos()
+                    self.assertFalse(old.value)
+                    old.valid = False
+                    # Closing removes the space. A surviving native space can also
+                    # acquire a fresh owner/wrapper across a workspace/file change.
+                    fresh = Space()
+                    fresh.value = False
+                    area.spaces = [] if removed else [fresh]
+                    viewcube._save_pre(None)
+                    if not removed:
+                        self.assertTrue(fresh.value)
+                    prefs.show_viewcube = False
+                    viewcube.sync_gizmos()
+                    self.assertEqual(viewcube._gizmos, {})
+                    if not removed:
+                        self.assertTrue(fresh.value)
+
     def test_face_rotations_match_max_axes(self):
         # A reversed front/back or left/right mapping breaks this contract.
         for direction in ((0, 0, 1), (0, 0, -1), (0, -1, 0),

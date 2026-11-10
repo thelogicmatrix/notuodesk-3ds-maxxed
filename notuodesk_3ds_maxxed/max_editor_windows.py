@@ -192,26 +192,14 @@ def _cancel_setup(host):
 
 
 def _prepare_host(host):
-    """Let Blender initialise its new regions before replacing their presentation."""
-    pointer = host.area.as_pointer()
-    phase = 0
-    def ready():
-        nonlocal phase
-        windows = list(bpy.context.window_manager.windows)
-        if host.window not in windows or host.area not in list(host.window.screen.areas):
-            _setup_timers.pop(pointer, None)
-            return None
-        if phase == 0:
-            _configure(host)
-            phase = 1
-            return .15
-        _setup_timers.pop(pointer, None)
-        host.ready = True
+    """Configure the initialized area before returning it to callers."""
+    # WM_window_open refreshes the duplicated screen before area_dupli returns.
+    # Use its owning context so area-type updates initialize the correct regions.
+    with bpy.context.temp_override(window=host.window, area=host.area):
+        _configure(host)
         _start_interaction(bpy.context, host)
+        host.ready = True
         host.area.tag_redraw()
-        return None
-    _setup_timers[pointer] = ready
-    bpy.app.timers.register(ready, first_interval=.15)
 
 
 def close_editor(window):

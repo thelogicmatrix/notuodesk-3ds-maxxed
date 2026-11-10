@@ -8,12 +8,12 @@ def _remember(owner, name, value):
     """Record the first value, even when Apply is used more than once."""
     if not hasattr(owner, name):
         return
-    key = (owner.as_pointer(), name)
+    key = (owner.as_pointer(), owner.bl_rna.identifier, name)
     if key not in _changes:
         previous = getattr(owner, name)
         if not isinstance(previous, (str, bool, int, float)):
             previous = tuple(previous)
-        _changes[key] = (owner, name, previous)
+        _changes[key] = previous
     try:
         setattr(owner, name, value)
     except (TypeError, ValueError, AttributeError):
@@ -84,15 +84,41 @@ def apply(context=None):
                 area.tag_redraw()
 
 
+def _live_owners(context):
+    """Resolve current preference and viewport structs, never cached RNA owners."""
+    prefs = context.preferences
+    yield prefs.view
+    yield prefs.inputs
+    for palette in prefs.themes:
+        yield palette.view_3d
+        for section in ('view_3d', 'properties', 'outliner', 'dopesheet_editor'):
+            yield getattr(palette, section).space
+        for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_text', 'wcol_menu', 'wcol_list_item'):
+            yield getattr(palette.user_interface, name)
+    for workspace in bpy.data.workspaces:
+        for screen in workspace.screens:
+            for area in screen.areas:
+                for space in area.spaces:
+                    if space.type == 'VIEW_3D':
+                        yield space
+                        yield space.overlay
+                        yield space.shading
+
+
 def restore(context=None):
-    """Restore touched settings, tolerating windows closed since Apply."""
-    for owner, name, value in reversed(list(_changes.values())):
+    """Restore surviving settings. Reloaded preferences and closed spaces are new owners."""
+    context = context or bpy.context
+    owners = {(owner.as_pointer(), owner.bl_rna.identifier): owner for owner in _live_owners(context)}
+    for (pointer, kind, name), value in reversed(list(_changes.items())):
+        owner = owners.get((pointer, kind))
+        if owner is None:
+            continue
         try:
             setattr(owner, name, value)
-        except (ReferenceError, RuntimeError, TypeError, AttributeError):
+        except (RuntimeError, TypeError, AttributeError):
             pass
     _changes.clear()
-    for window in bpy.context.window_manager.windows:
+    for window in context.window_manager.windows:
         for area in window.screen.areas:
             area.tag_redraw()
 

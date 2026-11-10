@@ -8,6 +8,43 @@ class ThemeTests(unittest.TestCase):
     def tearDown(self):
         theme.restore()
 
+    def test_restore_reacquires_live_owners_after_reload(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        class Owner:
+            bl_rna = SimpleNamespace(identifier='ThemeFixture')
+            valid = True
+            current = True
+
+            def as_pointer(self):
+                return 456
+
+            @property
+            def setting(self):
+                if not self.valid:
+                    raise AssertionError('read through expired theme RNA')
+                return self.current
+
+            @setting.setter
+            def setting(self, value):
+                if not self.valid:
+                    raise AssertionError('write through expired theme RNA')
+                self.current = value
+
+        for removed in (False, True):
+            with self.subTest(removed=removed), patch.object(theme, '_changes', {}):
+                old = Owner()
+                theme._remember(old, 'setting', False)
+                old.valid = False
+                fresh = Owner()
+                fresh.current = False
+                with patch.object(theme, '_live_owners', return_value=[] if removed else [fresh], create=True):
+                    theme.restore()
+                self.assertFalse(theme._changes)
+                if not removed:
+                    self.assertTrue(fresh.current)
+
     def test_repeat_apply_restore_and_unrelated_preferences(self):
         prefs = bpy.context.preferences
         view = prefs.themes[0].view_3d
