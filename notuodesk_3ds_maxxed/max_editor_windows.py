@@ -1,5 +1,6 @@
 """Owned auxiliary windows with curated chrome and supported scene controls."""
 from dataclasses import dataclass, field
+import os
 
 import bpy
 from bpy.app.handlers import persistent
@@ -53,6 +54,45 @@ class EditorHost:
     hits: list = field(default_factory=list)
     original_type: str = ""
     ready: bool = False
+    native_handle: int = 0
+    area_pointer: int = 0
+
+    def __post_init__(self):
+        self.area_pointer = self.area.as_pointer()
+
+
+def _native_windows():
+    if os.name != 'nt':
+        return set()
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    found = set()
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def collect(hwnd, param):
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value == os.getpid():
+            found.add(hwnd)
+        return True
+    user32.EnumWindows(callback_type(collect), 0)
+    return found
+
+
+def _native_frame(host, handles):
+    if len(handles) != 1:
+        return
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    host.native_handle = next(iter(handles))
+    handle = wintypes.HWND(host.native_handle)
+    user32.SetWindowTextW(handle, 'Material Editor' if host.kind == 'MATERIAL' else TITLES[host.kind])
+    if host.kind == 'MATERIAL':
+        dpi = user32.GetDpiForWindow(handle) if hasattr(user32, 'GetDpiForWindow') else 96
+        scale = max(1, dpi/96) * bpy.context.preferences.view.ui_scale
+        # Compact is a portrait editor. This is its opening size, not a test override.
+        user32.SetWindowPos(handle, None, 0, 0, round(480*scale), round(820*scale), 0x16)
 
 
 def register_material_adapter(open_callback=None):
@@ -181,6 +221,7 @@ def open_host(context, kind):
     if not source:
         return None
     before = {w.as_pointer() for w in context.window_manager.windows}
+    native_before = _native_windows()
     with context.temp_override(window=context.window, area=source, region=_region(source)):
         result = bpy.ops.screen.area_dupli("INVOKE_DEFAULT")
     if result != {"FINISHED"}:
@@ -194,6 +235,7 @@ def open_host(context, kind):
     _hosts[window.as_pointer()] = host
     try:
         _prepare_host(host)
+        _native_frame(host, _native_windows() - native_before)
         area.tag_redraw()
     except Exception:
         close_editor(window)
@@ -207,7 +249,7 @@ def _start_interaction(context, host):
 
 
 def _cancel_setup(host):
-    callback = _setup_timers.pop(host.area.as_pointer(), None)
+    callback = _setup_timers.pop(host.area_pointer, None)
     if callback and bpy.app.timers.is_registered(callback):
         bpy.app.timers.unregister(callback)
 
@@ -467,11 +509,12 @@ def _draw():
     try:
         if host.kind not in NATIVE:
             _rect(0, 0, width, height, (.18, .18, .18, 1))
-        _rect(0, height-38*scale, width, 38*scale, (.12, .12, .12, 1))
-        _text(14*scale, height-25*scale, TITLES[host.kind], round(15*scale))
-        close = (lambda c, e: detach_explorer(host.area)) if host.original_type else (lambda c, e: close_editor(host.window))
-        small = width < 300*scale
-        _button(host, width-(35 if small else 90)*scale, height-32*scale, (25 if small else 78)*scale, "X" if small else "Close", close, scale=scale)
+        if host.kind != "MATERIAL" or not host.native_handle:
+            _rect(0, height-38*scale, width, 38*scale, (.12, .12, .12, 1))
+            _text(14*scale, height-25*scale, TITLES[host.kind], round(15*scale))
+            close = (lambda c, e: detach_explorer(host.area)) if host.original_type else (lambda c, e: close_editor(host.window))
+            small = width < 300*scale
+            _button(host, width-(35 if small else 90)*scale, height-32*scale, (25 if small else 78)*scale, "X" if small else "Close", close, scale=scale)
         if host.kind == "SCENE_EXPLORER":
             _draw_explorer(host, context, width, height, scale)
         elif host.kind == "MATERIAL":

@@ -29,6 +29,11 @@ MAP_INFO = {key: (label, socket, color) for key, label, socket, color in MAP_CHA
 SHADERS = [('BLINN', 'Blinn', ''), ('PHONG', 'Phong', ''), ('METAL', 'Metal', ''),
            ('ANISOTROPIC', 'Anisotropic', ''), ('OREN_NAYAR', 'Oren-Nayar-Blinn', ''),
            ('TRANSLUCENT', 'Translucent Shader', ''), ('MULTI_LAYER', 'Multi-Layer', '')]
+ICON_FALLBACKS = {'material_editor': 'MATERIAL', 'sphere': 'SPHERE', 'mtl_drag': 'FORWARD',
+    'mtl_select': 'RESTRICT_SELECT_OFF', 'settings': 'PREFERENCES', 'mtl_get': 'MATERIAL',
+    'mtl_assign': 'CHECKMARK', 'mtl_reset': 'TRASH', 'make_unique': 'DUPLICATE',
+    'mtl_library': 'FILE_TICK', 'mtl_viewport': 'SHADING_TEXTURE', 'create': 'ADD',
+    'mtl_pick': 'EYEDROPPER', 'close': 'X'}
 _catalogue = []
 _preview_textures = {}
 _pickers = []
@@ -440,6 +445,7 @@ class MAX_OT_mtl_reset(bpy.types.Operator):
             if field.identifier != 'rna_type' and not field.is_readonly:
                 material.max_std.property_unset(field.identifier)
         _standard_update(material.max_std, context)
+        _shader_update(material.max_std, context)
         return {'FINISHED'}
 
 
@@ -801,6 +807,26 @@ class MAX_MT_mtl_material(bpy.types.Menu):
             self.layout.operator('max.mtl_' + command)
 
 
+class MAX_MT_mtl_modes(bpy.types.Menu):
+    bl_label = 'Modes'
+
+    def draw(self, context):
+        self.layout.label(text='Compact Material Editor', icon='CHECKMARK')
+        row = self.layout.row()
+        row.enabled = False
+        row.label(text='Slate Material Editor (unavailable)')
+
+
+class MAX_MT_mtl_navigation(bpy.types.Menu):
+    bl_label = 'Navigation'
+
+    def draw(self, context):
+        row = self.layout.row()
+        row.enabled = False
+        row.label(text='Go to Parent (no nested map editor)')
+        self.layout.operator('max.mtl_get')
+
+
 class MAX_MT_mtl_options(bpy.types.Menu):
     bl_label = 'Options'
 
@@ -825,9 +851,9 @@ class MAX_MT_mtl_extensions(bpy.types.Menu):
     bl_label = 'Extensions'
 
     def draw(self, context):
-        self.layout.operator('max.mtl_add_slot')
+        self.layout.operator('max.mtl_add_slot', **max_icons.ui('create', ICON_FALLBACKS['create']))
         self.layout.prop_enum(state(context), 'visible', 'ALL', text='Show All Saved Slots')
-        op = self.layout.operator('max.mtl_drag')
+        op = self.layout.operator('max.mtl_drag', **max_icons.ui('mtl_drag', ICON_FALLBACKS['mtl_drag']))
         op.index = state(context).active
 
 
@@ -1024,9 +1050,99 @@ def _sample(host, material, index, bounds, active, context, scale):
         else:
             _label(x+8*scale, y+(top-y)/2, 'Preview...', round(11*scale))
         users = [obj for obj in context.scene.objects if any(s.material == material for s in obj.material_slots)]
-        if users:
-            _label(x+3*scale, top-13*scale, '*' if any(o.select_get() for o in users) else '+', round(12*scale))
+        first_slot = next(i for i, slot in enumerate(state(context).slots) if slot.material == material)
+        if users and index == first_slot:
+            _sample_corners(bounds, any(o.select_get() for o in users), scale)
     _hit(host, bounds, ('SLOT', index))
+
+
+def _sample_corners(bounds, filled, scale):
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+    x, y, right, top = bounds
+    inset, length = 2*scale, 7*scale
+    positions = []
+    for cx, cy, dx, dy in [(x+inset, y+inset, 1, 1), (x+inset, top-inset, 1, -1),
+                           (right-inset, y+inset, -1, 1), (right-inset, top-inset, -1, -1)]:
+        a, b, c = (cx, cy), (cx+dx*length, cy), (cx, cy+dy*length)
+        positions.extend((a, b, c) if filled else (a, b, b, c, c, a))
+    program = gpu.shader.from_builtin('UNIFORM_COLOR')
+    program.bind()
+    program.uniform_float('color', (1, 1, 1, 1))
+    batch_for_shader(program, 'TRIS' if filled else 'LINES', {'pos': positions}).draw(program)
+
+
+def _map_shortcut(host, material, channel, x, y, scale):
+    _control(host, x, y, 19*scale, 20*scale, map_badge(material, channel),
+             _invoke('max.mtl_load_map', channel=channel), scale)
+
+
+def _frame_group(x, top, width, height, title, scale):
+    from .max_editor_windows import _line
+    color = (.43, .43, .43, 1)
+    for a, b in [((x, top-height), (x+width, top-height)), ((x, top-height), (x, top)),
+                 ((x+width, top-height), (x+width, top)), ((x, top), (x+width, top))]:
+        _line(a, b, color)
+    if title:
+        _box(x+5*scale, top-7*scale, (len(title)*6.5+7)*scale, 15*scale, (.18, .18, .18, 1))
+        _label(x+8*scale, top-3*scale, title, round(11*scale))
+
+
+def _highlight_plot(material, x, y, width, height):
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+    _box(x, y, width, height, (.12, .12, .12, 1))
+    _box(x+1, y+1, width-2, height-2, (.43, .43, .43, 1))
+    # A profile of the chosen equivalent, not a second stored highlight setting.
+    exponent = 2 ** (material.max_glossiness/10)
+    level = material.max_spec_level/100
+    points = []
+    for i in range(80):
+        left, right = i/80, (i+1)/80
+        a = y+2 + (height-4)*level*math.cos(math.pi*(left-.5))**exponent
+        b = y+2 + (height-4)*level*math.cos(math.pi*(right-.5))**exponent
+        points.extend([(x+left*width, y+1), (x+left*width, a), (x+right*width, b),
+                       (x+left*width, y+1), (x+right*width, b), (x+right*width, y+1)])
+    program = gpu.shader.from_builtin('UNIFORM_COLOR')
+    program.bind()
+    program.uniform_float('color', (.85, .85, .85, 1))
+    batch_for_shader(program, 'TRIS', {'pos': points}).draw(program)
+
+
+def _draw_basic(host, context, material, width, top, scale):
+    s = scale
+    left, right = 10*s, width*.53
+    half = width*.48
+    _frame_group(left, top-4*s, half, 91*s, '', s)
+    for index, (path, label, channel) in enumerate([('max_diffuse', 'Ambient:', 'AMBIENT'),
+            ('max_diffuse', 'Diffuse:', 'DIFFUSE'), ('max_specular', 'Specular:', 'SPECULAR_COLOR')]):
+        y = top-(30+26*index)*s
+        _field(host, context, material, path, left+6*s, y, half-36*s, label, s, 'color',
+               enabled=channel != 'AMBIENT' and shader(material) is not None)
+        _map_shortcut(host, material, channel, left+half-24*s, y, s)
+    _frame_group(right, top-4*s, width-right-10*s, 48*s, 'Self-Illumination', s)
+    def color_mode(context, event):
+        material.max_std.self_illum_color_on = not material.max_std.self_illum_color_on
+    _toggle(host, right+6*s, top-33*s, 'Color', material.max_std.self_illum_color_on, color_mode, s,
+            enabled=not material.library and shader(material) is not None)
+    key = 'std.self_illum_color' if material.max_std.self_illum_color_on else 'std.self_illum_amount'
+    _field(host, context, material, key, right+5*s, top-35*s, width-right-38*s, '', s,
+           'color' if material.max_std.self_illum_color_on else 'number')
+    _map_shortcut(host, material, 'SELF_ILLUM', width-33*s, top-35*s, s)
+    _frame_group(right, top-64*s, width-right-10*s, 31*s, '', s)
+    _field(host, context, material, 'max_opacity', right+5*s, top-90*s, width-right-38*s, 'Opacity:', s)
+    _map_shortcut(host, material, 'OPACITY', width-33*s, top-90*s, s)
+    _frame_group(left, top-111*s, width-20*s, 91*s, 'Specular Highlights', s)
+    for index, (path, label, channel) in enumerate([('max_spec_level', 'Specular Level:', 'SPECULAR_LEVEL'),
+            ('max_glossiness', 'Glossiness:', 'GLOSSINESS'), ('std.soften', 'Soften:', None)]):
+        y = top-(140+25*index)*s
+        _field(host, context, material, path, left+5*s, y, width*.56-20*s, label, s,
+               enabled=path != 'std.soften' and shader(material) is not None)
+        if channel:
+            _map_shortcut(host, material, channel, width*.56-10*s, y, s)
+    _highlight_plot(material, width*.69, top-192*s, width*.26, 73*s)
+    _label(12*s, top-220*s, 'Principled shading equivalent', round(10*s), (.65, .65, .65, 1))
+    return top-232*s
 
 
 def draw_host(host, context, width, height, scale):
@@ -1037,14 +1153,18 @@ def draw_host(host, context, width, height, scale):
         return
     material = active_material(context)
     columns, rows = grid_shape(editor)
-    y = height-62*s
-    for i, name in enumerate(('Material', 'Options', 'Utilities')):
-        _control(host, (5+i*79)*s, y, 76*s, 21*s, name,
-                 _invoke('wm.call_menu', name='MAX_MT_mtl_'+name.lower()), s)
+    y = height-(25 if host.native_handle else 62)*s
+    _box(0, y, width, 25*s, (.95, .95, .95, 1))
+    x = 5*s
+    for name in ('Modes', 'Material', 'Navigation', 'Options', 'Utilities'):
+        button_width = (len(name)*7+12)*s
+        _label(x, y+7*s, name, round(12*s), (.05, .05, .05, 1))
+        _hit(host, (x, y, x+button_width, y+25*s), _invoke('wm.call_menu', name='MAX_MT_mtl_'+name.lower()))
+        x += button_width
     # Keep samples full-width at every grid size. Extra saved slots stay reachable.
     available_width = max(100*s, width-34*s)
     cell_width = available_width/columns
-    cell_height = min(cell_width*.91, max(30*s, height*.37/rows))
+    cell_height = cell_width*.91
     start = min(getattr(host, 'sample_start', 0), max(0, len(editor.slots)-columns*rows))
     start -= start % columns
     host.sample_bounds = []
@@ -1083,43 +1203,28 @@ def draw_host(host, context, width, height, scale):
         return
     # Only the rollout area scrolls. Menus, samples and the name stay in place.
     import gpu
+    fixed_hits = len(host.hits)
+    rollout_clip = y
     gpu.state.scissor_test_set(True)
     gpu.state.scissor_set(0, 0, int(width), max(0, int(y)))
     try:
         y += host.scroll*26*s
         opened, y = _rollout(host, 'Shader Basic Parameters', 5*s, y, width-10*s, s)
         if opened:
-            _field(host, context, material, 'std.shader', 12*s, y-23*s, width-24*s, '', s, 'shader')
-            y -= 49*s
+            shader_label = dict((key, label) for key, label, description in SHADERS)[material.max_std.shader]
+            _control(host, 14*s, y-30*s, width*.43, 22*s, shader_label+' v',
+                     _invoke('max.mtl_value', material=material, field='std.shader'), s)
             def sided(context, event):
                 material.max_two_sided = not material.max_two_sided
-            _toggle(host, 14*s, y, 'Wire', material.max_std.wire, None, s, False)
-            _toggle(host, width*.46, y, '2-Sided', material.max_two_sided, sided, s)
-            y -= 24*s
-            _toggle(host, 14*s, y, 'Face Map', False, None, s, False)
-            _toggle(host, width*.46, y, 'Faceted', material.max_std.faceted, None, s, False)
-            y -= 15*s
+            _toggle(host, width*.51, y-13*s, 'Wire', material.max_std.wire, None, s, False)
+            _toggle(host, width*.76, y-13*s, '2-Sided', material.max_two_sided, sided, s, enabled=not material.library)
+            _toggle(host, width*.51, y-37*s, 'Face Map', False, None, s, False)
+            _toggle(host, width*.76, y-37*s, 'Faceted', material.max_std.faceted, None, s, False)
+            y -= 53*s
         title = 'Blinn Basic Parameters' if material_kind(material) == 'STANDARD' else 'Basic Parameters'
         opened, y = _rollout(host, title, 5*s, y, width-10*s, s)
         if opened:
-            _label(12*s, y-12*s, 'Principled shading equivalent', round(11*s), (.7, .7, .7, 1))
-            y -= 41*s
-            fields = [('max_diffuse', 'Diffuse', 'color'), ('max_specular', 'Specular', 'color'),
-                      ('std.self_illum_amount', 'Self-Illumination', 'number'), ('max_opacity', 'Opacity', 'number'),
-                      ('max_spec_level', 'Specular Level', 'number'), ('max_glossiness', 'Glossiness', 'number'),
-                      ('std.soften', 'Soften', 'number')]
-            for path, label, kind in fields:
-                _field(host, context, material, path, 14*s, y, width-58*s, label+':', s, kind,
-                       enabled=path != 'std.soften' and shader(material) is not None)
-                channel = {'max_diffuse': 'DIFFUSE', 'max_specular': 'SPECULAR_COLOR',
-                           'std.self_illum_amount': 'SELF_ILLUM', 'max_opacity': 'OPACITY',
-                           'max_spec_level': 'SPECULAR_LEVEL', 'max_glossiness': 'GLOSSINESS'}.get(path)
-                if channel:
-                    _control(host, width-32*s, y, 23*s, 22*s, map_badge(material, channel),
-                             _invoke('max.mtl_load_map', channel=channel), s)
-                y -= 27*s
-            _field(host, context, material, 'std.self_illum_color', 14*s, y, width-58*s, 'Self-Illum Color:', s, 'color')
-            y -= 28*s
+            y = _draw_basic(host, context, material, width, y, s)
         opened, y = _rollout(host, 'Extended Parameters', 5*s, y, width-10*s, s)
         if opened:
             _field(host, context, material, 'max_ior', 14*s, y-23*s, width-28*s, 'Index of Refraction:', s)
@@ -1149,9 +1254,8 @@ def draw_host(host, context, width, height, scale):
     finally:
         gpu.state.scissor_test_set(False)
     # Discard invisible hit regions so a scrolled rollout cannot cover the toolbar.
-    cutoff = top-rows*cell_height-66*s
-    host.hits[:] = [(bounds, action) for bounds, action in host.hits
-                   if bounds[1] >= cutoff or bounds[3] <= cutoff]
+    host.hits[fixed_hits:] = [(bounds, action) for bounds, action in host.hits[fixed_hits:]
+                            if bounds[1] >= 0 and bounds[3] <= rollout_clip]
 
 
 def _write_edit(edit, value):
@@ -1181,8 +1285,10 @@ def host_event(host, context, event):
             except ValueError:
                 pass
         elif event.type == 'BACK_SPACE' and event.value == 'PRESS':
-            edit['text'] = edit['text'][:-1]
+            edit['text'] = '' if edit['replace'] else edit['text'][:-1]
             edit['replace'] = False
+        elif event.type == 'A' and event.ctrl and event.value == 'PRESS':
+            edit['replace'] = True
         elif event.type == 'LEFTMOUSE' and event.value == 'RELEASE' and edit.get('dragged'):
             host.material_edit = None
             bpy.ops.ed.undo_push(message='Material Parameter')
@@ -1300,6 +1406,6 @@ classes = (MaxStdMaterial, MaxMtlSlot, MaxMtlEditorState,
     MAX_OT_mtl_put_library, MAX_OT_mtl_select_by, MAX_OT_mtl_show_in_viewport, MAX_OT_mtl_set_type,
     MAX_OT_mtl_load_map, MAX_OT_mtl_clear_map, MAX_OT_mtl_pick, MAX_OT_mtl_reset_slots,
     MAX_OT_mtl_add_slot, MAX_OT_mtl_get_scene, MAX_OT_mtl_drop, MAX_OT_mtl_drag, MAX_OT_mtl_pointer_relay, MAX_OT_mtl_value,
-    MAX_MT_mtl_material, MAX_MT_mtl_options, MAX_MT_mtl_utilities, MAX_MT_mtl_extensions,
+    MAX_MT_mtl_material, MAX_MT_mtl_modes, MAX_MT_mtl_navigation, MAX_MT_mtl_options, MAX_MT_mtl_utilities, MAX_MT_mtl_extensions,
     MAX_PT_mtl_editor, MAX_PT_mtl_shader_basic, MAX_PT_mtl_blinn, MAX_PT_mtl_vray,
     MAX_PT_mtl_extended, MAX_PT_mtl_maps)
