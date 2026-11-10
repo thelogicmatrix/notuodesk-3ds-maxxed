@@ -1,9 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<!-- Original drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <title>link</title>
-<desc>Two interlocking objects linked diagonally</desc>
-<g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M8 5 10 3 C13 0 16 3 13 6 L10 9 C8 11 6 10 6 8" fill="none" stroke="#d2d4d5" stroke-width="2"/><path d="M8 11 6 13 C3 16 0 13 3 10 L6 7 C8 5 10 6 10 8" fill="none" stroke="#d2d4d5" stroke-width="2"/>
-</g>
+<g stroke-linecap="butt" stroke-linejoin="miter"><path d="M6.2 4.8 9 2 C11.5 -.5 15.5 3.5 13 6 L10.2 8.8 C7.7 11.3 3.7 7.3 6.2 4.8 Z" fill="none" stroke="#d2d4d5" stroke-width="1.35" /><path d="M5.8 7.2 3 10 C.5 12.5 4.5 16.5 7 14 L9.8 11.2 C12.3 8.7 8.3 4.7 5.8 7.2 Z" fill="none" stroke="#d2d4d5" stroke-width="1.35" /></g>
 </svg>

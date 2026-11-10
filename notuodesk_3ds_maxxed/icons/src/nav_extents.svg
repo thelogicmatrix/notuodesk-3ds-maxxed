@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<!-- Original drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<title>nav_extents</title>
+<g stroke-linecap="butt" stroke-linejoin="miter"><path d="M1 5 V1 H5 M11 1 H15 V5 M15 11 V15 H11 M5 15 H1 V11" fill="none" stroke="#50b9bf" stroke-width="0.9" /><rect x="5" y="5" width="6" height="6" fill="none" stroke="#d2d4d5" /></g>
+</svg>

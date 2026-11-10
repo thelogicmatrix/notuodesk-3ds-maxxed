@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<!-- Original drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<title>status_lock</title>
+<g stroke-linecap="butt" stroke-linejoin="miter"><path d="M5 7 V4 Q5 1 8 1 Q11 1 11 4 V7" fill="none" stroke="#d2d4d5" stroke-width="1" /><rect x="4" y="7" width="8" height="7" fill="#cec5ad" stroke="none" /><path d="M8 9 V12" fill="none" stroke="#57534b" stroke-width="0.8" /></g>
+</svg>
