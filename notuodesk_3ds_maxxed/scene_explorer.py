@@ -300,7 +300,11 @@ def draw_docked(host, context, width, height, scale, rect, text, line, op):
         if active:
             rect(x, y, size*s, size*s, (.28, .39, .49, 1))
         gpu.state.blend_set('ALPHA')
-        max_icons.draw(art, x+size*s/2, y+size*s/2, 16*s)
+        if art == 'clear':
+            line((x+6*s, y+6*s), (x+16*s, y+16*s), (.65, .65, .65, 1))
+            line((x+6*s, y+16*s), (x+16*s, y+6*s), (.65, .65, .65, 1))
+        else:
+            max_icons.draw(art, x+size*s/2, y+size*s/2, 16*s)
         if callback:
             host.hits.append(((x, y, x+size*s, y+size*s), callback))
 
@@ -311,7 +315,7 @@ def draw_docked(host, context, width, height, scale, rect, text, line, op):
             search_width-10*s)
     host.hits.append(((7*s, y, 7*s+search_width, y+21*s),
                       op('max.explorer_action', action='SEARCH')))
-    icon(width-51*s, y, 'remove_modifier', op('max.explorer_action', action='CLEAR'))
+    icon(width-51*s, y, 'clear', op('max.explorer_action', action='CLEAR'))
     icon(width-28*s, y, 'select_by_name', op('max.scene_selection_dialog'))
     y -= 24*s
     hidden_x, frozen_x = width-98*s, width-51*s
