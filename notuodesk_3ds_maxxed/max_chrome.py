@@ -116,14 +116,24 @@ def timeline_area(area):
     return area is not None and area.as_pointer() in _timeline_areas
 
 
+def _area_window(area):
+    return next((window for window in bpy.context.window_manager.windows
+                 if area in tuple(window.screen.areas)), None)
+
+
 def _use_timeline_host(area):
-    area.type = 'VIEW_3D'
-    space = area.spaces.active
-    space.overlay.show_overlays = False
-    space.show_gizmo = False
-    space.show_region_ui = False
-    space.show_region_toolbar = False
-    space.show_region_tool_header = False
+    window = _area_window(area)
+    if window is None:
+        return
+    # Another save handler may have closed the window that invoked the save.
+    with bpy.context.temp_override(window=window, area=area):
+        area.type = 'VIEW_3D'
+        space = area.spaces.active
+        space.overlay.show_overlays = False
+        space.show_gizmo = False
+        space.show_region_ui = False
+        space.show_region_toolbar = False
+        space.show_region_tool_header = False
 
 
 def _adopt_timelines(screen):
@@ -191,8 +201,11 @@ def _before_save(_):
     # layout marker, and a saved file opens normally even without this add-on.
     for area, original_type, original_ui in _timeline_areas.values():
         try:
-            area.type = original_type
-            area.ui_type = original_ui
+            window = _area_window(area)
+            if window:
+                with bpy.context.temp_override(window=window, area=area):
+                    area.type = original_type
+                    area.ui_type = original_ui
         except (ReferenceError, RuntimeError):
             pass
 
