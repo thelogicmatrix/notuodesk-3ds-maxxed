@@ -1,14 +1,43 @@
 """Screen-pixel snap feedback, separate from magnetic target selection.
 
-2026 Snap Options calls the grid cursor a box with crosshairs. The vertex
-viewport captures in GUID-66F42B65 show a plain crosshair, without a label.
-Other types have no viewport illustration in the retrieved 2026 help. Use
-the documented box-shaped hit point for those, not their toolbar artwork.
+Grid Points keeps the Snap Options box/crosshairs. Vertex keeps the 2026
+viewport crosshair. Other shapes follow max-ui-reference/snap-markers.md:
+the 2023 Standard Snaps dialog and flylib-fig8-17 show Grid Lines (box),
+Bounding Box (upright triangle), Perpendicular (inverted triangle), Tangent
+(small box), Edge/Segment (corner brackets), Midpoint (extended right angle),
+Face (ring/top bar) and Center Face (plus). Pivot's Y comes from pivot-2023.png.
+Endpoint uses the table's open angle and the endpoint glyph's sloping arms.
+The per-type dialog crops supply proportions, without the checkbox or yellow
+toolbar overlay. These glyph sources do not prove current viewport pixels.
 """
 
 ACTIVE = (0, 1, 0, 1)
 SNAPPED = (1, 1, 0, 1)
 REFERENCED_TYPES = frozenset({'grid_points', 'vertex'})
+
+# Coordinates are fractions of half the Size setting, in viewport Y-up space.
+# Open boxes mean unfilled outlines. Tangent is smaller than Grid Lines.
+_GLYPHS = {
+    'pivot': (((0, 1), (0, 0)), ((0, 0), (-1, -1)), ((0, 0), (1, -1))),
+    'bounding_box': (((-1, -1), (0, 1)), ((0, 1), (1, -1)),
+                     ((1, -1), (-1, -1))),
+    'perpendicular': (((-1, 1), (1, 1)), ((1, 1), (0, -1)),
+                      ((0, -1), (-1, 1))),
+    'tangent': (((-.6, -.6), (.6, -.6)), ((.6, -.6), (.6, .6)),
+                ((.6, .6), (-.6, .6)), ((-.6, .6), (-.6, -.6))),
+    'endpoint': (((-1, -1), (0, 1)), ((0, 1), (1, -1))),
+    'edge': (((-1, .4), (-1, 1)), ((-1, 1), (-.4, 1)),
+             ((.4, 1), (1, 1)), ((1, 1), (1, .4)),
+             ((1, -.4), (1, -1)), ((1, -1), (.4, -1)),
+             ((-.4, -1), (-1, -1)), ((-1, -1), (-1, -.4))),
+    'midpoint': (((-1, 1), (-1, -1)), ((-1, -1), (1, -1)),
+                 ((-1, .2), (.2, .2)), ((.2, .2), (.2, -1))),
+    'face': (((0, .5), (.5, .25)), ((.5, .25), (.75, -.25)),
+             ((.75, -.25), (.5, -.75)), ((.5, -.75), (0, -1)),
+             ((0, -1), (-.5, -.75)), ((-.5, -.75), (-.75, -.25)),
+             ((-.75, -.25), (-.5, .25)), ((-.5, .25), (0, .5)),
+             ((-1, .5), (1, .5))),
+}
 
 
 def segments(kind, center, size):
@@ -18,10 +47,13 @@ def segments(kind, center, size):
     cross = (((x-h, y), (x+h, y)), ((x, y-h), (x, y+h)))
     box = (((x-h, y-h), (x+h, y-h)), ((x+h, y-h), (x+h, y+h)),
            ((x+h, y+h), (x-h, y+h)), ((x-h, y+h), (x-h, y-h)))
-    if kind == 'vertex':
+    if kind in {'vertex', 'center_face'}:
         return cross
     if kind == 'grid_points':
         return box + cross
+    if kind in _GLYPHS:
+        return tuple(tuple((x+dx*h, y+dy*h) for dx, dy in line)
+                     for line in _GLYPHS[kind])
     return box
 
 
