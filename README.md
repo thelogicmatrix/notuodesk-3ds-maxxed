@@ -234,32 +234,19 @@ to your test profile first. Its scripts/addons directory must contain this add-o
 
 ## Compact Material Editor (M)
 
-<img src="docs/material-editor.png" width="207" align="right" alt="Compact Material Editor">
+Press **M**, or choose **Rendering > Material Editor**. The Compact editor opens in a separate window. Click a sample to edit it. Drag a sample onto a viewport object to assign it, or use the eyedropper to get an object's material. Assign to Selection uses the selected objects.
 
-Press **M**, or choose **Rendering › Material Editor**. It opens as a narrow floating window, like 3ds Max's Compact Material Editor.
+Options offers 3 x 2, 5 x 3 and 6 x 4 sample grids. Sample scrollbars reach the other saved slots. Utilities > Extensions has New Sample Slot, Show All Saved Slots and the retained pick-up-and-click Drag route. Replacing a sample keeps the material assigned to scene objects intact.
 
-- **Sample slots:** 6, 15 or 24 slots, or **All**, chosen under Options. A dot marks materials that are used in the scene. **+ New Slot** adds more slots, with no 24-slot limit. **Utils › Get All Scene Materials** loads every material used in the scene, adding slots as needed.
-- **Drag and drop:** click a slot's hand icon, or **Drag**, then click an object in any viewport.
-  - **Plain click:** replaces the object's material, as in Max.
-  - **Object is part of a selection:** assigns to every selected object.
-  - **Edit Mode:** assigns to the selected faces.
-  - **Ctrl+click:** replaces only the material on the part you clicked.
-  - **Shift+click:** keeps dropping. Right-click or Esc to stop.
-  - *Blender doesn't let add-on buttons start a true mouse drag, so it works as pick-up-and-click.*
-- **Side toolbar:** preview type (sphere, cube, flat, cloth…), **Select by Material**, and options.
-- **Bottom toolbar:** Get Material, **Assign Material to Selection**, Reset Map/Mtl to Default Settings, Make Material Copy, **Put to Library** (Asset Browser), Material ID Channel, and Show Shaded Material in Viewport.
-- **Pick Material from Object:** an eyedropper. Click any object, or one face of a multi-material object.
-- **Material type:** Standard, VRayMtl or Physical.
-- **Rollouts:**
-  - **Shader Basic Parameters:** Blinn, Phong, Metal, Anisotropic, Oren-Nayar-Blinn, Translucent and Multi-Layer, plus Wire, 2-Sided and Faceted.
-  - **Blinn Basic Parameters:** Ambient (locked), Diffuse, Specular, Self-Illumination, Opacity, Specular Level, Glossiness and Soften.
-  - **Extended Parameters.**
-  - **Maps:** per-channel on/off and a bitmap button for Diffuse, Specular, Glossiness, Self-Illum, Opacity, Bump (with amount), Reflection, Refraction and Displacement.
-- **New materials** start with 3ds Max's defaults: grey 150, Specular Level 0, Glossiness 10.
-- **Real materials:** every value drives the material's Principled BSDF directly, so it renders the same in EEVEE, Cycles, and V-Ray (after conversion).
-- **Slate view:** the node canvas behind the panel acts as the Slate editor and shows the active slot's material.
+New samples use Physical Material. Presets, Coating Parameters and Basic Parameters follow the Compact layout. Base Color, Base Weight, Roughness/Glossiness, Metalness, IOR, Transmission Weight and supported Coating inputs edit Principled shading. The preset library, Advanced mode and unsupported independent transmission controls remain disabled.
 
-<br clear="right">
+The material type button also offers Standard (Legacy) and a V-Ray-labelled Principled approximation. Standard keeps its shader, Extended Parameters and Maps rollouts. New or reset Standard samples use RGB 150/255 in each diffuse channel. Opening saved materials preserves their values. These adapters do not reproduce Autodesk or V-Ray rendering.
+
+Map shortcuts show M for an enabled bitmap and m for a disabled bitmap. Disabling a bitmap keeps its image. Right-click a shortcut for Bitmap and Clear Map. Ambient and Displacement retain their image data without a rendered connection.
+
+The two toolbars follow Compact's control order. Supported commands include Get Material, Assign to Selection, Reset, material copies, Put to Library, Material ID Channel and viewport material display. Put to Library writes a Blender material library. Material ID Channel edits Material.pass_index. Controls with no implemented backend remain disabled. Slate is unavailable.
+
+On Windows the native window title follows the active material, such as Material Editor - 01 - Default. Windows may shorten the visible caption at the narrow opening width. Other platforms use the active material name in the drawn title.
 
 ## Extended Primitives
 
