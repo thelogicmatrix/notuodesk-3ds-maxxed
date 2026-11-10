@@ -25,6 +25,7 @@ MODES = [("2D", "2D", "Active construction grid only"),
 TABS = [("SNAPS", "Snaps", ""), ("OPTIONS", "Options", ""),
         ("HOME", "Home Grid", ""), ("USER", "User Grids", "")]
 _preview = {}
+_prompts = {}
 _handle = None
 _spinner_busy = False
 _spinner_values = {}
@@ -229,10 +230,10 @@ def _geometry(context, region, rv3d, co, enabled, objects, base=None, source=Fal
             continue
         mw = ob.matrix_world
         if "pivot" in enabled:
-            yield mw.translation.copy(), "pivot"
+            yield mw.translation.copy(), "pivot", ob.name
         if "bounding_box" in enabled and ob.type != "EMPTY":
             for v in ob.bound_box:
-                yield mw @ Vector(v), "bounding_box"
+                yield mw @ Vector(v), "bounding_box", ob.name
         if not enabled & {"vertex", "endpoint", "edge", "midpoint", "perpendicular", "face", "center_face"}:
             continue
         if ob.type not in {"MESH", "CURVE", "SURFACE", "FONT"}:
@@ -249,13 +250,13 @@ def _geometry(context, region, rv3d, co, enabled, objects, base=None, source=Fal
                 coords = {v: p for v, p in coords.items() if not v.select}
             if "vertex" in enabled or "endpoint" in enabled:
                 for p in coords.values():
-                    yield p, "vertex" if "vertex" in enabled else "endpoint"
+                    yield p, "vertex" if "vertex" in enabled else "endpoint", ob.name
             edges = [(coords[e.verts[0]], coords[e.verts[1]]) for e in bm.edges
                      if not e.hide and all(v in coords for v in e.verts)]
             if "center_face" in enabled:
                 for f in bm.faces:
                     if not f.hide and all(v in coords for v in f.verts):
-                        yield mw @ f.calc_center_median(), "center_face"
+                        yield mw @ f.calc_center_median(), "center_face", ob.name
         else:
             eo = ob.evaluated_get(deps)
             mesh = eo.to_mesh()
@@ -265,32 +266,32 @@ def _geometry(context, region, rv3d, co, enabled, objects, base=None, source=Fal
                 coords = [mw @ v.co for v in mesh.vertices]
                 if "vertex" in enabled or "endpoint" in enabled:
                     for p in coords:
-                        yield p, "vertex" if "vertex" in enabled else "endpoint"
+                        yield p, "vertex" if "vertex" in enabled else "endpoint", ob.name
                 edges = [(coords[e.vertices[0]], coords[e.vertices[1]]) for e in mesh.edges]
                 if "center_face" in enabled:
                     mesh.calc_loop_triangles()
                     for tri in mesh.loop_triangles:
-                        yield sum((coords[i] for i in tri.vertices), Vector()) / 3, "center_face"
+                        yield sum((coords[i] for i in tri.vertices), Vector()) / 3, "center_face", ob.name
             finally:
                 eo.to_mesh_clear()
         for a, b in edges:
             if "midpoint" in enabled:
-                yield (a + b) * .5, "midpoint"
+                yield (a + b) * .5, "midpoint", ob.name
             if "edge" in enabled:
                 p = _edge_point(region, rv3d, co, a, b)
                 if p is not None:
-                    yield p, "edge"
+                    yield p, "edge", ob.name
             if "perpendicular" in enabled and base is not None and (b - a).length_squared:
                 p, t = intersect_point_line(base, a, b)
                 if 0 <= t <= 1:
-                    yield p, "perpendicular"
+                    yield p, "perpendicular", ob.name
         if "face" in enabled and not source and eo is not None:
             origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, co)
             direction = view3d_utils.region_2d_to_vector_3d(region, rv3d, co)
             inv = mw.inverted_safe()
             hit, loc, normal, _ = eo.ray_cast(inv @ origin, inv.to_3x3() @ direction)
             if hit and normal.dot(inv.to_3x3() @ direction) < 0:
-                yield mw @ loc, "face"
+                yield mw @ loc, "face", ob.name
 
 
 def _pick(context, region, rv3d, co, point, plane, enabled, objects, base=None,
@@ -319,9 +320,10 @@ def _pick(context, region, rv3d, co, point, plane, enabled, objects, base=None,
             if "grid_lines" in enabled:
                 candidates.extend(((anchor + u * au + v * b, "grid_lines"),
                                    (anchor + u * a + v * bv, "grid_lines")))
+    candidates = [(p, kind, "Scene Root") for p, kind in candidates]
     candidates.extend(_geometry(context, region, rv3d, co, enabled, objects, base, source))
     best, rank = None, (float("inf"), 9)
-    for p, kind in candidates:
+    for p, kind, target in candidates:
         if s.mode == "2D" and not source and not kind.startswith("grid_"):
             tolerance = 1e-6 * max(1, s.grid_spacing, (p - origin).length)
             if abs((p - origin).dot(n)) > tolerance:
@@ -341,19 +343,19 @@ def _pick(context, region, rv3d, co, point, plane, enabled, objects, base=None,
             distance = (xy - Vector(co)).length
         key = (round(distance, 5), 1 if kind.startswith("grid_") else 0)
         if distance <= s.preview_radius and key < rank:
-            rank, best = key, (p.copy(), kind, distance)
+            rank, best = key, (p.copy(), kind, distance, target)
     return best
 
 
 def snap_point(context, region, rv3d, co, point, plane, *, exclude=(), base=None,
-               axis=None, pixels_per_unit=None, constraint_plane=None):
+               axis=None, pixels_per_unit=None, constraint_plane=None, commit=False):
     """Magnetically snap a world point within Snap Radius screen pixels.
 
     `co` is region-relative. `plane` is (world origin, world normal).
     Exclude the object being created or transformed. For height creation pass
     `axis`, and pixels_per_unit when that axis points at the viewer.
     `constraint_plane` is an optional (world origin, world normal) pair.
-    The returned Vector stays unchanged outside the radius. Preview never rounds.
+    Preview stays free outside Snap Radius. A click/release accepts the preview.
     """
     point = Vector(point)
     s = settings(context)
@@ -370,15 +372,44 @@ def snap_point(context, region, rv3d, co, point, plane, *, exclude=(), base=None
                 axis, pixels_per_unit, constraint_plane=constraint_plane)
     key = region.as_pointer() if hasattr(region, "as_pointer") else id(region)
     _preview[key] = (hit, Vector(base) if base is not None else None, point.copy())
-    return hit[0].copy() if hit and hit[2] <= s.snap_radius else point
+    from . import max_status
+    previous = _prompts.pop(key, None)
+    if hit:
+        units = context.scene.unit_settings
+        divisor = {'KILOMETERS':1000, 'METERS':1, 'CENTIMETERS':.01, 'MILLIMETERS':.001,
+                   'MICROMETERS':.000001, 'MILES':1609.344, 'FEET':.3048,
+                   'INCHES':.0254, 'THOU':.0000254}.get(units.length_unit,
+                   .3048 if units.system == 'IMPERIAL' else 1)
+        factor = units.scale_length/divisor if units.system != 'NONE' else 1
+        values = [f'{(0 if abs(v*factor) < .0005 else v*factor):.3f}'.rstrip('0').rstrip('.') for v in hit[0]]
+        values = [v if '.' in v else v+'.0' for v in values]
+        label = 'Grid' if hit[1].startswith('grid_') else dict(TYPES)[hit[1]]
+        text = f'{label} snap on {hit[3]} at [{", ".join(values)}]'
+        _prompts[key] = text
+        max_status.notify(text)
+        if context.workspace:
+            context.workspace.status_text_set(text)
+    elif previous and max_status._message == previous:
+        max_status.notify()
+        if context.workspace:
+            context.workspace.status_text_set(None)
+    return hit[0].copy() if hit and (commit or hit[2] <= s.snap_radius) else point
 
 
 def clear_preview(region=None):
+    from . import max_status
     if region is None:
         _preview.clear()
+        old = tuple(_prompts.values())
+        _prompts.clear()
     else:
         key = region.as_pointer() if hasattr(region, "as_pointer") else id(region)
         _preview.pop(key, None)
+        old = (_prompts.pop(key, None),)
+    if max_status._message and max_status._message in old:
+        max_status.notify()
+        if bpy.context.workspace:
+            bpy.context.workspace.status_text_set(None)
 
 
 def consume_override(context):
@@ -1040,7 +1071,11 @@ class MAX_OT_snap_transform(bpy.types.Operator):
             hit = _pick(context, self.region, self.rv3d, self.start_co,
                         cursor if cursor is not None else center, self.plane,
                         enabled, self.objects, source=True)
-        if hit and self.kind != "SCALE":
+        if self.from_gizmo and self.kind == "MOVE":
+            # Max's gizmo and snap handle always drag from the axis centre.
+            # The handle's mouse-down point is only the free-drag offset.
+            self.base = center.copy()
+        elif hit and self.kind != "SCALE":
             self.base = hit[0]
         elif self.objects:
             # Grid-only and angle/percent transforms start at the picked surface.
@@ -1124,7 +1159,7 @@ class MAX_OT_snap_transform(bpy.types.Operator):
                 self.poly_targets.apply_targets(targets)
         context.view_layer.update()
 
-    def _update(self, context, co):
+    def _update(self, context, co, commit=False):
         s = settings(context)
         if self.axis is not None and self.kind == "MOVE":
             from .create import ray_line_height
@@ -1141,7 +1176,8 @@ class MAX_OT_snap_transform(bpy.types.Operator):
         point = snap_point(context, self.region, self.rv3d, co, raw, self.plane,
                            exclude=[ob for ob in self.objects if ob.mode != "EDIT"],
                            base=self.base, axis=self.axis,
-                           constraint_plane=(self.base, self.constraint_normal) if self.constraint_normal is not None else None)
+                           constraint_plane=(self.base, self.constraint_normal) if self.constraint_normal is not None else None,
+                           commit=commit)
         if self.kind == "MOVE":
             delta = point - self.base
             if self.axis is not None:
@@ -1254,7 +1290,7 @@ class MAX_OT_snap_transform(bpy.types.Operator):
         if event.type in {"RIGHTMOUSE", "ESC"} and event.value == "PRESS":
             return self._finish(context, True)
         if event.type in {"LEFTMOUSE", "RET", "NUMPAD_ENTER"} and event.value == "RELEASE":
-            self._update(context, co)
+            self._update(context, co, commit=True)
             return self._finish(context)
         if event.value == "PRESS":
             if event.type in {"F5", "F6", "F7", "F8"}:

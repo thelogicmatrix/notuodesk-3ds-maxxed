@@ -187,9 +187,12 @@ class MAX_OT_create(bpy.types.Operator):
             area.tag_redraw()
 
     def _status(self, context):
+        from . import snaps
         message = ('Click and drag the base. Right-click to leave creation' if self.state == 'WAIT' else
                    'Release to accept the base' if self.state == 'BASE' else
                    'Move to set ' + self.stage_prop.replace('_', ' ') + ', click to accept. Right-click cancels')
+        if self.state != 'WAIT':
+            message = snaps._prompts.get(self.region.as_pointer(), message)
         context.workspace.status_text_set(message)
 
     def _co(self, event):
@@ -202,7 +205,8 @@ class MAX_OT_create(bpy.types.Operator):
         if point is None:
             return None
         return snaps.snap_point(context, self.region, self.rv3d, co, point, (Vector(), self.n),
-                                exclude=(self.obj,) if self.obj else (), base=self.p0)
+                                exclude=(self.obj,) if self.obj else (), base=self.p0,
+                                commit=event.type == 'LEFTMOUSE')
 
     def _footprint(self, context, event):
         from . import keyboard_entry
@@ -267,7 +271,8 @@ class MAX_OT_create(bpy.types.Operator):
             pixels = None
         point = self.p0 + self.n * value
         point = snaps.snap_point(context, self.region, self.rv3d, co, point, (self.p0, self.n),
-                                 exclude=(self.obj,), base=self.p0, axis=self.n, pixels_per_unit=pixels)
+                                 exclude=(self.obj,), base=self.p0, axis=self.n, pixels_per_unit=pixels,
+                                 commit=event.type == 'LEFTMOUSE')
         value = (point - self.p0).dot(self.n)
         p = self.obj.max_prim
         if self.stage_prop == 'wall_width':
