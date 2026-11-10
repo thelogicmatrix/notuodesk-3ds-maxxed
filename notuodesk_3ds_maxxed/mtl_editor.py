@@ -1363,6 +1363,18 @@ def _triangle(x, y, scale, direction='DOWN', color=(.8, .8, .8, 1)):
     _polygon([(x+a*scale, y+b*scale) for a, b in points], color)
 
 
+def _scroll_arrow(x, y, scale, direction):
+    arms = [[(0, 0), (4, 4), (4, 6), (0, 2)], [(4, 4), (8, 0), (8, 2), (4, 6)]]
+    for arm in arms:
+        if direction == 'DOWN':
+            arm = [(a, 6-b) for a, b in arm]
+        elif direction == 'LEFT':
+            arm = [(6-b, a) for a, b in arm]
+        elif direction == 'RIGHT':
+            arm = [(b, a) for a, b in arm]
+        _polygon([(x+a*scale, y+b*scale) for a, b in arm], (.36, .36, .36, 1))
+
+
 def _tool_icon(key, x, y, s, enabled=True):
     """Independent strokes measured against the Compact toolbar reference."""
     from .max_editor_windows import _line
@@ -1546,7 +1558,7 @@ def _color(host, material, path, x, y, width, s, enabled=True):
     data, key = _field_owner(material, path)
     value = getattr(data, key)
     display = tuple(12.92*v if v <= .0031308 else 1.055*v**(1/2.4)-.055 for v in value[:3])
-    _box(x, y, width, 25*s, (.08, .08, .08, 1))
+    _box(x, y, width, 25*s, (0, 0, 0, 1))
     _box(x+s, y+2*s, width-2*s, 22*s, (*display, 1))
     if enabled and not material.library:
         _hit(host, (x, y, x+width, y+25*s), _invoke('max.mtl_value', material=material.name, field=path))
@@ -1574,7 +1586,7 @@ def _draw_physical(host, context, material, width, top, s):
     right = width-22*u
     opened, y = _rollout(host, 'Presets', 2*u, top, width-18*u, u)
     if opened:
-        _box(2*u, y-142*u, width-18*u, 148*u, (.31, .31, .31, 1))
+        _box(2*u, y-142*u, width-18*u, 148*u, (.314, .314, .314, 1))
         _combo(host, 13*u, y-27*u, 236*u, '{Finishes}', u)
         # The reference's title tile is independent artwork, not a texture
         # copied out of an Autodesk screenshot.
@@ -1590,7 +1602,7 @@ def _draw_physical(host, context, material, width, top, s):
         y -= 147*u
     opened, y = _rollout(host, 'Coating Parameters', 2*u, y, width-18*u, u)
     if opened:
-        _box(2*u, y-97*u, width-18*u, 103*u, (.31, .31, .31, 1))
+        _box(2*u, y-97*u, width-18*u, 103*u, (.314, .314, .314, 1))
         _frame_group(9*u, y-7*u, width-32*u, 87*u, 'Coating', u)
         _number(host, material, 'physical.coating', 17*u, y-43*u, 79*u, u)
         _physical_map(host, material, 'PHYSICAL_COATING', 98*u, y-43*u, u)
@@ -1606,7 +1618,7 @@ def _draw_physical(host, context, material, width, top, s):
         y += 2*u
     opened, y = _rollout(host, 'Basic Parameters', 2*u, y, width-18*u, u)
     if opened:
-        _box(2*u, y-176*u, width-18*u, 182*u, (.31, .31, .31, 1))
+        _box(2*u, y-176*u, width-18*u, 182*u, (.314, .314, .314, 1))
         _frame_group(9*u, y-6*u, width-32*u, 74*u, 'Base Color and Reflections', u)
         row = y-44*u
         _number(host, material, 'physical.base_weight', 17*u, row, 79*u, u)
@@ -1631,7 +1643,8 @@ def _draw_physical(host, context, material, width, top, s):
         row = y-37*u
         _number(host, material, 'physical.transparency', 17*u, row, 79*u, u)
         _physical_map(host, material, 'REFRACTION', 98*u, row, u)
-        _control(host, 127*u, row, 76*u, 25*u, '', None, u, color=(1, 1, 1, 1))
+        _box(127*u, row, 76*u, 25*u, (0, 0, 0, 1))
+        _box(128*u, row+2*u, 74*u, 22*u, (1, 1, 1, 1))
         _physical_map(host, material, None, 205*u, row, u)
         _combo(host, 234*u, row, 105*u, 'Roughness', u)
         _number(host, material, 'physical.roughness', 343*u, row, 78*u, u, enabled=False)
@@ -1723,7 +1736,7 @@ def _rollout(host, title, x, y, width, scale):
         else:
             closed.add(title)
     toggle.rollout = title
-    _rounded(x, y-23*scale, width, 23*scale, 3*scale, (.31, .31, .31, 1))
+    _rounded(x, y-23*scale, width, 23*scale, 3*scale, (.314, .314, .314, 1))
     _triangle(x+7*scale, y-14*scale, scale, 'RIGHT' if title in closed else 'DOWN')
     _bold(x+22*scale, y-16*scale, title, round(13*scale))
     for row in range(4):
@@ -1798,7 +1811,7 @@ def _frame_group(x, top, width, height, title, scale):
                  ((x+width, top-height), (x+width, top)), ((x, top), (x+width, top))]:
         _line(a, b, color)
     if title:
-        _box(x+5*scale, top-7*scale, (len(title)*6.5+7)*scale, 15*scale, (.31, .31, .31, 1))
+        _box(x+5*scale, top-7*scale, (len(title)*6.5+7)*scale, 15*scale, (.314, .314, .314, 1))
         _label(x+8*scale, top-3*scale, title, round(11*scale))
 
 
@@ -1870,7 +1883,7 @@ def draw_host(host, context, width, height, scale):
     update_window_title(host, context)
     host.material_tools = []
     host.material_elements = {}
-    _box(0, 0, width, height-(0 if host.native_handle else 38*s), (.286, .286, .286, 1))
+    _box(0, 0, width, height-(0 if host.native_handle else 38*s), (.263, .263, .263, 1))
     y = height-(31 if host.native_handle else 69)*s
     _box(0, y, width, 31*s, (1, 1, 1, 1))
     x = 6*s
@@ -1900,20 +1913,20 @@ def draw_host(host, context, width, height, scale):
         return call
     sample_bottom = top-rows*cell_height
     sx = width-60*s
-    _box(sx, sample_bottom, 22*s, rows*cell_height, (.286, .286, .286, 1))
+    _box(sx, sample_bottom, 22*s, rows*cell_height, (.263, .263, .263, 1))
     for bottom, direction, delta in [(top-21*s, 'UP', -1), (sample_bottom, 'DOWN', 1)]:
         _box(sx, bottom, 22*s, 21*s, (.95, .95, .95, 1))
-        _triangle(sx+7*s, bottom+8*s, s, direction, (.36, .36, .36, 1))
+        _scroll_arrow(sx+7*s, bottom+8*s, s, direction)
         _hit(host, (sx, bottom, sx+22*s, bottom+21*s), scroll_samples(delta))
     track = max(0, rows*cell_height-44*s)
-    thumb = min(track, max(21*s, track*columns*rows/len(editor.slots)))
+    thumb = min(track, 21*s)
     fraction = start/max(1, len(editor.slots)-columns*rows)
     _box(sx, top-22*s-thumb-fraction*(track-thumb), 22*s, thumb, (.78, .78, .78, 1))
     hy = sample_bottom-22*s
-    _box(5*s, hy, available_width, 20*s, (.286, .286, .286, 1))
+    _box(5*s, hy, available_width, 20*s, (.263, .263, .263, 1))
     for hx, direction, delta in [(5*s, 'LEFT', -1), (width-81*s, 'RIGHT', 1)]:
         _box(hx, hy, 21*s, 20*s, (.95, .95, .95, 1))
-        _triangle(hx+8*s, hy+6*s, s, direction, (.36, .36, .36, 1))
+        _scroll_arrow(hx+8*s, hy+6*s, s, direction)
         _hit(host, (hx, hy, hx+21*s, hy+20*s), scroll_samples(delta))
     _box(26*s, hy, 21*s, 20*s, (.78, .78, .78, 1))
     for index, (key, label, operator) in enumerate(SAMPLE_TOOLS):
@@ -2003,7 +2016,7 @@ def draw_host(host, context, width, height, scale):
                          _invoke('max.mtl_load_map', channel=channel), s)
             y -= 12*s
         host.material_scroll_max = max(0, math.ceil((host.scroll*26*s-y)/max(1, 26*s)))
-        _box(width-9*s, 0, 7*s, rollout_clip, (.23, .23, .23, 1))
+        _box(width-9*s, 0, 7*s, rollout_clip, (.21, .21, .21, 1))
         thumb = max(24*s, rollout_clip/(host.material_scroll_max+1))
         _rounded(width-8*s, max(0, rollout_clip-thumb-host.scroll*6*s), 5*s, thumb, 2*s, (.39, .39, .39, 1))
     finally:
