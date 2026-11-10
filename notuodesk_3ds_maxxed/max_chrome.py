@@ -10,6 +10,8 @@ _originals = []
 _keys = []
 _layout_changes = []
 _timeline_areas = {}
+_timeline_original_heights = {}
+_timeline_resize_jobs = {}
 _quad_changes = {}
 _pointers = {}
 _menus = None
@@ -165,6 +167,41 @@ def _area_window(area):
                  if area in tuple(window.screen.areas)), None)
 
 
+def _resize_tick():
+    # Native area geometry updates on the next redraw. A successful operator
+    # return is not proof that the requested size was applied.
+    for key, (area, requested, attempts, restoring) in list(_timeline_resize_jobs.items()):
+        try:
+            target = requested if requested is not None else round(64*bpy.context.preferences.system.ui_scale)
+            window = _area_window(area)
+            if window is None or abs(area.height-target) <= 1:
+                _timeline_resize_jobs.pop(key, None)
+                if restoring:
+                    _timeline_original_heights.pop(key, None)
+                continue
+            if attempts >= 30:
+                _timeline_resize_jobs.pop(key, None)
+                print('[Maxxed] Timeline resize unavailable in the active screen context')
+                continue
+            _timeline_resize_jobs[key] = area, requested, attempts+1, restoring
+            with bpy.context.temp_override(window=window, area=area, region=None):
+                if bpy.ops.screen.area_move.poll():
+                    bpy.ops.screen.area_move(x=area.x+area.width//2, y=area.y+area.height,
+                                             delta=target-area.height)
+        except (ReferenceError, RuntimeError):
+            _timeline_resize_jobs.pop(key, None)
+    return .1 if _timeline_resize_jobs else None
+
+
+def _size_timeline(area, height=None, restoring=False):
+    key = area.as_pointer()
+    if not restoring:
+        _timeline_original_heights.setdefault(key, (area, area.height))
+    _timeline_resize_jobs[key] = area, height, 0, restoring
+    if not bpy.app.background and not bpy.app.timers.is_registered(_resize_tick):
+        bpy.app.timers.register(_resize_tick, first_interval=.1)
+
+
 def _use_timeline_host(area):
     window = _area_window(area)
     if window is None:
@@ -182,6 +219,7 @@ def _use_timeline_host(area):
         if header and header.alignment != 'BOTTOM':
             with bpy.context.temp_override(region=header):
                 bpy.ops.screen.region_flip()
+    _size_timeline(area)
 
 
 def _adopt_timelines(screen):
@@ -201,6 +239,7 @@ def apply_layout(context, quad=False):
     _adopt_timelines(context.screen)
     for area in context.screen.areas:
         if timeline_area(area):
+            _size_timeline(area)
             area.tag_redraw()
             continue
         if area.type == 'VIEW_3D':
@@ -231,6 +270,8 @@ def _load(_):
     _pointers.clear()
     _layout_changes.clear()  # Old screen references must never be restored into a new file.
     _timeline_areas.clear()
+    _timeline_original_heights.clear()
+    _timeline_resize_jobs.clear()
     _quad_changes.clear()
     max_status.clear()
     if _installed:
@@ -390,6 +431,11 @@ def uninstall():
         except (ReferenceError, RuntimeError, StopIteration):
             pass
     _quad_changes.clear()
+    for area, height in list(_timeline_original_heights.values()):
+        try:
+            _size_timeline(area, height, restoring=True)
+        except ReferenceError:
+            pass
     for area, original_type, original_ui in _timeline_areas.values():
         try:
             area.type = original_type
