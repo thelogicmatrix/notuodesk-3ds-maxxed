@@ -57,8 +57,11 @@ UNSUPPORTED = {
 
 CADDIES = {
     "EXTRUDE": ("extrusion_type", "amount", "local_bias", "base_width"), "WELD": ("threshold",),
-    "CHAMFER": ("amount", "segments", "open", "tension"),
-    "BRIDGE": ("segments", "taper", "bias", "smooth", "twist1", "twist2", "bridge_selection"),
+    "CHAMFER": ("chamfer_miter", "amount", "segments", "tension", "chamfer_depth",
+                "end_bias", "radial_bias", "open", "invert_open", "chamfer_smooth",
+                "smooth_type", "smooth_threshold", "chamfer_clamp"),
+    "BRIDGE": ("segments", "taper", "bias", "smooth", "twist1", "twist2", "bridge_selection",
+               "bridge_adjacent", "reverse_triangulation"),
     "CONNECT": ("segments", "pinch", "slide"),
     "OUTLINE": ("amount",), "BEVEL": ("bevel_type", "height", "amount", "local_bias"),
     "INSET": ("amount", "individual"), "HINGE": (), "SPLINE_EXTRUDE": (),
@@ -80,11 +83,32 @@ def option_properties():
         "threshold": FloatProperty(name="Weld Threshold", min=0, default=0.0001),
         "segments": IntProperty(name="Segments", min=1, max=100, default=1),
         "open": BoolProperty(name="Open", default=False),
+        "invert_open": BoolProperty(name="Invert Open", default=False),
+        "chamfer_miter": EnumProperty(name="Mitering", default="UNIFORM", items=[
+            ("QUAD", "Quad", "Blender offset bevel with grid-filled intersections"),
+            ("TRI", "Tri", "Legacy Standard chamfer, Blender cutoff intersections"),
+            ("UNIFORM", "Uniform", "Blender width bevel with grid-filled intersections"),
+            ("RADIAL", "Radial", "Blender arc outer and inner miters"),
+            ("PATCH", "Patch", "Blender patch outer miter and sharp inner miter")]),
+        "chamfer_depth": FloatProperty(name="Depth", min=-.5, max=1, default=.5),
+        "end_bias": FloatProperty(name="End Bias", min=0, max=1, default=.5,
+            description="BMesh bevel has no Max end-point bias parameter"),
+        "radial_bias": FloatProperty(name="Radial Bias", min=0, max=1, default=0,
+            description="BMesh bevel has no Max spherical radial bias parameter"),
+        "chamfer_smooth": BoolProperty(name="Smooth", default=True),
+        "smooth_type": EnumProperty(name="Smooth Type", items=[
+            ("OBJECT", "Smooth Entire Object", ""), ("CHAMFERS", "Smooth Chamfers Only", "")]),
+        "smooth_threshold": FloatProperty(name="Smooth Threshold", min=0, max=180, default=30),
+        "chamfer_clamp": BoolProperty(name="Clamp Overlap", default=True),
         "tension": FloatProperty(name="Tension", min=0, max=1, default=1),
         "tess_tension": FloatProperty(name="Tension", default=0),
         "taper": FloatProperty(name="Taper", default=0, min=-100, max=1000),
         "bias": FloatProperty(name="Bias", default=0, min=-99, max=99),
         "smooth": FloatProperty(name="Smooth", default=45, min=0, max=180),
+        "bridge_adjacent": FloatProperty(name="Bridge Adjacent", default=45, min=0, max=180,
+            description="Blender bridge_edge_loops has no adjacent-edge angle filter"),
+        "reverse_triangulation": BoolProperty(name="Reverse Triangulation", default=False,
+            description="Blender bridge_edge_loops cannot reverse Max's unequal-loop triangulation"),
         "twist": IntProperty(name="Twist", default=0),
         "twist1": IntProperty(name="Twist 1", default=0),
         "twist2": IntProperty(name="Twist 2", default=0),
@@ -463,6 +487,21 @@ def shift_edges(bm, ring, direction):
     return {"FINISHED"}
 
 
+def chamfer_options(s, mode):
+    """Map the 2026 miter choices to BMesh's bevel parameters."""
+    outer = {'QUAD': 'SHARP', 'TRI': 'SHARP', 'UNIFORM': 'SHARP',
+             'RADIAL': 'ARC', 'PATCH': 'PATCH'}[s.chamfer_miter]
+    profile = (1 - .5*s.tension if s.chamfer_miter in {'QUAD', 'UNIFORM'} else
+               .5 + .5*s.chamfer_depth if s.chamfer_miter in {'RADIAL', 'PATCH'} else .5)
+    return dict(offset=max(0, s.amount), offset_type='WIDTH' if mode != 'VERT' and s.chamfer_miter == 'UNIFORM' else 'OFFSET',
+                segments=1 if mode == 'VERT' else s.segments, profile=.5 if mode == 'VERT' else profile,
+                affect='VERTICES' if mode == 'VERT' else 'EDGES',
+                miter_outer=outer, miter_inner='ARC' if outer == 'ARC' else 'SHARP',
+                vmesh_method='CUTOFF' if s.chamfer_miter == 'TRI' else 'ADJ',
+                harden_normals=mode != 'VERT' and s.chamfer_smooth, clamp_overlap=s.chamfer_clamp,
+                material=-1, loop_slide=True)
+
+
 def run(operator, context, how, operation_settings=None):
     """Return None for the legacy commands that need no new handling."""
     from .operators import mesh_select_mode
@@ -564,11 +603,26 @@ def run(operator, context, how, operation_settings=None):
                         item.select_set(True)
             bm.select_flush_mode()
         elif action == "CHAMFER":
-            before = set(bm.faces)
-            ops.bevel(offset=max(0, s.amount), segments=s.segments, profile=1 - 0.5 * s.tension,
-                      affect="VERTICES" if mode == "VERT" else "EDGES")
+            geom = selected_vertices(bm) if mode == "VERT" else [e for e in bm.edges if e.select and not e.hide]
+            result = bmesh.ops.bevel(bm, geom=geom, **chamfer_options(s, mode))
+            created = set(result["faces"])
+            bm.normal_update()
+            if mode != "VERT" and s.chamfer_smooth:
+                smooth_faces = set(bm.faces) if s.smooth_type == "OBJECT" else created
+                for face in smooth_faces:
+                    face.smooth = True
+                for edge in bm.edges:
+                    if len(edge.link_faces) == 2 and all(f in smooth_faces for f in edge.link_faces):
+                        edge.smooth = edge.calc_face_angle() < math.radians(s.smooth_threshold)
+            for seq in (bm.faces, bm.edges, bm.verts):
+                for item in seq:
+                    item.select_set(False)
+            for face in created:
+                face.select_set(True)
             if s.open:
-                bmesh.ops.delete(bm, geom=[f for f in bm.faces if f not in before], context="FACES_ONLY")
+                remove = [f for f in bm.faces if f not in created] if mode != "VERT" and s.invert_open else list(created)
+                bmesh.ops.delete(bm, geom=remove, context="FACES_ONLY")
+            bm.select_flush_mode()
         elif action == "WELD":
             ops.remove_doubles(threshold=s.threshold)
         elif action == "BRIDGE":

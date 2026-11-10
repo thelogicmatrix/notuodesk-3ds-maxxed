@@ -6,6 +6,7 @@ The reference images stay outside the repo. They never enter runtime assets.
 import argparse
 import io
 import json
+import math
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -20,11 +21,19 @@ REFERENCES = {'extrude':'extrude-05.png', 'chamfer':'chamfer-09.png',
     'msmooth':'smooth-04.png', 'relax':'relax-04.png', 'outline':'poly_face-08.png'}
 OLD = {'extrude_height':'height', 'chamfer_amount':'chamfer',
        'inset_individual':'type_group', 'tessellate_tessellate_type':'type_edge'}
+# Measured control bounds, excluding the documentation image's outer padding.
+# Chamfer's last antialiased footer row is dark. Its logical disc is 22px high.
+REFERENCE_BOUNDS = {'extrude':(5,5,108,150),'chamfer':(10,9,181,266),
+    'connect':(4,5,85,133),'bevel':(9,6,80,179),'inset':(4,3,80,104),
+    'bridge':(5,6,155,162),'weld':(4,5,103,99),'tessellate':(3,4,80,104),
+    'msmooth':(3,4,95,104),'relax':(3,3,95,133)}
 # Prefer Autodesk's isolated setting image when it supplies one. This avoids
 # cutting through neighbouring pills in tightly packed full-caddy screenshots.
 FIELD_REFS = {
     'extrude': {'extrusion_type':6,'height':9,'local_bias':10},
-    'chamfer': {'amount':11,'segments':12,'tension':13,'open':17},
+    'chamfer': {'amount':11,'segments':12,'tension':13,'open':17,
+        'chamfer_depth':13,'end_bias':15,'radial_bias':16,'invert_open':18,
+        'chamfer_smooth':19,'smooth_type':20,'smooth_threshold':21},
     'connect': {'segments':9,'pinch':10,'slide':11},
     'bevel': {'bevel_type':7,'height':10,'amount':11,'local_bias':12},
     'inset': {'individual':7,'amount':9},
@@ -38,7 +47,11 @@ FIELD_REFS = {
 # Crop the actual setting from its caddy. Outline has no published caddy image.
 ROWS = {
     'extrude': {'extrusion_type':(2,44,53,70),'height':(2,73,83,99),'local_bias':(2,103,83,129)},
-    'chamfer': {'amount':(8,78,85,105),'segments':(8,107,85,134),'tension':(8,137,85,164),'open':(8,221,61,248)},
+    'chamfer': {'amount':(10,79,81,101),'segments':(10,108,81,130),'tension':(10,137,81,159),
+        'open':(10,195,58,217),'chamfer_miter':(10,50,58,72),
+        'chamfer_depth':(10,137,81,159),'end_bias':(10,166,81,188),'radial_bias':(90,166,161,188),
+        'invert_open':(65,195,113,217),'chamfer_smooth':(10,224,58,246),
+        'smooth_type':(65,224,113,246),'smooth_threshold':(120,224,191,246)},
     'connect': {'segments':(3,28,88,54),'pinch':(3,59,88,85),'slide':(3,90,88,116)},
     'bevel': {'bevel_type':(4,41,56,65),'height':(4,72,80,96),'amount':(4,102,80,126),'local_bias':(4,132,80,156)},
     'inset': {'individual':(2,26,48,51),'amount':(2,55,82,81)},
@@ -87,6 +100,7 @@ def live_comparisons(sandbox, tag=''):
     font=ImageFont.truetype('C:/Windows/Fonts/consola.ttf',16)
     small=ImageFont.truetype('C:/Windows/Fonts/consola.ttf',13)
     evidence=[]
+    footprints=[]
     for op,reference in REFERENCES.items():
         captured=[]
         for requested in (1.0,1.5):
@@ -96,11 +110,28 @@ def live_comparisons(sandbox, tag=''):
                        key=lambda p:p.stat().st_mtime_ns)
             im=Image.open(source).convert('RGB')
             x,y=row['x'],im.height-row['y']
-            crop=im.crop((int(x-8),int(y-2),int(x+row['title_width']+8),int(y+row['height']+12)))
+            crop=im.crop((int(x-8*requested),int(y-2*requested),
+                          int(x+max(row['width'],row['title_width'])+8*requested),
+                          int(y+row['height']+12*requested)))
             # Both live panels and the reference use the same total 3x scale.
             crop=crop.resize((round(crop.width*3/requested),round(crop.height*3/requested)),Image.Resampling.NEAREST)
             captured.append((row,source,crop))
         max_image=Image.open(sandbox/'references'/reference).convert('RGBA')
+        if op in REFERENCE_BOUNDS:
+            rx,ry,rw,rh=REFERENCE_BOUNDS[op]
+            normalized=Image.new('RGBA',(rw+16,rh+14),max_image.getpixel((0,0)))
+            normalized.paste(max_image,(8-rx,2-ry))
+            max_image=normalized
+        for row,source,crop in captured:
+            factor=row['scale']
+            actual=[math.ceil(row['width']),math.ceil(row['height'])]
+            target=([math.ceil(REFERENCE_BOUNDS[op][2]*factor),math.ceil(REFERENCE_BOUNDS[op][3]*factor)]
+                    if op in REFERENCE_BOUNDS else None)
+            if target is not None:
+                assert actual==target,(op,factor,actual,target)
+            footprints.append(dict(operation=op,scale=factor,live_pixels=actual,max_pixels=target,
+                measurement='Enclosing control bounds, no documentation padding or hover tooltip',
+                reference=reference,source=str(source)))
         max_large=max_image.resize((max_image.width*3,max_image.height*3),Image.Resampling.NEAREST)
         dark_footer=Image.open(sandbox/'references/extrude-05.png').convert('RGBA').crop((0,132,88,158))
         dark_footer=dark_footer.resize((264,78),Image.Resampling.NEAREST)
@@ -126,6 +157,16 @@ def live_comparisons(sandbox, tag=''):
                              live=[str(source) for _,source,_ in captured]))
         print('COMPARE',path,flush=True)
     (sandbox/'live-comparison-index.json').write_text(json.dumps(evidence,indent=2)+'\n')
+    (sandbox/'round3-footprints.json').write_text(json.dumps(footprints,indent=2)+'\n')
+    lines=['| Caddy | Live 100% | Max 100% | Live 150% | Max 150% |',
+           '|---|---|---|---|---|']
+    def dimensions(value):
+        return 'Unverified' if value is None else ' x '.join(map(str,value))
+    for op in REFERENCES:
+        first,second=[r for r in footprints if r['operation']==op]
+        lines.append('| '+op+' | '+' | '.join(dimensions(v) for v in
+                     [first['live_pixels'],first['max_pixels'],second['live_pixels'],second['max_pixels']])+' |')
+    (sandbox/'round3-footprints.md').write_text('\n'.join(lines)+'\n')
 
 
 def main(sandbox, include_live=False, tag=''):
@@ -153,7 +194,7 @@ def main(sandbox, include_live=False, tag=''):
                 # Same medium-grey pill background as the actual caddies.
                 for dx,src in ((0,sandbox/'baseline/src'/(old+'.svg')),(size+6,ICONS/'src'/(name+'.svg'))):
                     d.rectangle((x+dx-2,y+33,x+dx+size+1,y+33+size),fill='#93999c')
-                    if not (dx and op=='msmooth' and key in {'separate_smoothing','separate_materials'}):
+                    if src.is_file() and not (dx and op=='msmooth' and key in {'separate_smoothing','separate_materials'}):
                         tile=render(src,size);sheet.paste(tile,(x+dx,y+33),tile)
                 d.text((x,y+9),str(size)+'px',font=small,fill='#c6ced2')
                 x += size*2+16
@@ -164,6 +205,9 @@ def main(sandbox, include_live=False, tag=''):
             elif op=='outline':
                 crop=ref.copy();crop.thumbnail((130,68))
                 d.text((870,y+78),'No Max caddy image published',font=small,fill='#f3c37c')
+            elif key in {'bridge_adjacent','reverse_triangulation'}:
+                ref=Image.open(sandbox/'references/bridge_edges-06.png').convert('RGBA')
+                crop=ref.copy();crop.thumbnail((130,68))
             else:
                 crop=ref.crop(ROWS[op][key]);crop.thumbnail((200,60))
                 ref_prefix='smooth' if op=='msmooth' else op

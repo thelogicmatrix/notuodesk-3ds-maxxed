@@ -2445,9 +2445,49 @@
       "baseline": null
     },
     {
+      "name": "caddy_state_dark_off",
+      "section": "caddies",
+      "idea": "Dark caddy checkbox off",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy checkbox state",
+      "note": "Original state glyph. No field pictogram or footer disc.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_state_dark_on",
+      "section": "caddies",
+      "idea": "Dark caddy checkbox on",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy checkbox state",
+      "note": "Original state glyph. No field pictogram or footer disc.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_state_light_off",
+      "section": "caddies",
+      "idea": "Light caddy checkbox off",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy checkbox state",
+      "note": "Original state glyph. No field pictogram or footer disc.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_state_light_on",
+      "section": "caddies",
+      "idea": "Light caddy checkbox on",
+      "reference": "caddy",
+      "presentation": "icon-only",
+      "spot": "Caddy checkbox state",
+      "note": "Original state glyph. No field pictogram or footer disc.",
+      "baseline": null
+    },
+    {
       "name": "caddy_ok",
       "section": "caddies",
-      "idea": "Cyan check on grey OK disc",
+      "idea": "Cyan outlined check on grey OK disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer OK (Enter)",
@@ -2457,7 +2497,7 @@
     {
       "name": "caddy_apply",
       "section": "caddies",
-      "idea": "Cyan plus on grey Apply and Continue disc",
+      "idea": "Cyan outlined plus on grey Apply and Continue disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer Apply and Continue (Ctrl+Enter)",
@@ -2467,7 +2507,7 @@
     {
       "name": "caddy_cancel",
       "section": "caddies",
-      "idea": "Cyan cross on grey Cancel disc",
+      "idea": "Cyan outlined cross on grey Cancel disc",
       "reference": "caddy",
       "presentation": "icon-only",
       "spot": "Caddy footer Cancel (Esc)",
@@ -2705,6 +2745,86 @@
       "baseline": null
     },
     {
+      "name": "caddy_chamfer_chamfer_miter",
+      "section": "caddies",
+      "idea": "Folded quad corner for the 2026 mitering flyout",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, chamfer miter",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_chamfer_depth",
+      "section": "caddies",
+      "idea": "Corner profile used for chamfer depth",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, chamfer depth",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_end_bias",
+      "section": "caddies",
+      "idea": "Corner profile used for end bias",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, end bias",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_radial_bias",
+      "section": "caddies",
+      "idea": "Corner profile used for radial bias",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, radial bias",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_invert_open",
+      "section": "caddies",
+      "idea": "Inset gridded square for Invert Open",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, invert open",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_chamfer_smooth",
+      "section": "caddies",
+      "idea": "Cylinder with a cyan smooth wall",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, chamfer smooth",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_smooth_type",
+      "section": "caddies",
+      "idea": "Shaded cube for the smoothing scope flyout",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, smooth type",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_chamfer_smooth_threshold",
+      "section": "caddies",
+      "idea": "Shaded cube with a threshold pointer",
+      "reference": "chamfer",
+      "presentation": "icon-only",
+      "spot": "Chamfer caddy, smooth threshold",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
       "name": "caddy_connect_segments",
       "section": "caddies",
       "idea": "Upright block divided by horizontal segment lines",
@@ -2821,6 +2941,26 @@
       "reference": "bridge",
       "presentation": "icon-only",
       "spot": "Bridge caddy, smooth",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_bridge_adjacent",
+      "section": "caddies",
+      "idea": "Two adjacent border faces",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, bridge adjacent",
+      "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
+      "baseline": null
+    },
+    {
+      "name": "caddy_bridge_reverse_triangulation",
+      "section": "caddies",
+      "idea": "Reversed diagonal in a polygon grid",
+      "reference": "bridge",
+      "presentation": "icon-only",
+      "spot": "Bridge caddy, reverse triangulation",
       "note": "Original shaded pictogram. Operation and field have their own key. Max reference is visual study only.",
       "baseline": null
     },

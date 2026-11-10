@@ -84,9 +84,10 @@ def add(name, body, idea, section='toolbar', ref='toolbar', mode='icon-only', sp
     if name in ART:
         raise ValueError('Duplicate drawing ' + name)
     # Whole-unit stroke widths retain a stable weight at the native 16px size.
-    body = re.sub(r'stroke-width="([\d.]+)"',
-                  lambda m: 'stroke-width="'+str(0 if float(m[1]) == 0 else
-                                                1 if float(m[1]) < 1.5 else 2)+'"', body)
+    if name not in {'caddy_ok', 'caddy_apply', 'caddy_cancel'} and not name.startswith('caddy_state_'):
+        body = re.sub(r'stroke-width="([\d.]+)"',
+                      lambda m: 'stroke-width="'+str(0 if float(m[1]) == 0 else
+                                                    1 if float(m[1]) < 1.5 else 2)+'"', body)
     ART[name] = body
     CAT.append(dict(name=name, section=section, idea=idea, reference=ref, presentation=mode,
                     spot=spot or section.replace('_', ' '), note=note,
@@ -426,12 +427,24 @@ def caddies():
             body+=number_badge(2 if n.endswith('2') else 1)
         add('caddy_'+n,body,idea+' ('+n.replace('_',' ')+')','caddies',ref,'icon-only','Caddy '+n.replace('_',' '),note=f"Exact pending branch field key '{n}'. Maps to kind '{kind}'.")
     add('caddy_weld_counts',path('M1 4 H6 M1 8 H6 M10 4 H15 M10 8 H15',G)+path('M7 6 H10 M8 4 10 6 8 8',C),'Before and after count comparison','caddies','poly_vertex','text-only','Weld caddy Before / After counts',note='Max shows Before and After text. This reserved asset must not replace those counts.')
-    disc = circle(8,8,6.2,'#9ba0a2','#303b40',1)+path('M2.5 8 A5.5 5.5 0 0 1 13.5 8','#aab0b2',1)
-    # add() quantizes strokes to one or two units. Keep the inner stroke at
-    # one unit so the dark outline survives at native caddy size.
-    add('caddy_ok',disc+path('M4.5 8 6.8 10.2 11.3 5.5','#303b40',2)+path('M4.5 8 6.8 10.2 11.3 5.5','#4e9da1',1),'Cyan check on grey OK disc','caddies','caddy',spot='Caddy footer OK (Enter)')
-    add('caddy_apply',disc+path('M5 8 H11 M8 5 V11','#303b40',2)+path('M5 8 H11 M8 5 V11','#4e9da1',1),'Cyan plus on grey Apply and Continue disc','caddies','caddy',spot='Caddy footer Apply and Continue (Ctrl+Enter)')
-    add('caddy_cancel',disc+path('M5.5 5.5 10.5 10.5 M5.5 10.5 10.5 5.5','#303b40',2)+path('M5.5 5.5 10.5 10.5 M5.5 10.5 10.5 5.5','#4e9da1',1),'Cyan cross on grey Cancel disc','caddies','caddy',spot='Caddy footer Cancel (Esc)')
+    disc = circle(8,8,6,'#a5a5a5','#343434',.6)+path('M2.5 8 A5.5 5.5 0 0 1 13.5 8','#c2c2c2',.4)
+    # Closed outlines preserve the Max dark-theme glyph's corners and weight.
+    # Coordinates are authored geometry, with no reference pixels in the asset.
+    check = poly('3.8,8.3 5.3,6.8 6.8,8.3 10.4,3.8 12,5.2 7,11.8', '#57989b','#344549',.6)
+    plus = poly('7,4 9,4 9,7 12,7 12,9 9,9 9,12 7,12 7,9 4,9 4,7 7,7', '#57989b','#344549',.6)
+    cross = poly('5.5,4 8,6.5 10.5,4 12,5.5 9.5,8 12,10.5 10.5,12 8,9.5 5.5,12 4,10.5 6.5,8 4,5.5', '#57989b','#344549',.6)
+    glyph_transform = 'translate(8 8) scale(.72) translate(-8 -8)'
+    for theme, points in (
+            ('dark', '2.5,9 4,7.5 6.5,10 11.5,2 13,3 6.5,14'),
+            ('light', '2,8 3.5,6.5 6.5,9 12,3.5 13.5,5 6.5,12')):
+        for checked in (False, True):
+            fill, edge = (('#57989b', '#344549') if theme == 'dark' else ('#626262', '#626262')) if checked else ('#d0d0d0', '#909090')
+            add('caddy_state_'+theme+('_on' if checked else '_off'), poly(points, fill, edge, .7),
+                theme.capitalize()+' caddy checkbox '+('on' if checked else 'off'), 'caddies', 'caddy',
+                spot='Caddy checkbox state', note='Original state glyph. No field pictogram or footer disc.')
+    add('caddy_ok',disc+group(check,glyph_transform),'Cyan outlined check on grey OK disc','caddies','caddy',spot='Caddy footer OK (Enter)')
+    add('caddy_apply',disc+group(plus,glyph_transform),'Cyan outlined plus on grey Apply and Continue disc','caddies','caddy',spot='Caddy footer Apply and Continue (Ctrl+Enter)')
+    add('caddy_cancel',disc+group(cross,glyph_transform),'Cyan outlined cross on grey Cancel disc','caddies','caddy',spot='Caddy footer Cancel (Esc)')
     # Choice flyouts must change their pictogram instead of printing Group/Local.
     for name,body,idea in [
         ('group',rect(2.5,2.5,11,11,'none',C)+path('M6 2.5 V13.5 M10 2.5 V13.5 M2.5 6 H13.5 M2.5 10 H13.5',G),'Single connected group of polygons'),

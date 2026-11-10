@@ -101,6 +101,23 @@ def caddy_icons(add, path, poly, rect, circle):
          ''.join(rect(x,y,3,3,cyan if (x,y)==(6.5,6.5) else mid,edge,.6)
                  for x in (2,6.5,11) for y in (2,6.5,11)),
          'Nine small square openings in a flat polygon grid')
+    miter = (face('3,3 8,2 13,3 13,13 8,10 3,13',cyan)+
+             line('M8 2 V10 M3 7 8 5 13 7',edge))
+    emit('chamfer','chamfer_miter',miter,'Folded quad corner for the 2026 mitering flyout')
+    corner = (rect(2,2,3,12,mid,edge)+rect(2,2,12,3,mid,edge)+
+              face('3,3 8,5 5,9',cyan)+line('M3 3 6 6',dark)+
+              poly('10,9 15,9 15,11 13.5,11 13.5,15 11.5,15 11.5,11 10,11',cyan,edge,.7))
+    for key in ('chamfer_depth','end_bias','radial_bias'):
+        emit('chamfer',key,corner,'Corner profile used for '+key.replace('_',' '))
+    emit('chamfer','invert_open',grid()+rect(4,4,8,8,mid,edge),
+         'Inset gridded square for Invert Open')
+    cylinder = (path('M2 5 V12 C2 16 14 16 14 12 V5',edge,1,cyan)+
+                path('M2 5 C2 1 14 1 14 5 C14 9 2 9 2 5 Z',edge,1,mid))
+    emit('chamfer','chamfer_smooth',cylinder,'Cylinder with a cyan smooth wall')
+    smooth_cube = (face('2,5 8,2 14,5 8,8',light)+face('2,5 8,8 8,14 2,11',cyan)+
+                   face('8,8 14,5 14,11 8,14',mid))
+    emit('chamfer','smooth_type',smooth_cube,'Shaded cube for the smoothing scope flyout')
+    emit('chamfer','smooth_threshold',smooth_cube+pointer(),'Shaded cube with a threshold pointer')
 
     emit('connect','segments',stack(),'Upright block divided by horizontal segment lines')
     emit('connect','pinch',stack(pinch=True),'Stacked block with two plus marks along its right edge')
@@ -121,6 +138,10 @@ def caddy_icons(add, path, poly, rect, circle):
          path('M9 2 Q10 9 14 13 L12 14 Q9 10 8 3 Z',dark,.7,mid),
          'Flared bell shape with a narrow neck and curved sides')
     emit('bridge','smooth',sphere(),'Gridded sphere with a cyan lower hemisphere')
+    emit('bridge','bridge_adjacent',face('2,4 8,2 8,13 2,15',mid)+
+         face('8,2 14,4 14,15 8,13',cyan),'Two adjacent border faces')
+    emit('bridge','reverse_triangulation',grid()+line('M2 14 14 2',blue),
+         'Reversed diagonal in a polygon grid')
     hourglass = (face('2,1.5 12,1.5 9,8 12,14 2,14 6,8',light) +
                  face('12,1.5 14,1.5 11,8 13,14 12,14 9,8',dark) +
                  face('2,1.5 9,8 6,8',mid) + face('6,8 12,14 2,14',mid))

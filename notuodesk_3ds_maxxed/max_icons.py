@@ -23,13 +23,16 @@ CADDY_OPERATIONS = {
     'EXTRUDE': dict(amount='caddy_extrude_height',
                     **{key: 'caddy_extrude_'+key for key in
                        ('extrusion_type', 'local_bias', 'base_width')}),
-    'CHAMFER': {key: 'caddy_chamfer_'+key for key in ('amount', 'segments', 'tension', 'open')},
+    'CHAMFER': {key: 'caddy_chamfer_'+key for key in
+                ('amount', 'segments', 'tension', 'open', 'chamfer_miter', 'chamfer_depth',
+                 'end_bias', 'radial_bias', 'invert_open', 'chamfer_smooth', 'smooth_type', 'smooth_threshold')},
     'CONNECT': {key: 'caddy_connect_'+key for key in ('segments', 'pinch', 'slide')},
     'BEVEL': {key: 'caddy_bevel_'+key for key in ('bevel_type', 'height', 'amount', 'local_bias')},
     'INSET': {key: 'caddy_inset_'+key for key in ('individual', 'amount')},
     'OUTLINE': dict(amount='caddy_outline_amount'),
     'BRIDGE': {key: 'caddy_bridge_'+key for key in
-               ('segments', 'taper', 'bias', 'smooth', 'twist1', 'twist2', 'bridge_selection', 'pick1', 'pick2')},
+               ('segments', 'taper', 'bias', 'smooth', 'twist1', 'twist2', 'bridge_selection', 'pick1', 'pick2',
+                'bridge_adjacent', 'reverse_triangulation')},
     'WELD': {key: 'caddy_weld_'+key for key in ('threshold', 'weld_counts')},
     'TESSELLATE': {key: 'caddy_tessellate_'+key for key in ('tessellate_type', 'tess_tension')},
     'MSMOOTH': {key: 'caddy_msmooth_'+key for key in

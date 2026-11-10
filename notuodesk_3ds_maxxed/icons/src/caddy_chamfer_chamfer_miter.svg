@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<title>caddy_chamfer_chamfer_miter</title>
+<desc>Folded quad corner for the 2026 mitering flyout</desc>
+<g stroke-linecap="square" stroke-linejoin="miter">
+<polygon points="3,3 8,2 13,3 13,13 8,10 3,13" fill="#64c6d3" stroke="#303b40" stroke-width="1"/><path d="M8 2 V10 M3 7 8 5 13 7" fill="none" stroke="#303b40" stroke-width="1"/>
+</g>
+</svg>

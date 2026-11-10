@@ -2,8 +2,8 @@
 <!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
 <title>caddy_ok</title>
-<desc>Cyan check on grey OK disc</desc>
+<desc>Cyan outlined check on grey OK disc</desc>
 <g stroke-linecap="square" stroke-linejoin="miter">
-<circle cx="8" cy="8" r="6.2" fill="#9ba0a2" stroke="#303b40" stroke-width="1"/><path d="M2.5 8 A5.5 5.5 0 0 1 13.5 8" fill="none" stroke="#aab0b2" stroke-width="1"/><path d="M4.5 8 6.8 10.2 11.3 5.5" fill="none" stroke="#303b40" stroke-width="2"/><path d="M4.5 8 6.8 10.2 11.3 5.5" fill="none" stroke="#4e9da1" stroke-width="1"/>
+<circle cx="8" cy="8" r="6" fill="#a5a5a5" stroke="#343434" stroke-width="0.6"/><path d="M2.5 8 A5.5 5.5 0 0 1 13.5 8" fill="none" stroke="#c2c2c2" stroke-width="0.4"/><g transform="translate(8 8) scale(.72) translate(-8 -8)"><polygon points="3.8,8.3 5.3,6.8 6.8,8.3 10.4,3.8 12,5.2 7,11.8" fill="#57989b" stroke="#344549" stroke-width="0.6"/></g>
 </g>
 </svg>
