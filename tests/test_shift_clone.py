@@ -38,6 +38,18 @@ class ShiftCloneTests(unittest.TestCase):
         tx.cancel()
         self.assertEqual(len(bpy.context.scene.objects), 4)
 
+    def test_cancelled_transform_is_not_changed_before_the_next_redraw(self):
+        tx = shift_clone.ObjectClone(bpy.context)
+        preview = tx.preview[0]
+        preview.location.x = 3
+        bpy.context.view_layer.update()
+        # Native cancellation resets local channels before its depsgraph redraw.
+        preview.location.x = 0
+        try:
+            self.assertFalse(tx.changed(), 'Cancelled local channels must not open Clone Options')
+        finally:
+            tx.cancel()
+
     def test_instance_reference_scale_and_rotation(self):
         for mode in ('INSTANCE', 'REFERENCE'):
             bpy.ops.object.select_all(action='DESELECT')

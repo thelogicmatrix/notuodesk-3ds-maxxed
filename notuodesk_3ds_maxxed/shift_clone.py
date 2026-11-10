@@ -100,6 +100,9 @@ class ObjectClone:
     def changed(self):
         if not self.valid():
             return False
+        # Native cancel restores local channels before the next depsgraph draw.
+        # The observer's TIMER can arrive first and see the old world matrix.
+        self.context.view_layer.update()
         return any(any(abs(a - b) > 1e-6 for row1, row2 in zip(ob.matrix_world, matrix)
                        for a, b in zip(row1, row2))
                    for ob, matrix in zip(self.preview, self.matrices))
