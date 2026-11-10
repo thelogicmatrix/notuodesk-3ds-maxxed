@@ -52,7 +52,7 @@ def spinner(layout, data, prop, label, *, enabled=True, step=.1, arrows=True, in
             step = snap_increment
     row = compact(layout.row(align=True))
     row.enabled = enabled
-    split = row.split(factor=.53, align=True)
+    split = row.split(factor=.56, align=True)
     left = split.row()
     left.alignment = 'RIGHT'
     left.label(text=label.rstrip(':') + ':')
@@ -64,7 +64,7 @@ def spinner(layout, data, prop, label, *, enabled=True, step=.1, arrows=True, in
         buttons.ui_units_x = .65
         buttons.scale_y = .5
         for sign, icon in ((1, 'TRIA_UP'), (-1, 'TRIA_DOWN')):
-            op = buttons.operator('max.widget_adjust', text='', icon=icon, emboss=False)
+            op = buttons.operator('max.widget_adjust', text='', icon=icon)
             op.property_name = prop
             op.property_index = index
             op.increment = step * sign

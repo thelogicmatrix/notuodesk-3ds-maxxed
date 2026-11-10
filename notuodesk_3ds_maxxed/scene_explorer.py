@@ -255,23 +255,115 @@ class MAX_OT_scene_selection_toggle(bpy.types.Operator):
 
 def draw_explorer(layout, context):
     row = layout.row(align=True)
-    row.prop(context.window_manager, "max_explorer_search", text="Search")
-    row.operator("max.explorer_action", text="Clear").action = "CLEAR"
+    row.prop(context.window_manager, "max_explorer_search", text="", icon='VIEWZOOM')
+    row.operator("max.explorer_action", text="", icon='X').action = "CLEAR"
+    row.operator('max.layer_dialog', text='', icon='OUTLINER_COLLECTION')
+    header = layout.row(align=True)
+    header.label(text='Name')
+    header.label(text='Hidden')
+    header.label(text='Frozen')
     for entry in scene_rows(context, context.window_manager.max_explorer_search):
         obj = entry.obj
         row = layout.row(align=True)
         row.label(text="    " * entry.depth)
         op = row.operator("max.explorer_action", text="", icon="TRIA_RIGHT" if obj.get("max_explorer_collapsed") else "TRIA_DOWN", emboss=False)
         op.action, op.object_name, op.value = "EXPAND", obj.name, bool(obj.get("max_explorer_collapsed"))
-        op = row.operator("max.explorer_action", text=obj.name, depress=obj.select_get())
+        object_icon = {'MESH': 'OUTLINER_OB_MESH', 'CURVE': 'OUTLINER_OB_CURVE',
+                       'CAMERA': 'OUTLINER_OB_CAMERA', 'LIGHT': 'OUTLINER_OB_LIGHT'}.get(obj.type, 'OBJECT_DATA')
+        op = row.operator("max.explorer_action", text=obj.name, icon=object_icon,
+                          emboss=False, depress=obj.select_get())
         op.action, op.object_name = "SELECT", obj.name
-        row.label(text=max_layers.label(max_layers.membership(context.scene, obj)))
-        for action, text, state in (("HIDE", "Hide", obj.hide_get()), ("FREEZE", "Freeze", obj.max_frozen)):
-            op = row.operator("max.explorer_action", text=text, depress=state)
+        for action, glyph, state in (("HIDE", 'HIDE_ON' if obj.hide_get() else 'HIDE_OFF', obj.hide_get()),
+                                      ("FREEZE", 'LOCKED' if obj.max_frozen else 'UNLOCKED', obj.max_frozen)):
+            op = row.operator("max.explorer_action", text='', icon=glyph, emboss=False, depress=state)
             op.action, op.object_name, op.value = action, obj.name, not state
-        op = row.operator("max.explorer_action", text="Rename")
+        op = row.operator("max.explorer_action", text="", icon='GREASEPENCIL')
         op.action, op.object_name = "RENAME", obj.name
     max_layers.draw_layers(layout.box(), context)
+
+
+def draw_docked(host, context, width, height, scale, rect, text, line, op):
+    """Compact name table. The overview proves columns, not toolbar glyph detail."""
+    import blf
+    import gpu
+    from . import max_icons
+    s = scale
+    font = 12*s
+
+    def caption(x, y, value, available, color=(.87, .87, .87, 1)):
+        blf.size(0, font)
+        while value and blf.dimensions(0, value)[0] > available:
+            value = value[:-1]
+        text(x, y, value, round(font), color)
+
+    def icon(x, y, art, callback, active=False, size=22):
+        if active:
+            rect(x, y, size*s, size*s, (.28, .39, .49, 1))
+        gpu.state.blend_set('ALPHA')
+        if art == 'clear':
+            line((x+6*s, y+6*s), (x+16*s, y+16*s), (.65, .65, .65, 1))
+            line((x+6*s, y+16*s), (x+16*s, y+6*s), (.65, .65, .65, 1))
+        else:
+            max_icons.draw(art, x+size*s/2, y+size*s/2, 16*s)
+        if callback:
+            host.hits.append(((x, y, x+size*s, y+size*s), callback))
+
+    y = height-65*s
+    search_width = max(24*s, width-62*s)
+    rect(7*s, y, search_width, 21*s, (.24, .24, .24, 1))
+    caption(12*s, y+5*s, context.window_manager.max_explorer_search,
+            search_width-10*s)
+    host.hits.append(((7*s, y, 7*s+search_width, y+21*s),
+                      op('max.explorer_action', action='SEARCH')))
+    icon(width-51*s, y, 'clear', op('max.explorer_action', action='CLEAR'))
+    icon(width-28*s, y, 'select_by_name', op('max.scene_selection_dialog'))
+    y -= 24*s
+    hidden_x, frozen_x = width-98*s, width-51*s
+    rect(6*s, y, width-12*s, 21*s, (.22, .22, .22, 1))
+    caption(12*s, y+5*s, 'Name', max(0, hidden_x-16*s))
+    caption(hidden_x, y+5*s, 'Hidden', 44*s)
+    caption(frozen_x, y+5*s, 'Frozen', 44*s)
+    rows = scene_rows(context, context.window_manager.max_explorer_search)
+    capacity = max(1, int((y-44*s)/(21*s)))
+    host.scroll = min(host.scroll, max(0, len(rows)-capacity))
+    for index, entry in enumerate(rows[host.scroll:host.scroll+capacity]):
+        y -= 21*s
+        obj = entry.obj
+        rect(6*s, y, width-12*s, 21*s,
+             (.27, .39, .49, 1) if obj.select_get() else
+             ((.31, .31, .31, 1) if index % 2 else (.29, .29, .29, 1)))
+        x = min(9*s+entry.depth*12*s, max(9*s, hidden_x-58*s))
+        if obj.children:
+            collapsed = bool(obj.get('max_explorer_collapsed'))
+            caption(x, y+5*s, '+' if collapsed else '-', 12*s)
+            host.hits.append(((x, y, x+12*s, y+21*s),
+                             op('max.explorer_action', action='EXPAND',
+                                object_name=obj.name, value=collapsed)))
+        x += 12*s
+        art = {'MESH': 'box', 'CURVE': 'line', 'LIGHT': 'lights',
+               'CAMERA': 'cameras', 'EMPTY': 'select_object'}.get(obj.type, 'select_object')
+        gpu.state.blend_set('ALPHA')
+        max_icons.draw(art, x+8*s, y+10*s, 14*s)
+        caption(x+19*s, y+5*s, obj.name, max(0, hidden_x-x-22*s))
+        host.hits.append(((x, y, hidden_x, y+21*s),
+                          op('max.explorer_action', action='SELECT', object_name=obj.name)))
+        icon(hidden_x, y, 'bulb_off' if obj.hide_get() else 'bulb_on',
+             op('max.explorer_action', action='HIDE', object_name=obj.name,
+                value=not obj.hide_get()), size=20)
+        icon(frozen_x, y, 'freeze',
+             op('max.explorer_action', action='FREEZE', object_name=obj.name,
+                value=not obj.max_frozen), obj.max_frozen, size=20)
+    line((hidden_x-2*s, 40*s), (hidden_x-2*s, height-68*s), (.21, .21, .21, 1))
+    line((frozen_x-2*s, 40*s), (frozen_x-2*s, height-68*s), (.21, .21, .21, 1))
+    tools = [('select_by_name', op('max.scene_selection_dialog')),
+             ('hide_sel', op('max.scene_selection_dialog', hide=True)),
+             ('layer_explorer', op('max.layer_dialog')),
+             ('move', op('max.layer_action', action='ASSIGN'))]
+    if context.active_object:
+        tools.append(('edit_mode', op('max.explorer_action', action='RENAME',
+                                   object_name=context.active_object.name)))
+    for index, (art, callback) in enumerate(tools):
+        icon((8+24*index)*s, 10*s, art, callback)
 
 
 classes = (MAX_OT_explorer_action, MAX_OT_scene_selection_toggle, MAX_OT_scene_selection_dialog)
