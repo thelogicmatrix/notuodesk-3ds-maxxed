@@ -24,7 +24,8 @@ for kind, stages in extended_primitives.STAGES.items():
     ob = create.new_object(bpy.context, kind, bpy.data.meshes.new(kind))
     prims.set_params(ob, kind, radius1=8, width=8, length=8, front_length=8, back_length=8, side_length=8, height=8)
     for stage in stages:
-        for raw, want in ((1.3, 1.3), (1.04, 1.0)):
+        for raw, want, event_type in ((1.3, 1.3, 'MOUSEMOVE'), (1.04, 1.0, 'MOUSEMOVE'),
+                                      (1.12, 1.12, 'MOUSEMOVE'), (1.12, 1.0, 'LEFTMOUSE')):
             prims.set_params(ob, kind, radius1=8, width=8, length=8, front_length=8, back_length=8, side_length=8, height=8)
             op = SimpleNamespace(obj=ob, region=region, rv3d=rv, p0=Vector(),
                                  n=Vector((0,0,1)), u=Vector((1,0,0)),
@@ -33,7 +34,7 @@ for kind, stages in extended_primitives.STAGES.items():
                                  _redraw=lambda context: None)
             with patch.object(create.view3d_utils, "region_2d_to_location_3d",
                               side_effect=lambda region, rv, co, base: Vector((co.x/200,co.y/200,0))):
-                create.MAX_OT_create._update_creation_stage(op,bpy.context,None)
+                create.MAX_OT_create._update_creation_stage(op,bpy.context,SimpleNamespace(type=event_type))
             got = ob.max_prim.side_width if stage == "wall_width" else getattr(ob.max_prim,stage)
             assert abs(got-want) < 1e-4, (kind,stage,raw,got,want)
     bpy.data.objects.remove(ob, do_unlink=True)
