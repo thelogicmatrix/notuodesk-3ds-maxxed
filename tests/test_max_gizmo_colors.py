@@ -50,8 +50,8 @@ class GizmoColors(unittest.TestCase):
         for active, locked in (('CENTER', 'X'), ('OFF', 'XYZ')):
             fill = g.element_color('SCALE', 'fill', 'CENTER', clear, active, locked)
             self.assertEqual(fill[:3], g.TRANSFORM_YELLOW[:3])
-            self.assertGreaterEqual(fill[3], .18)
-            self.assertLess(fill[3], .6)
+            self.assertGreaterEqual(fill[3], .05)
+            self.assertLessEqual(fill[3], .1)
             for axis, native in zip('XYZ', g.TRANSFORM_COLORS):
                 self.assertEqual(g.element_color('SCALE', 'shaft', axis, native, active, locked), native)
                 self.assertEqual(g.element_color('SCALE', 'uniform_inner', axis, native, active, locked),
@@ -67,7 +67,7 @@ class GizmoColors(unittest.TestCase):
                     fill = g.element_color(operation, 'fill', plane, clear, active, locked)
                     self.assertLess(max(fill[:3]) - min(fill[:3]), .001)
                     self.assertGreaterEqual(fill[3], .25)
-                    self.assertLess(fill[3], .6)
+                    self.assertLessEqual(fill[3], .34)
                     for background in (.035, .4, 1):
                         composite = sum(fill[:3]) / 3 * fill[3] + background * (1 - fill[3])
                         self.assertLess(composite, background * .8)

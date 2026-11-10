@@ -43,8 +43,8 @@ def element_color(operation, element, handle, native, active, locked):
             return native
         if handle in {"XY", "YZ", "ZX"}:
             # A neutral overlay darkens the viewport into Max's grey plane.
-            return (0, 0, 0, .35)
-        return (*TRANSFORM_YELLOW[:3], .24 if operation == "SCALE" else .06)
+            return (0, 0, 0, .32)
+        return (*TRANSFORM_YELLOW[:3], .06)
     if operation == "MOVE" and handle == "CENTER":
         return TRANSFORM_YELLOW
     if operation == "SCALE" and element == "outline" and center:
