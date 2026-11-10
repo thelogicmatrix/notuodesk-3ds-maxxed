@@ -11,9 +11,7 @@ from bpy_extras.io_utils import ImportHelper, ExportHelper
 from . import max_icons
 
 NUM_SLOTS = 24
-MAX_DEFAULT_DIFFUSE = (.5, .5, .5)
-MATERIAL_PROPS = ('max_diffuse', 'max_specular', 'max_spec_level', 'max_glossiness',
-                  'max_opacity', 'max_ior', 'max_two_sided')
+MAX_DEFAULT_DIFFUSE = (150/255, 150/255, 150/255)
 MAP_PREFIX = 'MaxMap_'
 MAP_CHANNELS = (
     ('AMBIENT', 'Ambient Color', None, True),
@@ -168,6 +166,21 @@ def _two_sided_set(material, value):
     material.use_backface_culling = not value
 
 
+MATERIAL_PROPS = {
+    'max_diffuse': FloatVectorProperty(name='Diffuse', size=3, subtype='COLOR', min=0, max=1,
+        get=_diffuse_get, set=_diffuse_set),
+    'max_specular': FloatVectorProperty(name='Specular', size=3, subtype='COLOR', min=0, max=1,
+        get=_specular_get, set=_specular_set),
+    'max_spec_level': IntProperty(name='Specular Level', min=0, max=999, soft_max=100,
+        get=_level_get, set=_level_set),
+    'max_glossiness': IntProperty(name='Glossiness', min=0, max=100, get=_gloss_get, set=_gloss_set),
+    'max_opacity': IntProperty(name='Opacity', min=0, max=100, subtype='PERCENTAGE',
+        get=_opacity_get, set=_opacity_set),
+    'max_ior': FloatProperty(name='Index of Refraction', min=1, max=10, get=_ior_get, set=_ior_set),
+    'max_two_sided': BoolProperty(name='2-Sided', get=_two_sided_get, set=_two_sided_set),
+}
+
+
 def _standard_update(self, context):
     material = self.id_data
     color = self.self_illum_color if self.self_illum_color_on else _diffuse_get(material)
@@ -256,21 +269,22 @@ class MaxMtlEditorState(bpy.types.PropertyGroup):
         ('24', '6 x 4', ''), ('ALL', 'All (Extension)', '')], default='6')
 
 
-def new_default_material(index):
+def new_default_material(index, kind='PHYSICAL'):
     material = bpy.data.materials.new(f'{index+1:02d} - Default')
     material.use_nodes = True
-    material['max_type'] = 'PHYSICAL'
-    material.max_diffuse = MAX_DEFAULT_DIFFUSE
+    material['max_type'] = kind
+    material.max_diffuse = MAX_DEFAULT_DIFFUSE if kind == 'STANDARD' else (.5, .5, .5)
     material.max_specular = (1, 1, 1)
     material.max_spec_level = 0
     material.max_glossiness = 10
     material.max_opacity = 100
     material.max_two_sided = False
     material.max_std.shader = 'BLINN'
-    material.max_physical.roughness = 0
-    material.max_physical.coating = 0
-    material.max_ior = 1.52
-    material.max_spec_level = 50
+    if kind == 'PHYSICAL':
+        material.max_physical.roughness = 0
+        material.max_physical.coating = 0
+        material.max_ior = 1.52
+        material.max_spec_level = 50
     return material
 
 
@@ -318,7 +332,8 @@ def material_kind(material):
     return material.get('max_type', 'VRAY' if material.get('max_vray') else 'STANDARD') if material else 'STANDARD'
 
 
-def map_node(material, channel):
+def map_node(mat, channel):
+    material = mat
     if channel not in _all_map_info or not material or not material.node_tree:
         return None
     return material.node_tree.nodes.get(MAP_PREFIX + channel)
@@ -374,7 +389,8 @@ def set_map_amount(material, channel, amount):
         set_map_enabled(material, channel, map_enabled(material, channel))
 
 
-def set_map(material, channel, image):
+def set_map(mat, channel, image):
+    material = mat
     if channel not in _all_map_info:
         raise ValueError('Unknown material map channel')
     if material.library:
@@ -430,7 +446,8 @@ def set_map(material, channel, image):
     return texture
 
 
-def clear_map(material, channel):
+def clear_map(mat, channel):
+    material = mat
     if material.library:
         raise ValueError('Linked materials are read-only')
     texture = map_node(material, channel)
@@ -574,7 +591,7 @@ class MAX_OT_mtl_reset(bpy.types.Operator):
             return {'CANCELLED'}
         for key in _all_map_info:
             clear_map(material, key)
-        material.max_diffuse = (.5, .5, .5)
+        material.max_diffuse = MAX_DEFAULT_DIFFUSE if material_kind(material) == 'STANDARD' else (.5, .5, .5)
         material.max_specular = (1, 1, 1)
         material.max_spec_level, material.max_glossiness, material.max_opacity = 0, 10, 100
         material.max_ior, material.max_two_sided = 1.5, False
@@ -585,7 +602,7 @@ class MAX_OT_mtl_reset(bpy.types.Operator):
         _shader_update(material.max_std, context)
         if material_kind(material) == 'PHYSICAL':
             material.max_physical.base_weight = 1
-            material.max_physical.base_color = MAX_DEFAULT_DIFFUSE
+            material.max_physical.base_color = (.5, .5, .5)
             material.max_physical.roughness = 0
             material.max_physical.coating = 0
             material.max_physical.transparency = 0
@@ -737,7 +754,7 @@ class MAX_OT_mtl_set_type(bpy.types.Operator):
             index = getattr(self, '_source_slot', editor.active)
             if index >= len(editor.slots):
                 return {'CANCELLED'}
-            material = editor.slots[index].material = new_default_material(index)
+            material = editor.slots[index].material = new_default_material(index, kind=self.kind)
         if material.library or shader(material, create=True) is None:
             return {'CANCELLED'}
         material['max_type'] = self.kind
@@ -2084,14 +2101,8 @@ def open_editor(context):
 def register_props():
     definitions = [(bpy.types.Material, 'max_std', PointerProperty(type=MaxStdMaterial)),
         (bpy.types.Material, 'max_physical', PointerProperty(type=MaxPhysicalMaterial)),
-        (bpy.types.Scene, 'max_mtl_editor', PointerProperty(type=MaxMtlEditorState)),
-        (bpy.types.Material, 'max_diffuse', FloatVectorProperty(name='Diffuse', size=3, subtype='COLOR', min=0, max=1, get=_diffuse_get, set=_diffuse_set)),
-        (bpy.types.Material, 'max_specular', FloatVectorProperty(name='Specular', size=3, subtype='COLOR', min=0, max=1, get=_specular_get, set=_specular_set)),
-        (bpy.types.Material, 'max_spec_level', IntProperty(name='Specular Level', min=0, max=999, soft_max=100, get=_level_get, set=_level_set)),
-        (bpy.types.Material, 'max_glossiness', IntProperty(name='Glossiness', min=0, max=100, get=_gloss_get, set=_gloss_set)),
-        (bpy.types.Material, 'max_opacity', IntProperty(name='Opacity', min=0, max=100, subtype='PERCENTAGE', get=_opacity_get, set=_opacity_set)),
-        (bpy.types.Material, 'max_ior', FloatProperty(name='Index of Refraction', min=1, max=10, get=_ior_get, set=_ior_set)),
-        (bpy.types.Material, 'max_two_sided', BoolProperty(name='2-Sided', get=_two_sided_get, set=_two_sided_set))]
+        (bpy.types.Scene, 'max_mtl_editor', PointerProperty(type=MaxMtlEditorState))]
+    definitions.extend((bpy.types.Material, key, definition) for key, definition in MATERIAL_PROPS.items())
     for owner, key, definition in definitions:
         if not hasattr(owner, key):
             setattr(owner, key, definition)

@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
+from collections.abc import Mapping
 
 import bpy
 import addon_utils
@@ -321,8 +322,14 @@ class MaterialTests(unittest.TestCase):
         self.assertFalse(bpy.app.timers.is_registered(mtl._render_previews))
 
     def test_public_identifiers_and_toolbar_policy(self):
-        self.assertEqual(set(mtl.MATERIAL_PROPS), {'max_diffuse', 'max_specular',
-            'max_spec_level', 'max_glossiness', 'max_opacity', 'max_ior', 'max_two_sided'})
+        self.assertIsInstance(mtl.MATERIAL_PROPS, Mapping)
+        self.assertEqual(list(mtl.MATERIAL_PROPS), ['max_diffuse', 'max_specular',
+            'max_spec_level', 'max_glossiness', 'max_opacity', 'max_ior', 'max_two_sided'])
+        self.assertEqual(mtl.MAX_DEFAULT_DIFFUSE, (150/255, 150/255, 150/255))
+        for key, definition in mtl.MATERIAL_PROPS.items():
+            self.assertIn(key, bpy.types.Material.bl_rna.properties)
+            self.assertTrue(callable(definition.keywords['get']))
+            self.assertTrue(callable(definition.keywords['set']))
         self.assertEqual(mtl.bsdf(self.material), mtl.shader(self.material))
         self.assertEqual(mtl.ensure_nodes(self.material), mtl.shader(self.material))
         fields = bpy.types.Material.bl_rna.properties
@@ -339,6 +346,28 @@ class MaterialTests(unittest.TestCase):
             self.assertTrue(getattr(bpy.ops.max, 'mtl_'+name).get_rna_type())
         self.assertNotIn('max.mtl_drag', [op for op, key, fallback in mtl.TOOLBAR])
         self.assertNotIn('max.mtl_add_slot', [op for op, key, fallback in mtl.TOOLBAR])
+
+    def test_standard_compatibility_default_is_exact_and_saved_open_is_read_only(self):
+        standard = mtl.new_default_material(30, kind='STANDARD')
+        self.assertEqual(mtl.material_kind(standard), 'STANDARD')
+        for actual in standard.max_diffuse:
+            self.assertAlmostEqual(actual, 150/255)
+        editor = mtl.state(self.context)
+        editor.slots[0].material = standard
+        standard.max_diffuse = (.11, .22, .33)
+        mtl.ensure_slots(self.context.scene)
+        self.assertAlmostEqual(standard.max_diffuse[1], .22)
+        self.assertEqual(bpy.ops.max.mtl_reset(), {'FINISHED'})
+        for actual in standard.max_diffuse:
+            self.assertAlmostEqual(actual, 150/255)
+        self.assertEqual((standard.max_spec_level, standard.max_glossiness), (0, 10))
+
+    def test_frozen_map_helpers_accept_mat_keyword(self):
+        image = bpy.data.images.new('Keyword map', width=4, height=4)
+        texture = mtl.set_map(mat=self.material, channel='DIFFUSE', image=image)
+        self.assertEqual(mtl.map_node(mat=self.material, channel='DIFFUSE'), texture)
+        mtl.clear_map(mat=self.material, channel='DIFFUSE')
+        self.assertIsNone(mtl.map_node(mat=self.material, channel='DIFFUSE'))
 
 
 if __name__ == '__main__':
