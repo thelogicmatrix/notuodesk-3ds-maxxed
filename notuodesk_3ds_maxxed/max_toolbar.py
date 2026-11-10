@@ -61,6 +61,7 @@ def chrome_items(context):
     operation = operation if operation in {'MOVE','ROTATE','SCALE'} else 'ROTATE'
     cell(max_rotate.reference_name(context,operation).replace('_',' ').title(), width=58, menu='MAX_MT_chrome_reference')
     cell('Use Center', 'pivot', menu='MAX_MT_transform_center')
+    cell('Select and Manipulate', 'manipulate', enabled=False)
     gap()
     cell('Keyboard Shortcut Override', 'shortcut_override', enabled=False)
     s = snaps.settings(context)
@@ -71,6 +72,7 @@ def chrome_items(context):
         cell({'ANGLE_SNAP':'Angle Snap Toggle','PERCENT_SNAP':'Percent Snap Toggle','SPINNER_SNAP':'Spinner Snap Toggle'}[kind],
              art, 'max.snap_toggle', {'kind':kind}, pressed=pressed)
     gap()
+    cell('Edit Named Selection Sets', 'named_selection_sets', menu='MAX_MT_chrome_sets')
     cell('Create Selection Set', width=108, menu='MAX_MT_chrome_sets')
     gap()
     for key, art, label in [('mirror','mirror','Mirror'), ('align','align','Align'),
@@ -123,7 +125,8 @@ def draw_pixels():
             if cell['hold']:
                 _triangle(left+width-5*scale,bottom+2*scale,3*scale,(.85,.85,.85,1))
         else:
-            _rect(left+2*scale,bottom+3*scale,left+width-2*scale,top-3*scale,(.36,.36,.36,1))
+            _rect(left+2*scale,bottom+3*scale,left+width-2*scale,top-3*scale,(.25,.25,.25,1))
+            _rect(left+3*scale,bottom+4*scale,left+width-3*scale,top-4*scale,(.36,.36,.36,1))
             max_timeline._text(left+6*scale,height/2-3*scale,cell['label'],round(10*scale),(.78,.78,.78,1))
             # The dropdown arrow points down, not the flyout corner triangle.
             shader = gpu.shader.from_builtin('UNIFORM_COLOR')

@@ -463,6 +463,7 @@ class MAX_OT_workspace_layer_explorer(bpy.types.Operator):
 
 
 def _menus(layout, context):
+    layout.scale_x = .92
     for route, label in MAX_MENUBAR:
         route = {'TOPBAR_MT_file': 'MAX_MT_workspace_file', 'TOPBAR_MT_help': 'MAX_MT_workspace_help'}.get(route, route)
         layout.menu(route, text=label)

@@ -34,7 +34,7 @@ def _label_regions(context):
     x, y = 4*scale, region.height-14*scale
     result = []
     for menu, caption in labels:
-        text = '['+caption+']'
+        text = '['+caption+(' ' if caption != '+' else '')+']'
         width = blf.dimensions(face, text)[0]+2*scale
         if x+width > region.width-4*scale:
             break
