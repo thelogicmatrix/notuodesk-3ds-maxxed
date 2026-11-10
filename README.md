@@ -56,7 +56,7 @@ inside the add-on package.
 The caddy pictograms follow each field's Max 2026 symbol. Height uses a rectangle
 and height bar. Bridge uses a tapered prism, flared bell and numbered hourglasses.
 Its pick buttons have flat polygon grids and round pick cursors. Mode icons change
-with the choice. MeshSmooth's separation pills stay blank before the check mark.
+with the choice. MeshSmooth's separation pills show their smoothing and material icons.
 The drawings use original SVG paths and shaded faces.
 Value pills have rounded ends, the title has a drag grip, and the round footer
 buttons have one disc each. Missing field artwork falls back to the generic set.
