@@ -19,7 +19,8 @@ class Layout:
         return self.enabled and (self.parent is None or self.parent.active())
 
     def row(self, **kw): return Layout(self.calls, self)
-    column = grid_flow = row
+    column = grid_flow = split = row
+    def context_pointer_set(self, *args): pass
     def label(self, **kw): self.calls.append(("label", kw.get("text"), self.active()))
     def prop(self, data, key, **kw): self.calls.append(("prop", key, self.active()))
     def prop_enum(self, data, key, value, **kw): self.calls.append(("radio", key, self.active()))

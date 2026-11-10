@@ -5,6 +5,7 @@ import bmesh
 
 from . import editable_poly as ep
 from .operators import current_level
+from . import max_widgets
 
 LEVEL_ACTIONS = {
     1: ("REMOVE", "BREAK", "EXTRUDE", "WELD", "CHAMFER", "TARGET_WELD", "CONNECT",
@@ -68,9 +69,9 @@ def radios(layout, data, key):
 
 
 def spinner(layout, data, key):
-    row = layout.row(align=True)
-    row.label(text=data.bl_rna.properties[key].name + ":")
-    row.prop(data, key, text="")
+    prop = data.bl_rna.properties[key]
+    return max_widgets.spinner(layout, data, key, prop.name,
+                               step=1 if prop.type == 'INT' else .1)
 
 
 def selection(layout, context):
@@ -279,8 +280,9 @@ def smoothing_groups(layout, context):
 
 def subdivision(layout, context):
     p = context.active_object.max_poly
-    for key in ("smooth_result", "nurms", "isoline", "iterations"):
+    for key in ("smooth_result", "nurms", "isoline"):
         layout.prop(p, key)
+    spinner(layout, p, 'iterations')
     row = layout.row(align=True)
     row.enabled = False
     row.prop(p, "smoothness")

@@ -330,7 +330,7 @@ def draw_stack(layout, context, ob):
     if not any(is_symmetry(m) for m in ob.modifiers):
         return False
     from . import poly_tools
-    box = layout.box().column(align=True)
+    box = layout.column(align=True)
     for mod in reversed(ob.modifiers):
         if poly_tools.is_font_pivot(mod):
             continue
@@ -359,7 +359,7 @@ def draw(layout, ob, mod):
     layout.use_property_decorate = False
     row = layout.row(align=True)
     row.menu('MAX_MT_symmetry_type', text='Radial' if mod.radial else 'Planar')
-    box = layout.box().column(align=True)
+    box = layout.column(align=True)
     box.label(text='Mirror Axis:')
     for i, axis in enumerate('XYZ'):
         row = box.row(align=True)
@@ -381,7 +381,7 @@ def draw(layout, ob, mod):
     op.name, op.action = mod.name, 'RESET'
     op = layout.operator('max.symmetry_pick', text='Pick Object')
     op.name, op.kind = mod.name, 'OBJECT'
-    box = layout.box().column(align=True)
+    box = layout.column(align=True)
     box.label(text='Symmetry Options:')
     if mod.radial:
         row = box.row(align=True)
@@ -401,13 +401,9 @@ def draw(layout, ob, mod):
     op.name, op.action = mod.name, 'SLICE'
 
     def spinner(prop, enabled):
-        row = box.row(align=True)
-        row.enabled = enabled
-        split = row.split(factor=.55, align=True)
-        label = split.row()
-        label.alignment = 'RIGHT'
-        label.label(text='Threshold:')
-        mod.prop(split, prop, text='')
+        from . import max_widgets
+        return max_widgets.spinner(box, mod.mod, '["'+mod.path(prop)+'"]',
+                                   'Threshold', enabled=enabled)
 
     spinner('bisect_threshold', any(mod.use_bisect_axis))
     mod.prop(box, 'use_mirror_merge', text='Weld Seam')

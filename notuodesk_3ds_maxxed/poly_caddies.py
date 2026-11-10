@@ -338,7 +338,7 @@ def generic_artwork(session, key):
 
 
 def has_field_icon(session, key):
-    return not (session.action == 'MSMOOTH' and key in {'separate_smoothing', 'separate_materials'})
+    return True
 
 
 def draw_field_icon(session, key, cx, cy, size):
