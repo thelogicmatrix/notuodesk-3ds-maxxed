@@ -244,13 +244,17 @@ def _tooltip_tick():
     from . import max_chrome
     if not max_chrome._installed or not any(record['item'] for record in _hover.values()):
         return None
+    waiting = False
     for record in _hover.values():
         try:
             if record['area']:
-                record['area'].tag_redraw()
+                if time.monotonic()-record['started'] >= .6:
+                    record['area'].tag_redraw()
+                else:
+                    waiting = True
         except ReferenceError:
             pass
-    return .1
+    return .1 if waiting else None
 
 
 def install_drawing():
