@@ -1,1557 +1,1411 @@
-"""General 3ds Max style operators."""
-
+"""Workspace commands and compatibility routes for the Maxxed interface."""
 import math
+from contextlib import nullcontext
 
 import bpy
 import bmesh
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
-from bpy.types import Operator
-from mathutils import Euler, Matrix, Quaternion
-
-from . import theme, editable_poly, max_icons
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, IntProperty, StringProperty
+from mathutils import Matrix, Quaternion, Vector
 
 
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
+WS_NAME = '3ds Max'
+MTL_EDITOR_WIDTH = 640
+LEVEL_NAMES = {0: 'Object', 1: 'Vertex', 2: 'Edge', 3: 'Border', 4: 'Polygon', 5: 'Element'}
+VIEW_ROTATIONS = {
+    'TOP': Quaternion((1, 0, 0, 0)),
+    'BOTTOM': Quaternion((0, 1, 0, 0)),
+    'FRONT': Quaternion((math.sqrt(.5), math.sqrt(.5), 0, 0)),
+    'BACK': Quaternion((0, 0, math.sqrt(.5), math.sqrt(.5))),
+    'LEFT': Quaternion((.5, .5, -.5, -.5)),
+    'RIGHT': Quaternion((.5, .5, .5, .5)),
+}
+
+
+def _catalogue(pairs):
+    return [(key, label, '') for key, label in pairs]
+
+
+EDIT_POLY_OPS = _catalogue([
+    ('EXTRUDE', 'Extrude'), ('CHAMFER', 'Chamfer'), ('CONNECT', 'Connect'),
+    ('REMOVE', 'Remove'), ('REMOVE_WITH_VERTS', 'Remove (with vertices)'),
+    ('LOOP', 'Loop'), ('RING', 'Ring'), ('WELD', 'Weld'),
+    ('TARGET_WELD', 'Target Weld'), ('BRIDGE', 'Bridge'), ('INSET', 'Inset'),
+    ('OUTLINE', 'Outline'), ('CAP', 'Cap'), ('FLIP', 'Flip'), ('DETACH', 'Detach'),
+    ('BREAK', 'Break'), ('COLLAPSE', 'Collapse'), ('RELAX', 'Relax'),
+    ('MSMOOTH', 'MSmooth'), ('TESSELLATE', 'Tessellate'), ('MAKE_PLANAR', 'Make Planar'),
+    ('SLICE_PLANE', 'Slice Plane'), ('CUT', 'Cut'), ('HIDE_SEL', 'Hide Selected'),
+    ('HIDE_UNSEL', 'Hide Unselected'), ('UNHIDE', 'Unhide All'),
+    ('OPEN_EDGES', 'Select Open Edges'), ('GROW', 'Grow'), ('SHRINK', 'Shrink'),
+    ('SWIFT_LOOP', 'SwiftLoop'), ('BEVEL', 'Bevel'),
+])
+from . import editable_poly
+EDIT_POLY_OPS += list(editable_poly.EXTRA_OPS)
+
+OBJECT_CMDS = [
+    ('CONVERT_POLY', 'Convert to Editable Poly', 'Collapse the modifier stack into an editable mesh'),
+    ('CONVERT_SPLINE', 'Convert to Editable Spline', 'Convert to a curve object'),
+    ('RESET_XFORM', 'Reset XForm', 'Bake rotation and scale into the object (Apply Rotation & Scale)'),
+    ('CENTER_PIVOT', 'Center to Object', 'Move the pivot to the center of the object'),
+    ('PIVOT_TO_WORLD', 'Pivot to World Origin', 'Move the pivot to the world origin'),
+    ('OBJECT_TO_PIVOT', 'Center Object to Pivot', 'Move the object so its center is at the pivot'),
+    ('HIDE_SEL', 'Hide Selection', ''), ('HIDE_UNSEL', 'Hide Unselected', ''),
+    ('UNHIDE', 'Unhide All', ''),
+    ('FREEZE', 'Freeze Selection', 'Lock selection and snapping, respecting Show Frozen in Gray'),
+    ('UNFREEZE', 'Unfreeze All', ''), ('DISPLAY_BOX', 'Display as Box', 'Toggle bounding box display'),
+    ('SEE_THROUGH', 'See-Through', 'Toggle drawing the selection in front'),
+    ('EDGES_ONLY', 'Show Wireframe on Object', 'Toggle wireframe over shaded'),
+    ('LINK', 'Select and Link', 'Parent selection to the active object'),
+    ('UNLINK', 'Unlink Selection', 'Clear parent, keep transform'),
+    ('ATTACH', 'Attach', 'Join selected objects into the active one'),
+    ('MIRROR', 'Mirror', 'Mirror the selection'), ('ALIGN', 'Align', 'Align objects'),
+    ('ISOLATE', 'Isolate Selection', 'Local view (Alt+Q)'),
+]
+EDITORS = {
+    'MATERIAL': ('ShaderNodeTree', None, 'Material Editor'),
+    'RENDER_SETUP': ('PROPERTIES', 'RENDER', 'Render Setup'),
+    'ENVIRONMENT': ('PROPERTIES', 'WORLD', 'Environment and Effects'),
+    'CURVE_EDITOR': ('FCURVES', None, 'Curve Editor'),
+    'DOPE_SHEET': ('DOPESHEET', None, 'Dope Sheet'),
+    'SCENE_EXPLORER': ('OUTLINER', None, 'Scene Explorer'),
+    'SCHEMATIC': ('GeometryNodeTree', None, 'Schematic View'),
+    'SCRIPT_EDITOR': ('TEXT_EDITOR', None, 'Script Editor'),
+    'LISTENER': ('CONSOLE', None, 'Python Listener'),
+}
+_level_write = False
+_layout_snapshot = {}
+_layout_jobs = {}
+_material_windows = {}
+_scene_item_cache = []
+
 
 def max_name(base):
-    """3ds Max style unique names: Box001, Box002 ..."""
-    i = 1
-    while f"{base}{i:03d}" in bpy.data.objects:
-        i += 1
-    return f"{base}{i:03d}"
+    number = 1
+    while f'{base}{number:03d}' in bpy.data.objects:
+        number += 1
+    return f'{base}{number:03d}'
 
 
 def find_view3d(context):
-    """Return (area, window-region) of the viewport, preferring the current one."""
-    area = context.area if context.area and context.area.type == "VIEW_3D" else None
-    if area is None:
-        screen = context.window.screen if context.window else None
-        areas = [a for a in screen.areas if a.type == "VIEW_3D"] if screen else []
-        area = max(areas, key=lambda a: a.width * a.height) if areas else None
+    screen = context.window.screen if context.window else getattr(context, 'screen', None)
+    areas = [a for a in screen.areas if a.type == 'VIEW_3D'] if screen else []
+    # The chrome time host is a viewport for drawing, never a modeling target.
+    from . import max_chrome, max_editor_windows
+    areas = [a for a in areas if not max_chrome.timeline_area(a)
+             and a.as_pointer() not in max_editor_windows._docked]
+    area = context.area if context.area in areas else max(areas, key=lambda a: a.width * a.height, default=None)
     if area is None:
         return None, None
-    region = None
-    if context.region and context.region.type == "WINDOW" and context.area == area:
-        region = context.region
-    else:
-        wins = [r for r in area.regions if r.type == "WINDOW"]
-        region = wins[-1] if wins else None   # last = the free (perspective) quad
+    regions = [r for r in area.regions if r.type == 'WINDOW']
+    region = context.region if context.region in regions else next(iter(reversed(regions)), None)
     return area, region
 
 
 def viewport_override(context):
-    """Context override pointing at a 3D viewport, for commands run from menus,
-    the status bar or other editors (Dope Sheet, Graph Editor, ...)."""
     area, region = find_view3d(context)
-    if area is None:
-        return None
-    return dict(window=context.window, area=area, region=region)
+    return {'window': context.window, 'area': area, 'region': region} if area else None
 
 
 def has_view3d(context):
     return find_view3d(context)[0] is not None
 
 
+def _viewport(context):
+    override = viewport_override(context)
+    return context.temp_override(**override) if override else nullcontext()
+
+
+def _active_tool(context):
+    from . import mode_feedback
+    with _viewport(context):
+        return mode_feedback.active_tool(bpy.context)
+
+
 def mesh_select_mode(context):
-    m = context.tool_settings.mesh_select_mode
-    return "VERT" if m[0] else "EDGE" if m[1] else "FACE"
+    flags = context.tool_settings.mesh_select_mode
+    return 'VERT' if flags[0] else 'EDGE' if flags[1] else 'FACE'
 
 
-# ---------------------------------------------------------------------------
-# sub-object levels (1-5)
-# ---------------------------------------------------------------------------
-
-LEVEL_NAMES = {0: "Object", 1: "Vertex", 2: "Edge", 3: "Border", 4: "Polygon", 5: "Element"}
-_MESH_MODE = {1: "VERT", 2: "EDGE", 3: "EDGE", 4: "FACE", 5: "FACE"}
-_LEVEL_LAYER = ".max_sublevel_"
-_syncing_sublevel = False
+def _compatible(level, mode):
+    return level in {'VERT': (1,), 'EDGE': (2, 3), 'FACE': (4, 5)}[mode]
 
 
 def stored_mesh_level(obj):
-    """Layer names survive EditMesh undo and saving, even on an empty mesh."""
-    mesh = obj.data
-    # load_post runs before Blender has recreated its edit BMesh.
-    layers = bmesh.from_edit_mesh(mesh).verts.layers.int if mesh.is_editmode else mesh.attributes
-    return next((lev for lev in _MESH_MODE if layers.get(_LEVEL_LAYER + str(lev)) is not None), 0)
-
-
-def sublevel_changed(wm, context):
-    if _syncing_sublevel or context.mode != "EDIT_MESH":
-        return
-    lvl = wm.max_sublevel
-    if lvl not in _MESH_MODE or _MESH_MODE[lvl] != mesh_select_mode(context):
-        return
-    for obj in context.objects_in_mode_unique_data:
-        bm = bmesh.from_edit_mesh(obj.data)
-        layers = bm.verts.layers.int
-        name = _LEVEL_LAYER + str(lvl)
-        if layers.get(name) is not None:
-            continue
-        for old in list(layers.keys()):
-            if old.startswith(_LEVEL_LAYER):
-                layers.remove(layers[old])
-        layers.new(name)
-        bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
-
-
-def sync_sublevel(context):
-    """WindowManager is a compatibility mirror, never the mesh-level authority."""
-    global _syncing_sublevel
-    if not context.window_manager:
-        return
-    lvl = current_level(context)
-    if context.window_manager.max_sublevel != lvl:
-        _syncing_sublevel = True
+    if obj is None or obj.type != 'MESH':
+        return 0
+    if obj.data.is_editmode:
         try:
-            context.window_manager.max_sublevel = lvl
-        finally:
-            _syncing_sublevel = False
-    if context.mode == "EDIT_MESH" and context.edit_object.data.is_editmode:
-        # Native selection-mode changes also become saved, undoable level state.
-        sublevel_changed(context.window_manager, context)
+            layers = bmesh.from_edit_mesh(obj.data).verts.layers.int
+            return next((level for level in range(1, 6) if layers.get(f'.max_sublevel_{level}')), 0)
+        except (ValueError, RuntimeError):
+            pass
+    return next((level for level in range(1, 6) if obj.data.attributes.get(f'.max_sublevel_{level}')), 0)
+
+
+def _store_level(obj, level):
+    if obj.data.is_editmode:
+        layers = bmesh.from_edit_mesh(obj.data).verts.layers.int
+        for old in range(1, 6):
+            layer = layers.get(f'.max_sublevel_{old}')
+            if layer and old != level:
+                layers.remove(layer)
+        if level and layers.get(f'.max_sublevel_{level}') is None:
+            layers.new(f'.max_sublevel_{level}')
+    else:
+        attributes = obj.data.attributes
+        for old in range(1, 6):
+            layer = attributes.get(f'.max_sublevel_{old}')
+            if layer and old != level:
+                attributes.remove(layer)
+        if level and attributes.get(f'.max_sublevel_{level}') is None:
+            attributes.new(f'.max_sublevel_{level}', 'INT', 'POINT')
 
 
 def current_level(context):
-    wm = context.window_manager
-    if context.mode != "EDIT_MESH":
-        return 0 if context.mode == "OBJECT" else wm.max_sublevel
+    if context.mode == 'OBJECT':
+        return 0
+    if context.mode != 'EDIT_MESH':
+        return getattr(context.window_manager, 'max_sublevel', 0)
     mode = mesh_select_mode(context)
-    stored = stored_mesh_level(context.edit_object)
-    if stored in _MESH_MODE and _MESH_MODE[stored] == mode:
-        return stored
-    return {"VERT": 1, "EDGE": 2, "FACE": 4}[mode]
+    level = stored_mesh_level(context.active_object)
+    return level if _compatible(level, mode) else {'VERT': 1, 'EDGE': 2, 'FACE': 4}[mode]
 
 
-class MAX_OT_subobject(Operator):
-    """Sub-object level (1 Vertex, 2 Edge, 3 Border, 4 Polygon, 5 Element). Press again to exit"""
-    bl_idname = "max.subobject"
-    bl_label = "Sub-Object Level"
-    bl_options = {"REGISTER", "UNDO"}
+def sublevel_changed(wm, context):
+    if _level_write or context.mode != 'EDIT_MESH':
+        return
+    level = wm.max_sublevel
+    if level and _compatible(level, mesh_select_mode(context)):
+        seen = set()
+        for obj in context.objects_in_mode_unique_data:
+            if obj.type == 'MESH' and obj.data not in seen:
+                _store_level(obj, level)
+                seen.add(obj.data)
 
+
+def sync_sublevel(context):
+    global _level_write
+    if _level_write:
+        return
+    level = current_level(context)
+    if context.mode == 'EDIT_MESH':
+        for obj in context.objects_in_mode_unique_data:
+            if obj.type == 'MESH' and stored_mesh_level(obj) != level:
+                _store_level(obj, level)
+    _level_write = True
+    try:
+        context.window_manager.max_sublevel = level
+    finally:
+        _level_write = False
+
+
+def _description(identifier, properties, fallback):
+    from . import max_icons
+    return max_icons.tooltip(bpy.context, fallback, identifier, **properties)
+
+
+def _notice(text):
+    from . import max_status
+    max_status.notify(text)
+
+
+def _object_mode(context):
+    if context.object and context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def _owner(context):
+    from . import symmetry
+    obj = symmetry.owner(context)
+    symmetry.leave(context)
+    return obj or context.active_object
+
+
+class MAX_OT_subobject(bpy.types.Operator):
+    bl_idname = 'max.subobject'
+    bl_label = 'Sub-Object Level'
+    bl_description = 'Choose a component level. Choose it again to return to Object'
+    bl_options = {'REGISTER', 'UNDO'}
     level: IntProperty(min=0, max=5)
 
     @classmethod
-    def description(cls, context, props):
-        label = ("Object", "Vertex", "Edge", "Border", "Polygon", "Element")[props.level]
-        return max_icons.tooltip(context, label, "max.subobject", level=props.level)
+    def description(cls, context, properties):
+        return _description(cls.bl_idname, {'level': properties.level}, cls.bl_description)
 
     @classmethod
     def poll(cls, context):
         return context.active_object is not None
 
     def execute(self, context):
-        obj = context.active_object
-        from . import symmetry
-        if symmetry.editing(context):
-            obj = symmetry.leave(context)
-        wm = context.window_manager
-        lvl = self.level
         from . import mode_feedback
-        tool = mode_feedback.active_tool(context)
-        if lvl:
-            wm.max_cmd_tab = "MODIFY"
-            obj.max_feedback_expanded = True
-
-        if obj.type == "MESH":
-            if lvl == 0 or (context.mode == "EDIT_MESH" and current_level(context) == lvl):
-                bpy.ops.object.mode_set(mode="OBJECT")
-                wm.max_sublevel = 0
-                mode_feedback.restore_tool(context, tool)
-                return {"FINISHED"}
-            if context.mode != "EDIT_MESH":
-                if obj.max_prim.kind:     # editing a primitive turns it into an Editable Poly
-                    obj.max_prim.kind = ""
-                for m in obj.modifiers:   # sub-object editing happens at the base of the stack
-                    try:
-                        m.is_active = False
-                    except Exception:
-                        pass
-                bpy.ops.object.mode_set(mode="EDIT")
-            bpy.ops.mesh.select_mode(type=_MESH_MODE[lvl], use_extend=False, use_expand=False)
-            wm.max_sublevel = lvl
-            mode_feedback.restore_tool(context, tool)
-            if lvl == 3:
-                self.report({"INFO"}, "Border: click an open edge, then Alt+L / 'Loop' selects the whole border")
-            elif lvl == 5:
-                bpy.ops.mesh.select_linked()
-            return {"FINISHED"}
-
-        if obj.type in {"CURVE", "SURFACE", "LATTICE", "ARMATURE", "FONT", "META"}:
-            in_edit = context.mode.startswith("EDIT")
-            if lvl == 0 or (in_edit and wm.max_sublevel == lvl):
-                bpy.ops.object.mode_set(mode="OBJECT")
-                wm.max_sublevel = 0
-            else:
-                if not in_edit:
-                    bpy.ops.object.mode_set(mode="EDIT")
-                wm.max_sublevel = lvl
-            return {"FINISHED"}
-        return {"CANCELLED"}
-
-
-# ---------------------------------------------------------------------------
-# viewport navigation
-# ---------------------------------------------------------------------------
-
-VIEW_ROTATIONS = {
-    "TOP": Quaternion((1, 0, 0, 0)),
-    "FRONT": Euler((math.pi / 2, 0, 0)).to_quaternion(),
-    "LEFT": Euler((math.pi / 2, 0, -math.pi / 2)).to_quaternion(),
-}
-
-
-class MAX_OT_set_view(Operator):
-    """Switch view (T Top, B Bottom, F Front, K Back, L Left, P Perspective, U Orthographic, C Camera)"""
-    bl_idname = "max.set_view"
-    bl_label = "Set View"
-
-    view: EnumProperty(items=[(v, v.title(), "") for v in (
-        "TOP", "BOTTOM", "FRONT", "BACK", "LEFT", "RIGHT", "PERSP", "ORTHO", "CAMERA")])
-
-    @classmethod
-    def poll(cls, context):
-        return has_view3d(context)
-
-    def execute(self, context):
-        area, region = find_view3d(context)
-        rv3d = region.data if region else None
-        if rv3d is None:
-            return {"CANCELLED"}
-        if rv3d.lock_rotation:
-            rv3d.lock_rotation = False   # unlock a quad view so it can change like in Max
-        with context.temp_override(area=area, region=region):
-            v = self.view
-            if v in {"TOP", "BOTTOM", "FRONT", "BACK", "LEFT", "RIGHT"}:
-                bpy.ops.view3d.view_axis(type=v)
-            elif v == "PERSP":
-                if rv3d.view_perspective != "PERSP":
-                    rv3d.view_perspective = "PERSP"
-            elif v == "ORTHO":
-                if rv3d.view_perspective != "ORTHO":
-                    rv3d.view_perspective = "ORTHO"
-            elif v == "CAMERA":
-                if context.scene.camera is None:
-                    self.report({"WARNING"}, "No camera in scene (Ctrl+C creates one from this view)")
-                    return {"CANCELLED"}
-                rv3d.view_perspective = "CAMERA"
-        return {"FINISHED"}
-
-
-class MAX_OT_zoom_extents(Operator):
-    """Zoom Extents Selected (Z). Zooms to everything when nothing is selected"""
-    bl_idname = "max.zoom_extents"
-    bl_label = "Zoom Extents Selected"
-
-    @classmethod
-    def poll(cls, context):
-        return has_view3d(context)
-
-    def execute(self, context):
-        has_sel = bool(context.selected_objects) if context.mode == "OBJECT" else True
-        with context.temp_override(**viewport_override(context)):
-            try:
-                if has_sel:
-                    bpy.ops.view3d.view_selected(use_all_regions=False)
+        kind = _active_tool(context)
+        obj = _owner(context)
+        level = 0 if self.level == current_level(context) else self.level
+        cage_owner = obj.get('max_ffd_owner')
+        if cage_owner and level == 0:
+            from . import ffd
+            _object_mode(context)
+            owner = ffd.resolve_owner(obj)
+            if owner:
+                obj.select_set(False)
+                owner.select_set(True)
+                context.view_layer.objects.active = owner
+            with _viewport(context):
+                if kind == 'LINK':
+                    bpy.ops.wm.tool_set_by_id(name='max.select_link')
                 else:
-                    bpy.ops.view3d.view_all(center=False)
-            except RuntimeError:
-                try:
-                    bpy.ops.view3d.view_all(center=False)
-                except RuntimeError:
-                    return {"CANCELLED"}
-        return {"FINISHED"}
+                    mode_feedback.restore_tool(bpy.context, kind)
+            sync_sublevel(context)
+            return {'FINISHED'}
+        with _viewport(context):
+            if level == 0:
+                _object_mode(bpy.context)
+            elif obj.type == 'MESH':
+                context.window_manager.max_cmd_tab = 'MODIFY'
+                obj.max_stack_index = -1
+                obj.max_feedback_expanded = True
+                if context.mode != 'EDIT_MESH':
+                    bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(type='VERT' if level == 1 else 'EDGE' if level < 4 else 'FACE')
+                context.window_manager.max_sublevel = level
+                sublevel_changed(context.window_manager, bpy.context)
+            elif obj.type in {'CURVE', 'SURFACE', 'FONT', 'LATTICE'}:
+                context.window_manager.max_cmd_tab = 'MODIFY'
+                if obj.mode != 'EDIT':
+                    bpy.ops.object.mode_set(mode='EDIT')
+                context.window_manager.max_sublevel = level
+            else:
+                self.report({'WARNING'}, 'This object has no editable component level')
+                return {'CANCELLED'}
+            if kind == 'LINK':
+                bpy.ops.wm.tool_set_by_id(name='max.select_link')
+            else:
+                mode_feedback.restore_tool(bpy.context, kind)
+        sync_sublevel(context)
+        return {'FINISHED'}
 
 
-# ---------------------------------------------------------------------------
-# toggles
-# ---------------------------------------------------------------------------
+class MAX_OT_set_view(bpy.types.Operator):
+    bl_idname = 'max.set_view'
+    bl_label = 'Set View'
+    bl_description = 'Change the active viewport direction or projection'
+    view: EnumProperty(items=_catalogue([(v, v.title()) for v in ('TOP', 'BOTTOM', 'FRONT', 'BACK', 'LEFT', 'RIGHT', 'PERSP', 'ORTHO', 'CAMERA')]))
 
-_prev_shading = {}
-
-
-class MAX_OT_toggle(Operator):
-    """3ds Max display / snap toggles"""
-    bl_idname = "max.toggle"
-    bl_label = "Toggle"
-
-    what: EnumProperty(items=[(k, k.replace("_", " ").title(), "") for k in (
-        "WIREFRAME", "EDGED_FACES", "SEE_THROUGH", "GRID", "GIZMO", "STATS",
-        "SNAP", "ANGLE_SNAP", "PERCENT_SNAP", "AUTOKEY", "BACKFACE")])
+    @classmethod
+    def poll(cls, context):
+        return has_view3d(context)
 
     def execute(self, context):
-        ts = context.tool_settings
-        space = context.space_data if context.space_data and context.space_data.type == "VIEW_3D" else None
-        if space is None:
-            area, _ = find_view3d(context)
-            space = area.spaces.active if area else None
-        w = self.what
-        if w in {"SNAP", "ANGLE_SNAP", "PERCENT_SNAP"}:
+        with _viewport(context):
+            if self.view in VIEW_ROTATIONS:
+                bpy.ops.view3d.view_axis(type=self.view)
+            elif self.view == 'CAMERA':
+                if context.scene.camera is None:
+                    self.report({'WARNING'}, 'Create or assign a camera before switching to Camera view')
+                    return {'CANCELLED'}
+                bpy.ops.view3d.view_camera()
+            else:
+                area, _ = find_view3d(bpy.context)
+                area.spaces.active.region_3d.view_perspective = 'PERSP' if self.view == 'PERSP' else 'ORTHO'
+        return {'FINISHED'}
+
+
+class MAX_OT_zoom_extents(bpy.types.Operator):
+    bl_idname = 'max.zoom_extents'
+    bl_label = 'Zoom Extents Selected'
+    bl_description = 'Frame the selection, or frame the scene when nothing is selected'
+
+    @classmethod
+    def poll(cls, context):
+        return has_view3d(context)
+
+    def execute(self, context):
+        with _viewport(context):
+            if context.selected_objects:
+                bpy.ops.view3d.view_selected(use_all_regions=False)
+            else:
+                bpy.ops.view3d.view_all(center=False)
+        return {'FINISHED'}
+
+
+class MAX_OT_toggle(bpy.types.Operator):
+    bl_idname = 'max.toggle'
+    bl_label = 'Toggle'
+    bl_description = 'Switch the requested viewport, snap or keying option'
+    what: EnumProperty(items=_catalogue([(v, v.replace('_', ' ').title()) for v in (
+        'WIREFRAME', 'EDGED_FACES', 'SEE_THROUGH', 'GRID', 'GIZMO', 'STATS',
+        'SNAP', 'ANGLE_SNAP', 'PERCENT_SNAP', 'AUTOKEY', 'BACKFACE')]))
+
+    @classmethod
+    def description(cls, context, properties):
+        return _description(cls.bl_idname, {'what': properties.what}, cls.bl_description)
+
+    def execute(self, context):
+        if self.what in {'SNAP', 'ANGLE_SNAP', 'PERCENT_SNAP'}:
             from . import snaps
-            snaps.toggle(context, w)
-            return {"FINISHED"}
-        if w == "AUTOKEY":
-            ts.use_keyframe_insert_auto = not ts.use_keyframe_insert_auto
-            self.report({"INFO"}, f"Auto Key {'ON' if ts.use_keyframe_insert_auto else 'OFF'}")
-        elif space is None:
-            return {"CANCELLED"}
-        elif w == "WIREFRAME":
-            sh = space.shading
-            key = space.as_pointer()
-            if sh.type == "WIREFRAME":
-                sh.type = _prev_shading.get(key, "SOLID")
-            else:
-                _prev_shading[key] = sh.type
-                sh.type = "WIREFRAME"
-        elif w == "EDGED_FACES":
-            ov = space.overlay
-            ov.show_wireframes = not ov.show_wireframes
-            ov.wireframe_threshold = 1.0
-        elif w == "SEE_THROUGH":
-            sh = space.shading
-            sh.show_xray = not sh.show_xray
-            sh.xray_alpha = 0.5
-        elif w == "GRID":
-            ov = space.overlay
-            on = not (ov.show_floor or ov.show_ortho_grid)
-            ov.show_floor = ov.show_ortho_grid = on
-        elif w == "GIZMO":
-            space.show_gizmo = not space.show_gizmo
-        elif w == "STATS":
-            space.overlay.show_stats = not space.overlay.show_stats
-        elif w == "BACKFACE":
-            space.shading.show_backface_culling = not space.shading.show_backface_culling
-        return {"FINISHED"}
-
-
-_expert_state = {}
-
-
-class MAX_OT_expert_mode(Operator):
-    """Expert Mode (Ctrl+X): hide all interface around the viewport"""
-    bl_idname = "max.expert_mode"
-    bl_label = "Expert Mode"
-
-    def execute(self, context):
-        space = context.space_data
-        if space is None or space.type != "VIEW_3D":
+            snaps.toggle(context, self.what)
+        elif self.what == 'AUTOKEY':
+            context.tool_settings.use_keyframe_insert_auto = not context.tool_settings.use_keyframe_insert_auto
+        elif self.what == 'SEE_THROUGH':
+            for obj in context.selected_objects:
+                obj.show_in_front = not obj.show_in_front
+        else:
             area, _ = find_view3d(context)
-            space = area.spaces.active if area else None
-        if space is None:
-            return {"CANCELLED"}
-        attrs = ("show_region_header", "show_region_tool_header", "show_region_toolbar", "show_region_ui")
-        key = space.as_pointer()
-        if key in _expert_state:
-            for a, v in zip(attrs, _expert_state.pop(key)):
-                setattr(space, a, v)
-        else:
-            _expert_state[key] = [getattr(space, a) for a in attrs]
-            for a in attrs:
-                setattr(space, a, False)
-        return {"FINISHED"}
-
-
-# ---------------------------------------------------------------------------
-# selection / editing
-# ---------------------------------------------------------------------------
-
-class MAX_OT_select_all(Operator):
-    """Select All (Ctrl+A) / None (Ctrl+D) / Invert (Ctrl+I)"""
-    bl_idname = "max.select_all"
-    bl_label = "Select"
-    bl_options = {"REGISTER", "UNDO"}
-
-    action: EnumProperty(items=[("SELECT", "All", ""), ("DESELECT", "None", ""), ("INVERT", "Invert", "")])
-
-    def execute(self, context):
-        m = context.mode
-        if m == "OBJECT":
-            bpy.ops.object.select_all(action=self.action)
-        elif m == "EDIT_MESH":
-            bpy.ops.mesh.select_all(action=self.action)
-        elif m == "EDIT_CURVE":
-            bpy.ops.curve.select_all(action=self.action)
-        elif m == "EDIT_ARMATURE":
-            bpy.ops.armature.select_all(action=self.action)
-        elif m == "POSE":
-            bpy.ops.pose.select_all(action=self.action)
-        else:
-            return {"PASS_THROUGH"}
-        return {"FINISHED"}
-
-
-class MAX_OT_delete(Operator):
-    """Delete selection (no confirmation, like 3ds Max)"""
-    bl_idname = "max.delete"
-    bl_label = "Delete"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        m = context.mode
-        if m == "OBJECT":
-            bpy.ops.object.delete(use_global=False, confirm=False)
-        elif m == "EDIT_MESH":
-            mode = mesh_select_mode(context)
-            if mode == "EDGE" and not context.active_object.max_poly.delete_isolated:
-                import bmesh
-                bm = bmesh.from_edit_mesh(context.active_object.data)
-                bmesh.ops.delete(bm, geom=[e for e in bm.edges if e.select and not e.hide], context="EDGES_FACES")
-                editable_poly.update_mesh(context)
+            if area is None:
+                return {'CANCELLED'}
+            space = area.spaces.active
+            if self.what == 'WIREFRAME':
+                space.shading.type = 'SOLID' if space.shading.type == 'WIREFRAME' else 'WIREFRAME'
+            elif self.what == 'GIZMO':
+                space.show_gizmo = not space.show_gizmo
+            elif self.what == 'BACKFACE':
+                space.shading.show_backface_culling = not space.shading.show_backface_culling
             else:
-                bpy.ops.mesh.delete(type="ONLY_FACE" if mode == "FACE" and not context.active_object.max_poly.delete_isolated else mode)
-            editable_poly.cleanup_isolated(context)
-        elif m == "EDIT_CURVE":
-            bpy.ops.curve.delete(type="VERT")
+                field = {'GRID': 'show_floor', 'STATS': 'show_stats', 'EDGED_FACES': 'show_wireframes'}[self.what]
+                setattr(space.overlay, field, not getattr(space.overlay, field))
+            area.tag_redraw()
+        return {'FINISHED'}
+
+
+class MAX_OT_expert_mode(bpy.types.Operator):
+    bl_idname = 'max.expert_mode'
+    bl_label = 'Expert Mode'
+    bl_description = 'Maximize the modeling viewport or restore its surrounding controls'
+
+    def execute(self, context):
+        with _viewport(context):
+            bpy.ops.screen.screen_full_area(use_hide_panels=True)
+        return {'FINISHED'}
+
+
+class MAX_OT_select_all(bpy.types.Operator):
+    bl_idname = 'max.select_all'
+    bl_label = 'Select'
+    bl_description = 'Select all, clear the selection or invert it at the current level'
+    action: EnumProperty(items=_catalogue([(v, v.title()) for v in ('SELECT', 'DESELECT', 'INVERT')]))
+
+    def execute(self, context):
+        if context.mode == 'EDIT_MESH':
+            bpy.ops.mesh.select_all(action=self.action)
+        elif context.mode in {'EDIT_CURVE', 'EDIT_SURFACE'}:
+            bpy.ops.curve.select_all(action=self.action)
         else:
-            return {"PASS_THROUGH"}
-        return {"FINISHED"}
+            bpy.ops.object.select_all(action=self.action)
+        return {'FINISHED'}
 
 
-def _object_items(self, context):
-    icons = {"MESH": "OUTLINER_OB_MESH", "CURVE": "OUTLINER_OB_CURVE", "LIGHT": "OUTLINER_OB_LIGHT",
-             "CAMERA": "OUTLINER_OB_CAMERA", "EMPTY": "OUTLINER_OB_EMPTY", "FONT": "OUTLINER_OB_FONT"}
-    items = [(o.name, o.name, o.type.title(), icons.get(o.type, "OBJECT_DATA"), i)
-             for i, o in enumerate(sorted(context.scene.objects, key=lambda o: o.name.lower()))]
-    _object_items.cache = items  # keep strings alive for Blender
-    return items
-
-
-class MAX_OT_select_by_name(Operator):
-    """Select From Scene (H)"""
-    bl_idname = "max.select_by_name"
-    bl_label = "Select From Scene"
-    bl_property = "obj"
-    bl_options = {"REGISTER", "UNDO"}
-
-    obj: EnumProperty(items=_object_items)
-
-    @classmethod
-    def description(cls, context, props):
-        return max_icons.tooltip(context, "Select by Name", "max.select_by_name")
+class MAX_OT_delete(bpy.types.Operator):
+    bl_idname = 'max.delete'
+    bl_label = 'Delete'
+    bl_description = 'Delete selected objects or components using the Delete Isolated Vertices setting'
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        return context.mode == "OBJECT"
-
-    def invoke(self, context, event):
-        context.window_manager.invoke_search_popup(self)
-        return {"RUNNING_MODAL"}
+        return context.active_object is not None or bool(context.selected_objects)
 
     def execute(self, context):
-        ob = context.scene.objects.get(self.obj)
-        if ob is None:
-            return {"CANCELLED"}
-        bpy.ops.object.select_all(action="DESELECT")
-        if ob.hide_get():
-            ob.hide_set(False)
-        ob.select_set(True)
-        context.view_layer.objects.active = ob
-        return {"FINISHED"}
+        if context.mode == 'EDIT_MESH':
+            obj = context.active_object
+            level = current_level(context)
+            isolated = obj.max_poly.delete_isolated
+            mode = mesh_select_mode(context)
+            kind = 'VERT' if mode == 'VERT' else ('EDGE' if isolated else 'EDGE_FACE') if mode == 'EDGE' else ('FACE' if isolated else 'ONLY_FACE')
+            bpy.ops.mesh.delete(type=kind)
+            editable_poly.cleanup_isolated(context)
+            context.window_manager.max_sublevel = level
+        elif context.mode in {'EDIT_CURVE', 'EDIT_SURFACE'}:
+            bpy.ops.curve.delete(type='VERT')
+        else:
+            bpy.ops.object.delete(use_global=False)
+        return {'FINISHED'}
 
 
-class MAX_OT_clone(Operator):
-    """Clone Options (Ctrl+V): Copy or Instance the selection in place"""
-    bl_idname = "max.clone"
-    bl_label = "Clone Options"
-    bl_options = {"REGISTER", "UNDO"}
+def _scene_items(self, context):
+    _scene_item_cache[:] = [(o.name, o.name, '') for o in context.scene.objects] if context else []
+    return _scene_item_cache
 
-    mode: EnumProperty(name="Object", items=[("COPY", "Copy", ""), ("INSTANCE", "Instance", "")])
+
+class MAX_OT_select_by_name(bpy.types.Operator):
+    bl_idname = 'max.select_by_name'
+    bl_label = 'Select From Scene'
+    bl_description = 'Search the scene hierarchy and choose objects to select'
+    obj: EnumProperty(items=_scene_items)
+
+    def invoke(self, context, event):
+        return bpy.ops.max.scene_selection_dialog('INVOKE_DEFAULT')
+
+    def execute(self, context):
+        from . import scene_explorer
+        obj = context.scene.objects.get(self.obj)
+        if obj is None:
+            return {'CANCELLED'}
+        scene_explorer.select_objects(context, [obj])
+        return {'FINISHED'}
+
+
+class MAX_OT_clone(bpy.types.Operator):
+    bl_idname = 'max.clone'
+    bl_label = 'Clone Options'
+    bl_description = 'Clone through the shared Copy and Instance transaction'
+    bl_options = {'REGISTER', 'UNDO'}
+    mode: EnumProperty(items=_catalogue([('COPY', 'Copy'), ('INSTANCE', 'Instance')]))
 
     @classmethod
     def poll(cls, context):
-        return context.mode == "OBJECT" and context.selected_objects
+        return context.mode == 'OBJECT' and bool(context.selected_objects)
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=220)
-
-    def draw(self, context):
-        self.layout.prop(self, "mode", expand=True)
+        return bpy.ops.max.clone_dialog('INVOKE_DEFAULT', mode=self.mode)
 
     def execute(self, context):
-        bpy.ops.object.duplicate(linked=(self.mode == "INSTANCE"))
-        for ob in context.selected_objects:
-            base = ob.name.split(".")[0].rstrip("0123456789") or "Object"
-            ob.name = max_name(base)
-        return {"FINISHED"}
+        from . import max_dialogs
+        max_dialogs.clone(context, mode=self.mode)
+        return {'FINISHED'}
 
 
-EDIT_POLY_OPS = [
-    ("EXTRUDE", "Extrude", ""), ("CHAMFER", "Chamfer", ""), ("CONNECT", "Connect", ""),
-    ("REMOVE", "Remove", ""), ("REMOVE_WITH_VERTS", "Remove (with vertices)", ""),
-    ("LOOP", "Loop", ""), ("RING", "Ring", ""), ("WELD", "Weld", ""), ("TARGET_WELD", "Target Weld", ""),
-    ("BRIDGE", "Bridge", ""), ("INSET", "Inset", ""), ("OUTLINE", "Outline", ""), ("CAP", "Cap", ""),
-    ("FLIP", "Flip", ""), ("DETACH", "Detach", ""), ("BREAK", "Break", ""), ("COLLAPSE", "Collapse", ""),
-    ("RELAX", "Relax", ""), ("MSMOOTH", "MSmooth", ""), ("TESSELLATE", "Tessellate", ""),
-    ("MAKE_PLANAR", "Make Planar", ""), ("SLICE_PLANE", "Slice Plane", ""), ("CUT", "Cut", ""),
-    ("HIDE_SEL", "Hide Selected", ""), ("HIDE_UNSEL", "Hide Unselected", ""), ("UNHIDE", "Unhide All", ""),
-    ("OPEN_EDGES", "Select Open Edges", ""), ("GROW", "Grow", ""), ("SHRINK", "Shrink", ""),
-    ("SWIFT_LOOP", "SwiftLoop", ""), ("BEVEL", "Bevel", ""),
-]
-
-
-EDIT_POLY_OPS += editable_poly.EXTRA_OPS
-
-
-class MAX_OT_edit_poly(Operator):
-    """Editable Poly command"""
-    bl_idname = "max.edit_poly"
-    bl_label = "Edit Poly"
-    bl_options = {"REGISTER", "UNDO"}
-
+class MAX_OT_edit_poly(bpy.types.Operator):
+    bl_idname = 'max.edit_poly'
+    bl_label = 'Edit Poly'
+    bl_description = 'Apply the chosen Editable Poly operation at the current level'
+    bl_options = {'REGISTER', 'UNDO'}
     op: EnumProperty(items=EDIT_POLY_OPS)
 
     @classmethod
     def poll(cls, context):
-        return context.mode == "EDIT_MESH" or (context.mode == "OBJECT" and context.active_object is not None and context.active_object.type == "MESH")
+        return context.active_object is not None and context.active_object.type == 'MESH'
 
     @classmethod
-    def description(cls, context, props):
-        return dict((k, n) for k, n, _ in EDIT_POLY_OPS).get(props.op, "Edit Poly")
+    def description(cls, context, properties):
+        return _description(cls.bl_idname, {'op': properties.op}, cls.bl_description)
 
     def invoke(self, context, event):
-        if event.type == "LEFTMOUSE" and event.shift and self.op in editable_poly.poly_caddies.SHIFT_ACTIONS:
-            return bpy.ops.max.poly_settings("INVOKE_DEFAULT", action=self.op)
-        return self.run(context, "INVOKE_DEFAULT")
+        from . import poly_caddies
+        if event.shift and self.op in poly_caddies.SHIFT_ACTIONS:
+            return bpy.ops.max.poly_settings('INVOKE_DEFAULT', action=self.op)
+        return self.run(context, 'INVOKE_DEFAULT')
 
     def execute(self, context):
-        return self.run(context, "EXEC_DEFAULT")
+        return self.run(context, 'EXEC_DEFAULT')
 
     def run(self, context, how):
-        o = self.op
         result = editable_poly.run(self, context, how)
         if result is not None:
             return result
-        mode = mesh_select_mode(context)
+        if context.mode != 'EDIT_MESH':
+            return {'CANCELLED'}
         ops = bpy.ops.mesh
-        try:
-            if o == "EXTRUDE":
-                if mode == "VERT":
-                    bpy.ops.mesh.extrude_vertices_move(how)
-                elif mode == "EDGE":
-                    bpy.ops.mesh.extrude_edges_move(how)
-                else:
-                    bpy.ops.view3d.edit_mesh_extrude_move_normal(how)
-            elif o in {"CHAMFER", "BEVEL"}:
-                ops.bevel(how, affect="VERTICES" if mode == "VERT" else "EDGES")
-            elif o == "CONNECT":
-                if mode == "VERT":
-                    ops.vert_connect_path()
-                else:
-                    ops.subdivide(number_cuts=1)
-            elif o == "REMOVE":
-                ops.dissolve_mode(use_verts=False)
-                editable_poly.cleanup_isolated(context)
-            elif o == "REMOVE_WITH_VERTS":
-                ops.dissolve_mode(use_verts=True)
-                editable_poly.cleanup_isolated(context)
-            # hasattr() on bpy.ops is always True, so call the real operator directly
-            elif o == "LOOP":
-                ops.loop_multi_select(ring=False)
-            elif o == "RING":
-                ops.loop_multi_select(ring=True)
-            elif o == "WELD":
-                ops.remove_doubles(how)
-            elif o == "TARGET_WELD":
-                try:
-                    ops.merge(type="LAST")
-                except TypeError:
-                    self.report({"WARNING"}, "Target Weld: click the source vertex, then Shift+click the target")
-                    return {"CANCELLED"}
-            elif o == "BRIDGE":
-                ops.bridge_edge_loops()
-            elif o in {"INSET", "OUTLINE"}:
-                ops.inset(how)
-            elif o == "CAP":
-                ops.fill()
-            elif o == "FLIP":
-                ops.flip_normals()
-            elif o == "DETACH":
-                ops.separate(type="SELECTED")
-            elif o == "BREAK":
-                ops.split()
-            elif o == "COLLAPSE":
-                ops.merge(type="COLLAPSE")
-            elif o == "RELAX":
-                ops.vertices_smooth(factor=0.5, repeat=3)
-            elif o == "MSMOOTH":
-                ops.subdivide(number_cuts=1, smoothness=1.0)
-            elif o == "TESSELLATE":
-                ops.subdivide(number_cuts=1)
-            elif o == "MAKE_PLANAR":
-                bpy.ops.transform.resize(value=(1, 1, 0), orient_type="NORMAL", constraint_axis=(False, False, True))
-            elif o == "SLICE_PLANE":
-                ops.bisect(how)
-            elif o == "CUT":
-                return bpy.ops.max.cut("INVOKE_DEFAULT")
-            elif o == "SWIFT_LOOP":
-                return bpy.ops.max.swift_loop("INVOKE_DEFAULT")
-            elif o == "HIDE_SEL":
-                ops.hide(unselected=False)
-            elif o == "HIDE_UNSEL":
-                ops.hide(unselected=True)
-            elif o == "UNHIDE":
-                ops.reveal()
-            elif o == "OPEN_EDGES":
-                ops.select_mode(type="EDGE")
-                ops.select_non_manifold(extend=False, use_wire=False, use_boundary=True,
-                                        use_multi_face=False, use_non_contiguous=False, use_verts=False)
-            elif o == "GROW":
-                ops.select_more()
-            elif o == "SHRINK":
-                ops.select_less()
-        except RuntimeError as exc:
-            self.report({"WARNING"}, str(exc).split("Error: ")[-1].strip())
-            return {"CANCELLED"}
-        return {"FINISHED"}
+        action = self.op
+        if action in {'LOOP', 'RING'}:
+            ops.loop_multi_select(ring=action == 'RING')
+        elif action == 'SWIFT_LOOP':
+            with _viewport(context):
+                return bpy.ops.max.swift_loop('INVOKE_DEFAULT')
+        elif action in {'REMOVE', 'REMOVE_WITH_VERTS'}:
+            mode = mesh_select_mode(context)
+            if mode == 'VERT':
+                ops.dissolve_verts(use_face_split=False, use_boundary_tear=False)
+            elif mode == 'EDGE':
+                ops.dissolve_edges(use_verts=action == 'REMOVE_WITH_VERTS')
+            else:
+                ops.dissolve_faces(use_verts=action == 'REMOVE_WITH_VERTS')
+        elif action == 'CAP':
+            ops.edge_face_add()
+        elif action == 'FLIP':
+            ops.flip_normals()
+        elif action == 'BREAK':
+            ops.split()
+        elif action == 'COLLAPSE':
+            ops.merge(type='COLLAPSE')
+        elif action == 'DETACH':
+            ops.separate(type='SELECTED')
+        elif action in {'HIDE_SEL', 'HIDE_UNSEL'}:
+            ops.hide(unselected=action == 'HIDE_UNSEL')
+        elif action == 'UNHIDE':
+            ops.reveal()
+        elif action in {'GROW', 'SHRINK'}:
+            (ops.select_more if action == 'GROW' else ops.select_less)()
+        elif action == 'OPEN_EDGES':
+            ops.select_all(action='DESELECT')
+            ops.select_non_manifold(extend=False, use_wire=False, use_boundary=True,
+                                   use_multi_face=False, use_non_contiguous=False, use_verts=False)
+        else:
+            self.report({'WARNING'}, f'{dict((a, b) for a, b, _ in EDIT_POLY_OPS).get(action, action)} has no supported route at this level')
+            return {'CANCELLED'}
+        return {'FINISHED'}
 
 
-# ---------------------------------------------------------------------------
-# object level commands
-# ---------------------------------------------------------------------------
+def _pivot_world(obj):
+    from . import poly_tools, loft
+    if obj.type not in {'MESH', 'CURVE', 'SURFACE', 'FONT'}:
+        return False
+    delta = obj.matrix_world.inverted_safe() @ Vector((0, 0, 0))
+    # Editable Text retains its local text plane. The compensation supports its XY origin.
+    if obj.type == 'FONT':
+        delta.z = 0
+    children = {child: child.matrix_world.copy() for child in obj.children}
+    if obj.data.users > 1:
+        obj.data = obj.data.copy()
+    if getattr(obj, 'max_loft', None) and obj.max_loft.enabled:
+        loft.offset_origin(obj, delta)
+    elif obj.type == 'FONT':
+        poly_tools._offset_font_geometry(obj, delta)
+    else:
+        obj.data.transform(Matrix.Translation(-delta), shape_keys=True)
+    obj.matrix_world = obj.matrix_world @ Matrix.Translation(delta)
+    if obj.type == 'MESH' and obj.max_prim.kind:
+        obj['max_pivot_offset'] = list(Vector(obj.get('max_pivot_offset', (0, 0, 0))) - delta)
+    for child, world in children.items():
+        child.matrix_world = world
+    obj.data.update_tag()
+    return True
 
-OBJECT_CMDS = [
-    ("CONVERT_POLY", "Convert to Editable Poly", "Collapse the modifier stack into an editable mesh"),
-    ("CONVERT_SPLINE", "Convert to Editable Spline", "Convert to a curve object"),
-    ("RESET_XFORM", "Reset XForm", "Bake rotation and scale into the object (Apply Rotation & Scale)"),
-    ("CENTER_PIVOT", "Center to Object", "Move the pivot to the center of the object"),
-    ("PIVOT_TO_WORLD", "Pivot to World Origin", "Move the pivot to the world origin"),
-    ("OBJECT_TO_PIVOT", "Center Object to Pivot", "Move the object so its center is at the pivot"),
-    ("HIDE_SEL", "Hide Selection", ""), ("HIDE_UNSEL", "Hide Unselected", ""), ("UNHIDE", "Unhide All", ""),
-    ("FREEZE", "Freeze Selection", "Lock selection and snapping, respecting Show Frozen in Gray"),
-    ("UNFREEZE", "Unfreeze All", ""),
-    ("DISPLAY_BOX", "Display as Box", "Toggle bounding box display"),
-    ("SEE_THROUGH", "See-Through", "Toggle drawing the selection in front"),
-    ("EDGES_ONLY", "Show Wireframe on Object", "Toggle wireframe over shaded"),
-    ("LINK", "Select and Link", "Parent selection to the active object"),
-    ("UNLINK", "Unlink Selection", "Clear parent, keep transform"),
-    ("ATTACH", "Attach", "Join selected objects into the active one"),
-    ("MIRROR", "Mirror", "Mirror the selection"),
-    ("ALIGN", "Align", "Align objects"),
-    ("ISOLATE", "Isolate Selection", "Local view (Alt+Q)"),
-]
 
-
-class MAX_OT_object_cmd(Operator):
-    """3ds Max object command"""
-    bl_idname = "max.object_cmd"
-    bl_label = "Object Command"
-    bl_options = {"REGISTER", "UNDO"}
-
+class MAX_OT_object_cmd(bpy.types.Operator):
+    bl_idname = 'max.object_cmd'
+    bl_label = 'Object Command'
+    bl_description = 'Apply the chosen object operation to the selection'
+    bl_options = {'REGISTER', 'UNDO'}
     cmd: EnumProperty(items=OBJECT_CMDS)
 
     @classmethod
-    def description(cls, context, props):
-        for k, n, d in OBJECT_CMDS:
-            if k == props.cmd:
-                name = max_icons.tooltip(context, n, "max.object_cmd", cmd=k)
-                return name + (": " + d if d else "")
-        return ""
+    def poll(cls, context):
+        return bool(context.selected_objects) or cls._global(context)
 
-    def invoke(self, context, event):
-        if self.cmd == "LINK":
-            override = viewport_override(context)
-            if override:
-                with context.temp_override(**override):
-                    bpy.ops.wm.tool_set_by_id(name="max.select_link")
-                return {"FINISHED"}
-        return self.run(context, "INVOKE_DEFAULT")
-
-    def execute(self, context):
-        return self.run(context, "EXEC_DEFAULT")
-
-    def run(self, context, how):
-        c = self.cmd
-        from . import symmetry
-        symmetry.leave(context)
-        if context.mode != "OBJECT" and c not in {"ISOLATE", "MIRROR"}:
-            bpy.ops.object.mode_set(mode="OBJECT")
-            context.window_manager.max_sublevel = 0
-        sel = context.selected_objects
-        try:
-            if c == "CONVERT_POLY":
-                if bpy.ops.object.convert(target="MESH") != {"FINISHED"}:
-                    return {"CANCELLED"}
-                for ob in context.selected_objects:
-                    if ob.type == "MESH":
-                        ob.max_prim.kind = ""
-                symmetry.reconcile()
-            elif c == "CONVERT_SPLINE":
-                bpy.ops.object.convert(target="CURVE")
-                from . import poly_tools
-                poly_tools.bake_converted_text_pivots(context.selected_objects)
-            elif c == "RESET_XFORM":
-                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-            elif c == "CENTER_PIVOT":
-                bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
-            elif c == "PIVOT_TO_WORLD":
-                # Move the origin without borrowing or moving Blender's cursor.
-                children = {child: child.matrix_world.copy() for ob in sel for child in ob.children}
-                for ob in sel:
-                    old = ob.matrix_world.copy()
-                    new = old.copy()
-                    new.translation = (0, 0, 0)
-                    if ob.data is not None and hasattr(ob.data, "transform"):
-                        if ob.data.users > 1:
-                            ob.data = ob.data.copy()
-                        if ob.type == "FONT":
-                            # Native Text origins stay on the text's local XY plane.
-                            shift = old.inverted_safe().translation
-                            shift.z = 0
-                            new = old @ Matrix.Translation(shift)
-                            ob.data.offset_x -= shift.x
-                            ob.data.offset_y -= shift.y
-                        elif ob.type in {"MESH", "CURVE", "SURFACE", "LATTICE"}:
-                            transform = new.inverted_safe() @ old
-                            ob.data.transform(transform, shape_keys=True)
-                        else:
-                            ob.data.transform(new.inverted_safe() @ old)
-                    else:
-                        continue
-                    ob.matrix_world = new
-                for child, matrix in children.items():
-                    if child not in sel:
-                        child.matrix_world = matrix
-            elif c == "OBJECT_TO_PIVOT":
-                bpy.ops.object.origin_set(type="GEOMETRY_ORIGIN", center="BOUNDS")
-            elif c == "HIDE_SEL":
-                bpy.ops.object.hide_view_set(unselected=False)
-            elif c == "HIDE_UNSEL":
-                bpy.ops.object.hide_view_set(unselected=True)
-            elif c == "UNHIDE":
-                bpy.ops.object.hide_view_clear(select=False)
-            elif c == "FREEZE":
-                from . import freezing
-                for ob in sel:
-                    freezing.freeze(ob, context.scene)
-            elif c == "UNFREEZE":
-                from . import freezing
-                for ob in context.scene.objects:
-                    freezing.unfreeze(ob, context.scene)
-            elif c == "DISPLAY_BOX":
-                for ob in sel:
-                    ob.display_type = "TEXTURED" if ob.display_type == "BOUNDS" else "BOUNDS"
-            elif c == "SEE_THROUGH":
-                for ob in sel:
-                    ob.show_in_front = not ob.show_in_front
-            elif c == "EDGES_ONLY":
-                for ob in sel:
-                    ob.show_wire = not ob.show_wire
-            elif c == "LINK":
-                bpy.ops.object.parent_set(type="OBJECT", keep_transform=True)
-            elif c == "UNLINK":
-                bpy.ops.object.parent_clear(type="CLEAR_KEEP_TRANSFORM")
-            elif c == "ATTACH":
-                bpy.ops.object.join()
-            elif c == "MIRROR":
-                bpy.ops.transform.mirror(how)
-            elif c == "ALIGN":
-                bpy.ops.object.align(how)
-            elif c == "ISOLATE":
-                area, region = find_view3d(context)
-                with context.temp_override(area=area, region=region):
-                    bpy.ops.view3d.localview()
-        except RuntimeError as exc:
-            self.report({"WARNING"}, str(exc).split("Error: ")[-1].strip())
-            return {"CANCELLED"}
-        return {"FINISHED"}
-
-
-# ---------------------------------------------------------------------------
-# cameras / editors / dialogs
-# ---------------------------------------------------------------------------
-
-class MAX_OT_camera_from_view(Operator):
-    """Create Camera From View (Ctrl+C)"""
-    bl_idname = "max.camera_from_view"
-    bl_label = "Create Camera From View"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        area, region = find_view3d(context)
-        if region is None:
-            return {"CANCELLED"}
-        rv3d = region.data
-        name = max_name("PhysCamera")
-        cam = bpy.data.cameras.new(name)
-        cam.lens = area.spaces.active.lens
-        ob = bpy.data.objects.new(name, cam)
-        context.collection.objects.link(ob)
-        ob.matrix_world = rv3d.view_matrix.inverted()
-        context.scene.camera = ob
-        if context.mode == "OBJECT":
-            bpy.ops.object.select_all(action="DESELECT")
-            ob.select_set(True)
-            context.view_layer.objects.active = ob
-        rv3d.view_perspective = "CAMERA"
-        return {"FINISHED"}
-
-
-EDITORS = {
-    "MATERIAL": ("ShaderNodeTree", None, "Material Editor"),
-    "RENDER_SETUP": ("PROPERTIES", "RENDER", "Render Setup"),
-    "ENVIRONMENT": ("PROPERTIES", "WORLD", "Environment and Effects"),
-    "CURVE_EDITOR": ("FCURVES", None, "Curve Editor"),
-    "DOPE_SHEET": ("DOPESHEET", None, "Dope Sheet"),
-    "SCENE_EXPLORER": ("OUTLINER", None, "Scene Explorer"),
-    "SCHEMATIC": ("GeometryNodeTree", None, "Schematic View"),
-    "SCRIPT_EDITOR": ("TEXT_EDITOR", None, "Script Editor"),
-    "LISTENER": ("CONSOLE", None, "Python Listener"),
-}
-
-
-class MAX_OT_open_editor(Operator):
-    """Open a floating editor window, like 3ds Max dialogs"""
-    bl_idname = "max.open_editor"
-    bl_label = "Open Editor"
-
-    editor: EnumProperty(items=[(k, v[2], "") for k, v in EDITORS.items()])
+    @staticmethod
+    def _global(context):
+        return bool(context.scene.objects)
 
     @classmethod
-    def description(cls, context, props):
-        return max_icons.tooltip(context, EDITORS[props.editor][2], "max.open_editor", editor=props.editor)
+    def description(cls, context, properties):
+        return _description(cls.bl_idname, {'cmd': properties.cmd}, cls.bl_description)
 
     def invoke(self, context, event):
-        ui_type, tab, _ = EDITORS[self.editor]
-        area = context.area
-        if area is None or area.type in {"TOPBAR", "STATUSBAR", "EMPTY"} \
-                or area not in context.window.screen.areas[:]:
-            # called from the menu bar / status bar: borrow the main viewport
-            area, _ = find_view3d(context)
-            if area is None:
-                area = max(context.window.screen.areas, key=lambda a: a.width * a.height)
-        if self.editor == "MATERIAL":
-            # The new window takes the size of the area it is copied from: use a tall,
-            # narrow area (the Scene Explorer) so it opens like Max's Compact Material Editor
-            areas = context.window.screen.areas[:]
-            full_w = max(a.x + a.width for a in areas)
-            full_h = max(a.y + a.height for a in areas)
-            narrow = [a for a in areas if a.width < full_w * 0.3 and a.height > full_h * 0.45
-                      and a.type not in {"TOPBAR", "STATUSBAR"}]
-            if narrow:
-                area = min(narrow, key=lambda a: (a.type != "OUTLINER", a.width))
-        win = context.window
-        err = _duplicate_as(win, area, self.editor)
-        if err:
-            self.report({"WARNING"}, f"Could not open window: {err}")
-        if self.editor == "MATERIAL":
-            _setup_material_editor_window(win)
-        return {"FINISHED"}
+        if self.cmd in {'MIRROR', 'ALIGN'}:
+            return getattr(bpy.ops.max, self.cmd.lower() + '_dialog')('INVOKE_DEFAULT')
+        return self.execute(context)
 
     def execute(self, context):
-        return {"CANCELLED"}
+        from . import freezing, poly_tools, scene_explorer, symmetry
+        _owner(context)
+        token = self.cmd
+        if token == 'LINK':
+            with _viewport(context):
+                bpy.ops.wm.tool_set_by_id(name='max.select_link')
+            return {'FINISHED'}
+        if token in {'UNHIDE', 'UNFREEZE'}:
+            targets = list(context.scene.objects)
+        elif token == 'HIDE_UNSEL':
+            targets = [o for o in context.scene.objects if not o.select_get()]
+        else:
+            targets = list(context.selected_objects)
+        if not targets:
+            self.report({'WARNING'}, 'Select an object first')
+            return {'CANCELLED'}
+        _object_mode(context)
+        if token.startswith('CONVERT_'):
+            bpy.ops.object.convert(target='MESH' if token == 'CONVERT_POLY' else 'CURVE')
+            for converted in context.selected_objects:
+                converted.max_prim.kind = ''
+                converted.display_type = 'TEXTURED'
+            poly_tools.bake_converted_text_pivots(context.selected_objects)
+            symmetry.reconcile()
+        elif token == 'RESET_XFORM':
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+        elif token == 'CENTER_PIVOT':
+            for target in targets:
+                poly_tools.move_pivot(target, 'CENTER')
+        elif token == 'PIVOT_TO_WORLD':
+            for target in targets:
+                _pivot_world(target)
+        elif token == 'OBJECT_TO_PIVOT':
+            for target in targets:
+                center = sum((Vector(v) for v in target.bound_box), Vector()) / 8
+                if target.data and hasattr(target.data, 'transform'):
+                    if target.data.users > 1:
+                        target.data = target.data.copy()
+                    target.data.transform(Matrix.Translation(-center), shape_keys=True)
+        elif token in {'HIDE_SEL', 'HIDE_UNSEL', 'UNHIDE'}:
+            scene_explorer.set_hidden(context, targets, token != 'UNHIDE')
+        elif token in {'FREEZE', 'UNFREEZE'}:
+            for target in targets:
+                (freezing.freeze if token == 'FREEZE' else freezing.unfreeze)(target, context.scene)
+        elif token in {'DISPLAY_BOX', 'SEE_THROUGH', 'EDGES_ONLY'}:
+            for target in targets:
+                if token == 'DISPLAY_BOX':
+                    target.display_type = 'TEXTURED' if target.display_type == 'BOUNDS' else 'BOUNDS'
+                elif token == 'SEE_THROUGH':
+                    target.show_in_front = not target.show_in_front
+                else:
+                    target.show_wire = not target.show_wire
+        elif token == 'UNLINK':
+            scene_explorer.reparent(context, targets)
+        elif token == 'ATTACH':
+            bpy.ops.object.join()
+        elif token in {'MIRROR', 'ALIGN'}:
+            return getattr(bpy.ops.max, token.lower() + '_dialog')('INVOKE_DEFAULT')
+        elif token == 'ISOLATE':
+            with _viewport(context):
+                bpy.ops.view3d.localview(frame_selected=True)
+        return {'FINISHED'}
 
 
-MTL_EDITOR_WIDTH = 210      # points: the node sidebar's natural width = Compact editor width
+class MAX_OT_camera_from_view(bpy.types.Operator):
+    bl_idname = 'max.camera_from_view'
+    bl_label = 'Create Camera From View'
+    bl_description = 'Create a camera with the active viewport position and lens'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return has_view3d(context)
+
+    def execute(self, context):
+        area, _ = find_view3d(context)
+        space = area.spaces.active
+        camera = bpy.data.cameras.new(max_name('Camera'))
+        obj = bpy.data.objects.new(camera.name, camera)
+        context.collection.objects.link(obj)
+        obj.matrix_world = space.region_3d.view_matrix.inverted_safe()
+        camera.lens = space.lens
+        context.scene.camera = obj
+        with _viewport(context):
+            bpy.ops.view3d.view_camera()
+        return {'FINISHED'}
 
 
-def _duplicate_as(win, area, editor):
-    """Open `area` in a new window as the given editor; the area itself is left unchanged."""
-    ui_type, tab, _ = EDITORS[editor]
-    old = area.ui_type
-    try:
-        area.ui_type = ui_type
-        if tab:
-            try:
-                area.spaces.active.context = tab
-            except Exception:
-                pass
-        region = next((r for r in area.regions if r.type == "WINDOW"), None)
-        with bpy.context.temp_override(window=win, screen=win.screen, area=area, region=region):
-            bpy.ops.screen.area_dupli("INVOKE_DEFAULT")
-    except Exception as exc:
-        return str(exc)
-    finally:
-        area.ui_type = old
-    return None
+class MAX_OT_open_editor(bpy.types.Operator):
+    bl_idname = 'max.open_editor'
+    bl_label = 'Open Editor'
+    bl_description = 'Open the named editor in its own window'
+    editor: EnumProperty(items=_catalogue([(key, value[2]) for key, value in EDITORS.items()]))
+
+    @classmethod
+    def description(cls, context, properties):
+        return _description(cls.bl_idname, {'editor': properties.editor}, cls.bl_description)
+
+    def execute(self, context):
+        from . import max_editor_windows
+        if self.editor == 'MATERIAL':
+            return {'FINISHED'} if open_material_compat(context) else {'CANCELLED'}
+        window = max_editor_windows.open_editor(context, self.editor)
+        if window is None:
+            self.report({'WARNING'}, 'This editor needs an interactive window')
+            return {'CANCELLED'}
+        return {'FINISHED'}
 
 
-def _setup_material_editor_window(source_win):
-    """Turn the new Shader Editor window into the 3ds Max Compact Material Editor."""
-    from . import mtl_editor
-    scene = source_win.scene
-    mtl_editor.ensure_slots(scene)
-    st = scene.max_mtl_editor
-    if st.slots[st.active].material is None:
-        ob = source_win.view_layer.objects.active
-        st.slots[st.active].material = (ob.active_material if ob and ob.active_material
-                                        else mtl_editor.new_default_material(st.active))
-    win = bpy.context.window_manager.windows[-1]
-
-    def later():
-        try:
-            for area in win.screen.areas:
-                if area.type == "NODE_EDITOR":
-                    sp = area.spaces.active
-                    sp.show_region_ui = True
-                    sp.show_region_header = False      # compact: just the editor panel
-                    sp.show_region_toolbar = False
-                    mat = st.slots[st.active].material
-                    if mat and mat.node_tree:
-                        sp.pin = True
-                        sp.node_tree = mat.node_tree
-                    for r in area.regions:
-                        if r.type == "UI":
-                            r.active_panel_category = "Material Editor"
-                    area.tag_redraw()
-        except ReferenceError:
-            pass
-        return None
-    bpy.app.timers.register(later, first_interval=0.15)
-
-
-class MAX_OT_transform_typein(Operator):
-    """Transform Type-In (F12)"""
-    bl_idname = "max.transform_typein"
-    bl_label = "Transform Type-In"
+class MAX_OT_transform_typein(bpy.types.Operator):
+    bl_idname = 'max.transform_typein'
+    bl_label = 'Transform Type-In'
+    bl_description = 'Enter absolute or offset coordinates for the current transform'
+    bl_options = {'REGISTER', 'UNDO'}
+    absolute_move: FloatVectorProperty(name='Absolute: World', size=3, subtype='TRANSLATION', unit='LENGTH')
+    offset_move: FloatVectorProperty(name='Offset: World', size=3, subtype='TRANSLATION', unit='LENGTH')
+    absolute_scale: FloatVectorProperty(name='Absolute (%)', size=3, default=(100, 100, 100))
+    offset_scale: FloatVectorProperty(name='Offset (%)', size=3, default=(100, 100, 100))
+    offset: BoolProperty(name='Offset', default=False, options={'SKIP_SAVE'})
 
     @classmethod
     def poll(cls, context):
         from . import max_rotate
-        return context.active_object is not None or bool(max_rotate._typein_windows)
+        return bool(context.active_object or max_rotate.floating_window(context, max_rotate._typein_windows))
 
     def invoke(self, context, event):
-        from . import snaps, max_rotate
-        if snaps._tool(context) == "max.rotate" or max_rotate._typein_windows:
-            return bpy.ops.max.rotate_typein("INVOKE_DEFAULT")
-        return context.window_manager.invoke_popup(self, width=320)
+        from . import max_rotate
+        if _active_tool(context) == 'ROTATE' or max_rotate.floating_window(context, max_rotate._typein_windows):
+            return bpy.ops.max.rotate_typein('INVOKE_DEFAULT')
+        kind, values, _ = read_transform(context, False)
+        if values is None and kind != 'SCALE':
+            return {'CANCELLED'}
+        if kind == 'SCALE' and values is None:
+            self.offset = True
+        elif kind == 'SCALE':
+            self.absolute_scale = values
+        else:
+            self.absolute_move = values
+        return context.window_manager.invoke_props_dialog(self, width=310)
 
     def draw(self, context):
-        ob = context.active_object
-        lay = self.layout
-        lay.label(text=f"Move / Rotate / Scale Transform Type-In:  {ob.name}")
-        row = lay.row()
-        row.column().prop(ob, "location", text="Absolute:World")
-        row.column().prop(ob, "rotation_euler", text="Rotation")
-        row.column().prop(ob, "scale", text="Scale")
+        from . import max_widgets, max_rotate
+        kind, absolute, _ = read_transform(context, False)
+        max_rotate.draw_managers(self.layout, context)
+        row = self.layout.row()
+        for use_offset, label in ((False, 'Absolute'), (True, 'Offset')):
+            col = row.column(align=True)
+            col.enabled = use_offset or absolute is not None
+            col.label(text=label)
+            prop = ('offset_' if use_offset else 'absolute_') + ('scale' if kind == 'SCALE' else 'move')
+            for index, axis in enumerate('XYZ'):
+                max_widgets.spinner(col, self, prop, axis, index=index)
+        self.layout.prop(self, 'offset', text='Apply Offset values')
 
     def execute(self, context):
-        return {"FINISHED"}
+        if _active_tool(context) == 'ROTATE':
+            return bpy.ops.max.rotate_typein('INVOKE_DEFAULT')
+        field = ('offset_' if self.offset else 'absolute_') + ('scale' if _active_tool(context) == 'SCALE' else 'move')
+        return {'FINISHED'} if write_transform(context, getattr(self, field), self.offset) else {'CANCELLED'}
 
 
-class MAX_OT_add_modifier(Operator):
-    """Add a modifier (3ds Max name)"""
-    bl_idname = "max.add_modifier"
-    bl_label = "Add Modifier"
-    bl_options = {"REGISTER", "UNDO"}
-
-    kind: StringProperty()     # "BLENDER_TYPE[:option]|Max Name"
-
-    @classmethod
-    def description(cls, context, props):
-        try:
-            spec, label = props.kind.split("|")
-            return f"{label}  (Blender: {spec.split(':')[0].replace('_', ' ').title()})"
-        except ValueError:
-            return "Add modifier"
+class MAX_OT_add_modifier(bpy.types.Operator):
+    bl_idname = 'max.add_modifier'
+    bl_label = 'Add Modifier'
+    bl_description = 'Add the selected supported modifier to the active object'
+    bl_options = {'REGISTER', 'UNDO'}
+    kind: StringProperty()
 
     @classmethod
     def poll(cls, context):
         return context.active_object is not None
 
     def execute(self, context):
-        spec, label = self.kind.split("|")
-        mtype, _, option = spec.partition(":")
-        from . import symmetry
-        ob = symmetry.leave(context)
-        if mtype == "SYMMETRY":
-            if ob.type != "MESH":
-                self.report({"WARNING"}, "Symmetry works on mesh objects")
-                return {"CANCELLED"}
-            if context.mode != "OBJECT":
-                bpy.ops.object.mode_set(mode="OBJECT")
-            symmetry.add(ob)
-            return {"FINISHED"}
-        if mtype == "TURBOSMOOTH":
-            if ob.type != "MESH":
-                self.report({"WARNING"}, "TurboSmooth works on mesh objects")
-                return {"CANCELLED"}
-            for other in context.selected_objects:
-                if other != ob:
-                    other.select_set(False)
-            bpy.ops.max.turbosmooth()
-            return {"FINISHED"}
-        if mtype == "EDIT_POLY":
-            bpy.ops.max.subobject(level=1)
-            return {"FINISHED"}
-        if mtype == "UNWRAP":
-            ws = bpy.data.workspaces.get("UV Editing")
-            if ws:
-                context.window.workspace = ws
-            return {"FINISHED"}
-        if mtype == "EXTRUDE_SHAPE" and ob.type == "CURVE":
-            ob.data.extrude = 0.25
-            return {"FINISHED"}
-        if mtype == "SWEEP" and ob.type == "CURVE":
-            ob.data.bevel_depth = 0.05
-            return {"FINISHED"}
-        if mtype == "GN":
-            from . import gn_mods
-            if ob.type != "MESH":
-                self.report({"WARNING"}, f"{label} works on mesh objects")
-                return {"CANCELLED"}
-            mod = gn_mods.add(ob, option, label)
-            ob.modifiers.active = mod
-            return {"FINISHED"}
-        try:
-            mod = ob.modifiers.new(label, mtype)
-        except (RuntimeError, TypeError) as exc:
-            self.report({"WARNING"}, f"{label} can't be applied to this object: {exc}")
-            return {"CANCELLED"}
+        from . import gn_mods, poly_tools, symmetry
+        obj = _owner(context)
+        _object_mode(context)
+        token, _, display_name = self.kind.partition('|')
+        kind, _, variant = token.partition(':')
+        if kind == 'SYMMETRY':
+            if obj.type != 'MESH':
+                self.report({'WARNING'}, 'Symmetry requires a mesh')
+                return {'CANCELLED'}
+            mod = symmetry.add(obj)
+        elif kind == 'EDIT_POLY':
+            return bpy.ops.max.subobject(level=4)
+        elif kind == 'GN':
+            mod = gn_mods.add(obj, variant.title())
+        elif kind in {'TURBOSMOOTH', 'LATTICE', 'UNWRAP', 'EXTRUDE_SHAPE', 'SWEEP'}:
+            if kind == 'TURBOSMOOTH':
+                from . import turbosmooth
+                mod = turbosmooth.add(obj)
+            elif kind == 'LATTICE':
+                from . import ffd
+                mod = ffd.add(obj, points=int(variant or 4))
+            elif kind == 'UNWRAP':
+                self.report({'WARNING'}, 'Unwrap UVW requires the UV editing workflow, which is not installed')
+                return {'CANCELLED'}
+            if kind == 'EXTRUDE_SHAPE' and obj.type == 'CURVE':
+                obj.data.extrude = .1
+                return {'FINISHED'}
+            if kind == 'SWEEP' and obj.type == 'CURVE':
+                obj.data.bevel_depth = .1
+                return {'FINISHED'}
+            elif kind not in {'TURBOSMOOTH', 'LATTICE'}:
+                self.report({'WARNING'}, 'This modifier requires a spline')
+                return {'CANCELLED'}
+        else:
+            label = display_name or _modifier_label(token)
+            try:
+                mod = obj.modifiers.new(label, kind)
+            except (RuntimeError, TypeError) as exc:
+                self.report({'WARNING'}, str(exc))
+                return {'CANCELLED'}
+            if kind == 'SIMPLE_DEFORM':
+                mod.deform_method = variant or 'BEND'
+            elif kind == 'SUBSURF' and variant == 'SIMPLE':
+                mod.subdivision_type = 'SIMPLE'
+            elif kind == 'DECIMATE' and variant == 'PLANAR':
+                mod.decimate_type = 'DISSOLVE'
+            elif kind == 'REMESH' and variant == 'QUAD':
+                mod.mode = 'SHARP'
+            elif kind == 'SHRINKWRAP' and variant == 'PROJECT':
+                mod.wrap_method = 'PROJECT'
+            elif kind == 'WAVE' and variant == 'RIPPLE':
+                mod.use_cyclic = True
         if mod is None:
-            self.report({"WARNING"}, f"{label} can't be applied to a {ob.type.lower()}")
-            return {"CANCELLED"}
-        if mtype == "SIMPLE_DEFORM" and option:
-            mod.deform_method = option
-            mod.deform_axis = "Z"
-            if option in {"BEND", "TWIST"}:
-                mod.angle = 0.7854
-        elif mtype == "LATTICE" and option:
-            mod.object = _make_ffd(context, ob, int(option))
-        elif mtype == "DECIMATE" and option == "PLANAR":
-            mod.decimate_type = "DISSOLVE"
-        elif mtype == "REMESH" and option == "QUAD":
-            mod.mode = "SHARP"
-        elif mtype == "SHRINKWRAP" and option == "PROJECT":
-            mod.wrap_method = "PROJECT"
-        elif mtype == "PARTICLE_SYSTEM" and option == "HAIR":
-            mod.particle_system.settings.type = "HAIR"
-            mod.particle_system.settings.hair_length = 0.2
-        elif mtype == "SUBSURF":
-            mod.levels = mod.render_levels = 1 if option else 2
-        elif mtype == "SOLIDIFY":
-            mod.thickness = 0.1
-        elif mtype == "SCREW":
-            mod.axis = "Z"
-        elif mtype == "CAST" and option == "SPHERE":
-            mod.factor = 1.0
-        elif mtype == "WAVE" and option == "RIPPLE":
-            mod.use_normal = False
-        try:
-            ob.modifiers.active = mod
-        except Exception:
-            pass
-        return {"FINISHED"}
+            self.report({'WARNING'}, 'This modifier is unavailable for the selected object')
+            return {'CANCELLED'}
+        if display_name:
+            mod.name = display_name
+        obj.modifiers.active = mod
+        for internal in obj.modifiers:
+            if poly_tools.is_font_pivot(internal):
+                poly_tools._protect_font_pivot(obj, internal)
+        context.window_manager.max_cmd_tab = 'MODIFY'
+        return {'FINISHED'}
 
 
-def _make_ffd(context, ob, n):
-    """Create an FFD lattice fitted to the object's bounding box."""
-    from mathutils import Vector
-    lat = bpy.data.lattices.new(f"FFD({n}x{n}x{n})")
-    lat.points_u = lat.points_v = lat.points_w = n
-    lat_ob = bpy.data.objects.new(f"{ob.name} FFD", lat)
-    for coll in ob.users_collection:
-        coll.objects.link(lat_ob)
-    # Measure the mesh itself: ob.bound_box can be stale right after the mesh changed
-    if ob.type == "MESH" and ob.data.vertices:
-        xs = [v.co for v in ob.data.vertices]
-        lo = Vector([min(c[i] for c in xs) for i in range(3)])
-        hi = Vector([max(c[i] for c in xs) for i in range(3)])
+def _modifier_label(kind):
+    from . import ui_menus
+    return next((label for _, entries in ui_menus.MODIFIER_LIST for token, label in entries if token == kind), kind.title())
+
+
+def _effective_points(context):
+    if context.mode == 'EDIT_MESH':
+        return [obj.matrix_world @ vert.co for obj in context.objects_in_mode_unique_data
+                if obj.type == 'MESH' for vert in bmesh.from_edit_mesh(obj.data).verts
+                if vert.select and not vert.hide]
+    return [obj.matrix_world.translation.copy() for obj in context.selected_objects]
+
+
+def read_transform(context, offset=False):
+    """Read supported coordinates from the same basis used by the shared tools."""
+    from . import max_rotate, max_status
+    kind = _active_tool(context)
+    kind = kind if kind in {'MOVE', 'ROTATE', 'SCALE'} else 'MOVE'
+    unit = {'MOVE': 'LENGTH', 'ROTATE': 'ROTATION', 'SCALE': 'PERCENT'}[kind]
+    points = _effective_points(context)
+    if not points or context.active_object is None:
+        return kind, None, unit
+    if offset:
+        actual = _live_transform(context, kind)
+        if actual is not None:
+            return kind, actual, unit
+        live = max_status._live.get(context.window.as_pointer() if context.window else 0)
+        return kind, live[1] if live and live[0] == kind else None, unit
+    if kind == 'MOVE':
+        point = sum(points, Vector()) / len(points)
+        basis = max_rotate.reference_basis(context, operation='MOVE')
+        origin = max_rotate._coordinate_center(context, context.active_object, 'MOVE')
+        return kind, tuple(basis.inverted_safe() @ (point - origin)), unit
+    if context.mode != 'OBJECT' or len(context.selected_objects) != 1:
+        return kind, None, unit
+    if kind == 'ROTATE':
+        return kind, tuple(max_rotate.typein_values(context)), unit
+    basis = max_rotate.reference_basis(context, operation='SCALE')
+    matrix = basis.inverted_safe() @ context.active_object.matrix_world.to_3x3()
+    # A rotated/sheared stretch has no three independent absolute scale fields
+    # in this frame. Offset scaling still uses the chosen reference axes.
+    if any(abs(matrix[row][column]) > 1e-6 for row in range(3) for column in range(3) if row != column):
+        return kind, None, unit
+    return kind, tuple(matrix[i][i] * 100 for i in range(3)), unit
+
+
+def _live_transform(context, kind):
+    """Observe the existing gizmo owner. No timer or second transform is started."""
+    from . import max_gizmos, max_rotate
+    for operation in tuple(max_gizmos._active.values()):
+        owner = getattr(operation, '_owner_context', None)
+        if not owner or owner[0] != context.window or operation.operation != kind:
+            continue
+        if kind == 'ROTATE':
+            return tuple(operation.angle_data)
+        if kind == 'SCALE':
+            applied = operation.orientation.inverted_safe() @ getattr(operation, 'display_basis', operation.orientation)
+            return tuple(applied[i][i] * 100 for i in range(3))
+        differences = []
+        for obj, matrix in getattr(operation, 'matrices', ()):
+            differences.append(obj.matrix_world.translation - matrix.translation)
+        for obj, saved in getattr(operation, 'meshes', ()):
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.verts.ensure_lookup_table()
+            differences.extend(obj.matrix_world.to_3x3() @ (bm.verts[index].co - point) for index, point in saved)
+        if differences:
+            delta = sum(differences, Vector()) / len(differences)
+            return tuple(max_rotate.reference_basis(context, operation='MOVE').inverted_safe() @ delta)
+    return None
+
+
+def write_transform(context, values, offset=False):
+    """Numerical entry shares constraint projection and transform centres."""
+    from . import max_rotate, poly_constraints
+    kind, absolute, _ = read_transform(context, False)
+    if not _effective_points(context) or (not offset and absolute is None):
+        return False
+    if kind == 'ROTATE':
+        session = max_rotate.typein_apply(context, values, absolute=not offset)
+        session.finish()
+        return True
+    basis = max_rotate.reference_basis(context, operation=kind)
+    if kind == 'MOVE':
+        delta = basis @ (Vector(values) if offset else Vector(values) - Vector(absolute))
+        if context.mode == 'EDIT_MESH':
+            session = poly_constraints.MoveSession(context)
+            session.apply(delta)
+            session.finish()
+        else:
+            matrices = {obj: obj.matrix_world.copy() for obj in context.selected_objects}
+            for obj, matrix in matrices.items():
+                matrix.translation += delta
+            _write_world(context, matrices)
+        return True
+    factors = Vector(values) / 100 if offset else Vector(
+        values[i] / absolute[i] if abs(absolute[i]) > 1e-9 else 1 for i in range(3))
+    stretch = basis @ Matrix.Diagonal(factors) @ basis.inverted_safe()
+    pivots = _scale_pivots(context)
+    if context.mode == 'EDIT_MESH':
+        session = poly_constraints.MoveSession(context)
+        targets = {}
+        for obj in context.objects_in_mode_unique_data:
+            if obj.type != 'MESH':
+                continue
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.verts.index_update()
+            pivot = pivots.get(obj, max_rotate.transform_center(context, 'SCALE'))
+            targets[obj] = {v.index: pivot + stretch @ (obj.matrix_world @ v.co - pivot)
+                            for v in bm.verts if v.select and not v.hide}
+        session.apply_targets(targets)
+        session.finish()
     else:
-        corners = [Vector(c) for c in ob.bound_box]
-        lo = Vector([min(c[i] for c in corners) for i in range(3)])
-        hi = Vector([max(c[i] for c in corners) for i in range(3)])
-    lat_ob.parent = ob
-    lat_ob.location = (lo + hi) / 2
-    lat_ob.scale = [max(hi[i] - lo[i], 1e-3) for i in range(3)]
-    lat_ob.color = (1.0, 0.55, 0.1, 1.0)   # Max draws FFD lattices orange
-    lat_ob["max_ffd_owner"] = ob.name
-    lat_ob.show_in_front = True
-    return lat_ob
+        matrices = {}
+        for obj in context.selected_objects:
+            pivot = pivots.get(obj, max_rotate.transform_center(context, 'SCALE'))
+            matrices[obj] = Matrix.Translation(pivot) @ stretch.to_4x4() @ Matrix.Translation(-pivot) @ obj.matrix_world
+        _write_world(context, matrices)
+    return True
 
 
-class MAX_OT_melt_preset(Operator):
-    """Set Melt solidity to a 3ds Max preset"""
-    bl_idname = "max.melt_preset"
-    bl_label = "Solidity Preset"
-    bl_options = {"REGISTER", "UNDO"}
+def _write_world(context, matrices):
+    def depth(obj):
+        count = 0
+        while obj.parent:
+            obj = obj.parent
+            count += 1
+        return count
+    for obj in sorted(matrices, key=depth):
+        obj.matrix_world = matrices[obj]
+        context.view_layer.update()
 
-    value: bpy.props.FloatProperty()
+
+def _scale_pivots(context):
+    from . import max_rotate
+    mode = max_rotate.center_mode(context, 'SCALE')
+    local = max_rotate.reference_name(context, 'SCALE') == 'LOCAL'
+    objects = context.objects_in_mode_unique_data if context.mode == 'EDIT_MESH' else context.selected_objects
+    result = {}
+    for obj in objects:
+        if mode == 'COORDINATE' and not local:
+            pivot = max_rotate._coordinate_center(context, obj, 'SCALE')
+        elif mode == 'PIVOT' or local:
+            if context.mode == 'EDIT_MESH' and obj.type == 'MESH':
+                points = [obj.matrix_world @ v.co for v in bmesh.from_edit_mesh(obj.data).verts if v.select and not v.hide]
+                pivot = sum(points, Vector()) / len(points) if points else obj.matrix_world.translation.copy()
+            else:
+                pivot = obj.matrix_world.translation.copy()
+        else:
+            pivot = max_rotate.transform_center(context, 'SCALE')
+        result[obj] = pivot
+    return result
+
+
+def open_material_compat(context):
+    """Temporary Compact sidebar host. W2.E replaces only this adapter."""
+    from . import mtl_editor
+    if bpy.app.background or context.window is None:
+        return None
+    live = {w.as_pointer(): w for w in context.window_manager.windows}
+    for key in list(_material_windows):
+        if key in live:
+            return live[key]
+        _material_windows.pop(key)
+    mtl_editor.ensure_slots(context.scene)
+    state = mtl_editor.state(context)
+    slot = state.slots[state.active]
+    if slot.material is None:
+        slot.material = (context.active_object.active_material if context.active_object else None) or mtl_editor.new_default_material(state.active)
+    source = context.area or find_view3d(context)[0]
+    if source is None:
+        return None
+    with context.temp_override(area=source):
+        result = bpy.ops.screen.area_dupli('INVOKE_DEFAULT')
+    added = [w for w in context.window_manager.windows if w.as_pointer() not in live]
+    if result != {'FINISHED'} or len(added) != 1:
+        return None
+    window = added[0]
+    area = max(window.screen.areas, key=lambda a: a.width * a.height)
+    with context.temp_override(window=window, area=area):
+        area.ui_type = 'ShaderNodeTree'
+        area.spaces.active.show_region_ui = True
+        area.spaces.active.show_region_toolbar = False
+    _material_windows[window.as_pointer()] = window
+    return window
+
+
+def close_material_compat(*_):
+    live = {w.as_pointer(): w for w in bpy.context.window_manager.windows}
+    for key in list(_material_windows):
+        window = live.get(key)
+        if window:
+            with bpy.context.temp_override(window=window):
+                bpy.ops.wm.window_close()
+    _material_windows.clear()
+
+
+def _melt(context):
+    from . import gn_mods
+    obj = context.active_object
+    return next((m for m in obj.modifiers if gn_mods.is_melt(m)), None) if obj else None
+
+
+class MAX_OT_melt_preset(bpy.types.Operator):
+    bl_idname = 'max.melt_preset'
+    bl_label = 'Solidity Preset'
+    bl_description = 'Set solidity on the active Melt modifier'
+    bl_options = {'REGISTER', 'UNDO'}
+    value: FloatProperty()
 
     def execute(self, context):
         from . import gn_mods
-        ob = context.active_object
-        mod = ob.modifiers.active if ob else None
-        if mod is None or mod.type != "NODES":
-            return {"CANCELLED"}
-        gn_mods.set_input(mod, "Solidity", self.value)
-        ob.update_tag()
-        return {"FINISHED"}
+        mod = _melt(context)
+        return {'FINISHED'} if mod and gn_mods.set_input(mod, 'Solidity', self.value) else {'CANCELLED'}
 
 
-def _melt_mod(ob):
-    from . import gn_mods
-    if ob is None:
-        return None
-    act = ob.modifiers.active
-    if gn_mods.is_melt(act):
-        return act
-    return next((m for m in ob.modifiers if gn_mods.is_melt(m)), None)
-
-
-class MAX_OT_animate_melt(Operator):
-    """Animate the melt: keyframe Amount from solid to melted over a frame range"""
-    bl_idname = "max.animate_melt"
-    bl_label = "Animate Melt"
-    bl_options = {"REGISTER", "UNDO"}
-
-    start: bpy.props.IntProperty(name="Start Frame", default=1)
-    end: bpy.props.IntProperty(name="End Frame", default=100)
-    amount_from: FloatProperty(name="From Amount", default=0.0, min=0.0, max=1.0, subtype="FACTOR")
-    amount_to: FloatProperty(name="To Amount", default=1.0, min=0.0, max=1.0, subtype="FACTOR")
-    play: BoolProperty(name="Play Animation", default=True)
-
-    @classmethod
-    def poll(cls, context):
-        ob = context.active_object
-        return ob is not None and ob.type == "MESH"
+class MAX_OT_animate_melt(bpy.types.Operator):
+    bl_idname = 'max.animate_melt'
+    bl_label = 'Animate Melt'
+    bl_description = 'Add start and end Amount keys to Melt, an optional Maxxed utility'
+    bl_options = {'REGISTER', 'UNDO'}
+    start: IntProperty(default=1)
+    end: IntProperty(default=100)
+    amount_from: FloatProperty(default=0, min=0, max=1, subtype='FACTOR')
+    amount_to: FloatProperty(default=1, min=0, max=1, subtype='FACTOR')
+    play: BoolProperty(default=True)
 
     def invoke(self, context, event):
-        self.start = context.scene.frame_current
-        self.end = self.start + 99
-        return context.window_manager.invoke_props_dialog(self, width=260)
+        return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
         from . import gn_mods
-        ob = context.active_object
-        mod = _melt_mod(ob)
-        if mod is None:
-            mod = gn_mods.add(ob, "MELT", "Melt")
-        ob.modifiers.active = mod
-        if self.end <= self.start:
-            self.end = self.start + 1
+        mod = _melt(context)
+        if mod is None or self.end <= self.start:
+            self.report({'WARNING'}, 'Choose a Melt modifier and an end frame after the start')
+            return {'CANCELLED'}
         for frame, value in ((self.start, self.amount_from), (self.end, self.amount_to)):
-            gn_mods.set_input(mod, "Amount", value)
-            gn_mods.keyframe_input(mod, "Amount", frame)
-        scene = context.scene
-        scene.frame_end = max(scene.frame_end, self.end)
-        scene.frame_set(self.start)
-        if self.play and not context.screen.is_animation_playing:
-            try:
-                bpy.ops.screen.animation_play()
-            except RuntimeError:
-                pass
-        self.report({"INFO"}, f"Melt animated: frame {self.start} to {self.end}")
-        return {"FINISHED"}
+            gn_mods.set_input(mod, 'Amount', value)
+            gn_mods.keyframe_input(mod, 'Amount', frame)
+        if self.play and not bpy.app.background:
+            bpy.ops.screen.animation_play()
+        return {'FINISHED'}
 
 
-class MAX_OT_key_melt(Operator):
-    """Set a key on the Melt Amount at the current frame"""
-    bl_idname = "max.key_melt"
-    bl_label = "Key Melt Amount"
-    bl_options = {"REGISTER", "UNDO"}
+class MAX_OT_key_melt(bpy.types.Operator):
+    bl_idname = 'max.key_melt'
+    bl_label = 'Key Melt Amount'
+    bl_description = 'Insert a Melt Amount key at the current frame'
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         from . import gn_mods
-        mod = _melt_mod(context.active_object)
+        mod = _melt(context)
         if mod is None:
-            return {"CANCELLED"}
-        gn_mods.keyframe_input(mod, "Amount", context.scene.frame_current)
-        return {"FINISHED"}
+            return {'CANCELLED'}
+        gn_mods.keyframe_input(mod, 'Amount', context.scene.frame_current)
+        return {'FINISHED'}
 
 
-class MAX_OT_modifier_set_active(Operator):
-    """Select this modifier in the stack"""
-    bl_idname = "max.modifier_set_active"
-    bl_label = "Select Modifier"
-
+class MAX_OT_modifier_set_active(bpy.types.Operator):
+    bl_idname = 'max.modifier_set_active'
+    bl_label = 'Select Modifier'
+    bl_description = 'Leave component editing and select this entry in the modifier stack'
     name: StringProperty()
 
     def execute(self, context):
-        from . import symmetry
-        ob = symmetry.leave(context)
-        if context.mode.startswith("EDIT"):
-            bpy.ops.object.mode_set(mode="OBJECT")
-        mod = ob.modifiers.get(self.name) if ob else None
-        if ob and ob.mode == "EDIT":
-            bpy.ops.max.subobject(level=0)
         from . import poly_tools
-        if mod is not None and poly_tools.is_font_pivot(mod):
-            return {"CANCELLED"}
-        if mod is None:
-            if ob:  # clicked the base object: deselect modifiers
-                for m in ob.modifiers:
-                    try:
-                        m.is_active = False
-                    except Exception:
-                        pass
-            return {"FINISHED"}
-        ob.modifiers.active = mod
-        return {"FINISHED"}
+        obj = _owner(context)
+        if obj is None:
+            return {'CANCELLED'}
+        mod = obj.modifiers.get(self.name)
+        if mod and poly_tools.is_font_pivot(mod):
+            self.report({'WARNING'}, 'Text origin compensation is internal')
+            return {'CANCELLED'}
+        _object_mode(context)
+        if mod and not poly_tools.is_font_pivot(mod):
+            obj.modifiers.active = mod
+        elif not self.name:
+            obj.modifiers.active = None
+        context.window_manager.max_cmd_tab = 'MODIFY'
+        sync_sublevel(context)
+        return {'FINISHED'}
 
-
-# ---------------------------------------------------------------------------
-# global apply / restore
-# ---------------------------------------------------------------------------
 
 def quadview_op():
-    """screen.region_quadviews was renamed to screen.region_quadview in Blender 5."""
-    if "region_quadview" in dir(bpy.ops.screen):
-        return bpy.ops.screen.region_quadview
-    return bpy.ops.screen.region_quadviews
-
-
-class MAX_OT_toggle_quad(Operator):
-    """Maximize Viewport Toggle (Alt+W): switch between quad views and one big viewport"""
-    bl_idname = "max.toggle_quad"
-    bl_label = "Maximize Viewport Toggle"
-
-    @classmethod
-    def poll(cls, context):
-        return find_view3d(context)[0] is not None
-
-    def execute(self, context):
-        area, region = find_view3d(context)
-        with context.temp_override(area=area, region=region):
-            quadview_op()()
-        return {"FINISHED"}
+    return bpy.ops.screen.region_quadview
 
 
 def unlock_region(region):
-    """3ds Max lets you orbit any viewport; Blender locks 3 of its 4 quad views."""
-    rv3d = region.data
-    if rv3d is not None and getattr(rv3d, "lock_rotation", False):
-        rv3d.lock_rotation = False
+    for name in ('lock_rotation', 'show_sync_view', 'use_box_clip', 'use_box_quadview'):
+        if hasattr(region, name):
+            setattr(region, name, False)
 
 
 def unlock_max_workspace_quads():
-    """Fix layouts saved by older versions (orbit didn't work in 3 of 4 viewports)."""
-    ws = bpy.data.workspaces.get(WS_NAME)
-    if ws is None:
-        return
-    for screen in ws.screens:
-        for area in screen.areas:
-            if area.type == "VIEW_3D":
-                for region in area.regions:
-                    if region.type == "WINDOW":
-                        unlock_region(region)
-
-
-def _assign_quad_views(area):
-    wins = [r for r in area.regions if r.type == "WINDOW"]
-    if len(wins) < 4:
-        return
-    # order: top-left, top-right, bottom-left, bottom-right
-    wins.sort(key=lambda r: (-r.y, r.x))
-    for region in wins:
-        unlock_region(region)
-    for region, name in zip(wins[:3], ("TOP", "FRONT", "LEFT")):
-        rv3d = region.data
-        try:
-            rv3d.view_rotation = VIEW_ROTATIONS[name]
-            rv3d.view_perspective = "ORTHO"
-        except Exception as exc:
-            print(f"[3ds Maxxed] quad {name}: {exc}")
-    persp = wins[3].data
-    persp.view_perspective = "PERSP"
-    persp.view_rotation = Euler((math.radians(65), 0, math.radians(-45))).to_quaternion()
-    area.tag_redraw()
+    workspace = bpy.data.workspaces.get(WS_NAME)
+    if workspace:
+        for screen in workspace.screens:
+            for area in screen.areas:
+                if area.type == 'VIEW_3D':
+                    for view in area.spaces.active.region_quadviews:
+                        unlock_region(view)
 
 
 def setup_quad_views(context, window, area):
-    """Enable quad view with the 3ds Max layout: Top | Front / Left | Perspective."""
-    space = area.spaces.active
-    wins = [r for r in area.regions if r.type == "WINDOW"]
-    if len(space.region_quadviews) == 0 and wins:
-        with context.temp_override(window=window, area=area, region=wins[-1]):
+    region = next((r for r in area.regions if r.type == 'WINDOW'), None)
+    if region is None:
+        return
+    with context.temp_override(window=window, area=area, region=region):
+        if not area.spaces.active.region_quadviews:
             quadview_op()()
-    # Region positions are only valid after Blender lays the quads out, so assign
-    # the views a moment later.
-    def later():
-        try:
-            _assign_quad_views(area)
-        except ReferenceError:
-            pass
-        return None
-    bpy.app.timers.register(later, first_interval=0.15)
-
-
-WS_NAME = "3ds Max"
-
-
-def _configure_viewport(context, window, area, quad=False):
-    space = area.spaces.active
-    space.show_region_ui = True
-    space.show_region_tool_header = False
-    space.show_region_toolbar = False
-    space.show_region_header = True           # drawn as the 3ds Max Main Toolbar
-    sh = space.shading
-    if sh.type == "SOLID":
-        sh.color_type = "OBJECT"
-        sh.light = "STUDIO"
-    sh.wireframe_color_type = "OBJECT"
-    space.overlay.show_text = False           # only our [+] [Perspective] labels
-    space.overlay.show_wireframes = False
-    space.overlay.show_cursor = False         # Max has no 3D cursor
-    from .cursor_policy import reset_scene
-    reset_scene(window.scene)
-    for r in area.regions:
-        if r.type == "UI":
-            try:
-                r.active_panel_category = "Command Panel"
-            except Exception:
-                pass
-    if quad:
-        setup_quad_views(context, window, area)
-    try:
-        with context.temp_override(window=window, area=area):
-            bpy.ops.wm.tool_set_by_id(name="builtin.select_box")
-    except Exception:
-        pass
-
-
-def _build_screen(window, quad=False):
-    """Turn the duplicated Layout into: Scene Explorer | quad viewports | Command Panel."""
-    context = bpy.context
-    screen = window.screen
-    views = [a for a in screen.areas if a.type == "VIEW_3D"]
-    if not views:
-        return
-    view = max(views, key=lambda a: a.width * a.height)
-    # 1. close the Outliner / Properties column right of the viewport
-    for area in list(screen.areas):
-        if area.type in {"OUTLINER", "PROPERTIES"} and area.x >= view.x + view.width - 4:
-            try:
-                with context.temp_override(window=window, screen=screen, area=area):
-                    bpy.ops.screen.area_close()
-            except Exception as exc:
-                print(f"[3ds Maxxed] close area: {exc}")
-
-    def split_later():
-        try:
-            views = [a for a in screen.areas if a.type == "VIEW_3D"]
-            view = max(views, key=lambda a: a.width * a.height)
-            if not any(a.type == "OUTLINER" and a.x < view.x for a in screen.areas):
-                region = [r for r in view.regions if r.type == "WINDOW"][-1]
-                with context.temp_override(window=window, screen=screen, area=view, region=region):
-                    # Scene Explorer as wide as the Compact Material Editor, which opens
-                    # as a copy of it (M) and is then filled edge to edge by the editor panel
-                    width = MTL_EDITOR_WIDTH * bpy.context.preferences.system.ui_scale
-                    factor = min(0.3, max(0.08, width / max(view.width, 1)))
-                    bpy.ops.screen.area_split(direction="VERTICAL", factor=factor)
-                views = sorted([a for a in screen.areas if a.type == "VIEW_3D"], key=lambda a: a.width)
-                if len(views) >= 2:
-                    explorer = views[0]
-                    explorer.ui_type = "OUTLINER"
-                    view = views[-1]
-            _configure_viewport(context, window, view, quad=quad)
-        except Exception as exc:
-            print(f"[3ds Maxxed] layout: {exc}")
-        return None
-    bpy.app.timers.register(split_later, first_interval=0.1)
-
-
-def _build_new_workspace(window, quad=False):
-    """Duplicate Blender's Layout workspace and turn it into the 3ds Max layout."""
-    old = bpy.data.workspaces.get(WS_NAME)
-    base = bpy.data.workspaces.get("Layout")
-    if base is None or base == old:
-        base = next((w for w in bpy.data.workspaces if w != old), old)
-    before = set(bpy.data.workspaces.keys())
-    with bpy.context.temp_override(window=window, workspace=base):
-        bpy.ops.workspace.duplicate()
-    new = [w for w in bpy.data.workspaces if w.name not in before]
-    if not new:
-        return
-    new[0].name = WS_NAME
-    window.workspace = new[0]
-
-    def wait():
-        if window.workspace != new[0]:
-            return 0.05
-        _build_screen(window, quad=quad)
-        return None
-    bpy.app.timers.register(wait, first_interval=0.05)
-
-
-def apply_layout(context, quad=False):
-    """(Re)build the '3ds Max' workspace from scratch, so Apply always resets the layout."""
-    wm = context.window_manager
-    window = context.window or (wm.windows[0] if wm.windows else None)
-    if window is None:
-        return
-    old = bpy.data.workspaces.get(WS_NAME)
-    if old is None:
-        _build_new_workspace(window, quad)
-        return
-    # A workspace can't be removed while a window shows it: move off it first
-    other = bpy.data.workspaces.get("Layout")
-    if other is None or other == old:
-        other = next((w for w in bpy.data.workspaces if w != old), None)
-    if other is None:                      # only the 3ds Max workspace exists: rename and replace
-        old.name = WS_NAME + " (old)"
-        _build_new_workspace(window, quad)
-        return
-    for w in wm.windows:
-        if w.workspace == old:
-            w.workspace = other
-
-    def replace():
-        if any(w.workspace == old for w in bpy.context.window_manager.windows):
-            return 0.05                     # workspace switch happens on the next refresh
-        try:
-            old.name = WS_NAME + " (old)"
-            bpy.data.batch_remove(ids=[old])
-        except Exception as exc:
-            print(f"[3ds Maxxed] could not remove old layout: {exc}")
-        _build_new_workspace(window, quad)
-        return None
-    bpy.app.timers.register(replace, first_interval=0.05)
-
-
-def restore_layout(context):
-    for window in context.window_manager.windows:
-        if window.workspace.name == WS_NAME:
-            layout = bpy.data.workspaces.get("Layout")
-            if layout:
-                window.workspace = layout
-
-
-class MAX_OT_adaptive_degradation(Operator):
-    """Adaptive Degradation (O): lighter viewport for heavy scenes (Blender Simplify)"""
-    bl_idname = "max.adaptive_degradation"
-    bl_label = "Adaptive Degradation"
-
-    def execute(self, context):
-        r = context.scene.render
-        r.use_simplify = not r.use_simplify
-        if r.use_simplify:
-            r.simplify_subdivision = min(r.simplify_subdivision, 1)
-            r.simplify_child_particles = min(r.simplify_child_particles, 0.2)
-            r.simplify_volumes = min(r.simplify_volumes, 0.5)
-        self.report({"INFO"}, f"Adaptive Degradation {'ON' if r.use_simplify else 'OFF'}")
-        return {"FINISHED"}
-
-
-class MAX_OT_set_key(Operator):
-    """Set Key (K): key the selection's transforms (works from any menu or editor)"""
-    bl_idname = "max.set_key"
-    bl_label = "Set Key"
-    bl_options = {"REGISTER", "UNDO"}
-
-    @classmethod
-    def poll(cls, context):
-        return bool(context.selected_objects) or context.active_object is not None
-
-    def execute(self, context):
-        ov = viewport_override(context)
-        try:
-            if ov:
-                with context.temp_override(**ov):
-                    bpy.ops.anim.keyframe_insert()
-            else:
-                raise RuntimeError
-        except RuntimeError:
-            frame = context.scene.frame_current
-            for ob in context.selected_objects or [context.active_object]:
-                for path in ("location", "rotation_euler", "scale"):
-                    ob.keyframe_insert(path, frame=frame)
-        self.report({"INFO"}, f"Key set at frame {context.scene.frame_current}")
-        return {"FINISHED"}
-
-
-class MAX_OT_group(Operator):
-    """Group: parent the selection under a new Dummy (Ungroup removes it)"""
-    bl_idname = "max.group"
-    bl_label = "Group"
-    bl_options = {"REGISTER", "UNDO"}
-
-    action: EnumProperty(items=[("GROUP", "Group", ""), ("UNGROUP", "Ungroup", "")])
-
-    @classmethod
-    def poll(cls, context):
-        return context.mode == "OBJECT" and context.selected_objects
-
-    def execute(self, context):
-        sel = list(context.selected_objects)
-        if self.action == "GROUP":
-            from mathutils import Vector
-            center = sum((o.matrix_world.translation for o in sel), Vector()) / len(sel)
-            grp = bpy.data.objects.new(max_name("Group"), None)
-            grp.empty_display_type = "CUBE"
-            grp.location = center
-            context.collection.objects.link(grp)
-            context.view_layer.update()
-            for o in sel:
-                mw = o.matrix_world.copy()
-                o.parent = grp
-                o.matrix_world = mw
-            for o in sel:
-                o.select_set(False)
-            grp.select_set(True)
-            context.view_layer.objects.active = grp
+    rotations = ('TOP', 'FRONT', 'LEFT')
+    for index, view in enumerate(area.spaces.active.region_quadviews):
+        unlock_region(view)
+        if index < 3:
+            view.view_rotation = VIEW_ROTATIONS[rotations[index]]
+            view.view_perspective = 'ORTHO'
         else:
-            for grp in [o for o in sel if o.type == "EMPTY" and o.name.startswith("Group")]:
-                for child in list(grp.children):
-                    mw = child.matrix_world.copy()
-                    child.parent = None
-                    child.matrix_world = mw
-                    child.select_set(True)
-                bpy.data.objects.remove(grp)
-        return {"FINISHED"}
+            view.view_perspective = 'PERSP'
 
 
-class MAX_OT_set_workspace(Operator):
-    """Switch workspace"""
-    bl_idname = "max.set_workspace"
-    bl_label = "Workspace"
+class MAX_OT_toggle_quad(bpy.types.Operator):
+    bl_idname = 'max.toggle_quad'
+    bl_label = 'Maximize Viewport Toggle'
+    bl_description = 'Switch the modeling viewport between single and four-view layouts'
 
+    def execute(self, context):
+        area, _ = find_view3d(context)
+        if area is None:
+            return {'CANCELLED'}
+        if area.spaces.active.region_quadviews:
+            with _viewport(context):
+                quadview_op()()
+        else:
+            setup_quad_views(context, context.window, area)
+        return {'FINISHED'}
+
+
+class MAX_OT_adaptive_degradation(bpy.types.Operator):
+    bl_idname = 'max.adaptive_degradation'
+    bl_label = 'Adaptive Degradation'
+    bl_description = 'Toggle bounding-box display for the selection. Automatic Nitrous degradation is unavailable'
+
+    def execute(self, context):
+        _notice('Adaptive Degradation uses manual bounding-box display for the selection')
+        return bpy.ops.max.object_cmd(cmd='DISPLAY_BOX')
+
+
+class MAX_OT_set_key(bpy.types.Operator):
+    bl_idname = 'max.set_key'
+    bl_label = 'Set Key'
+    bl_description = 'Insert position, rotation and scale keys for the selection at the current frame'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        if not context.selected_objects:
+            return {'CANCELLED'}
+        for obj in context.selected_objects:
+            rotation = 'rotation_quaternion' if obj.rotation_mode == 'QUATERNION' else 'rotation_axis_angle' if obj.rotation_mode == 'AXIS_ANGLE' else 'rotation_euler'
+            for path in ('location', rotation, 'scale'):
+                obj.keyframe_insert(data_path=path, frame=context.scene.frame_current)
+        return {'FINISHED'}
+
+
+class MAX_OT_group(bpy.types.Operator):
+    bl_idname = 'max.group'
+    bl_label = 'Group'
+    bl_description = 'Group objects under a group head, or dissolve the selected group without moving members'
+    bl_options = {'REGISTER', 'UNDO'}
+    action: EnumProperty(items=_catalogue([('GROUP', 'Group'), ('UNGROUP', 'Ungroup')]))
+
+    def execute(self, context):
+        from . import scene_explorer
+        targets = list(context.selected_objects)
+        if not targets:
+            return {'CANCELLED'}
+        _object_mode(context)
+        if self.action == 'GROUP':
+            head = bpy.data.objects.new(max_name('Group'), None)
+            context.collection.objects.link(head)
+            head.empty_display_type = 'PLAIN_AXES'
+            head['max_group_head'] = True
+            head.location = sum((o.matrix_world.translation for o in targets), Vector()) / len(targets)
+            context.view_layer.update()
+            scene_explorer.reparent(context, targets, head)
+            head.select_set(True)
+            context.view_layer.objects.active = head
+        else:
+            groups = {o if o.get('max_group_head') else o.parent for o in targets}
+            for head in groups:
+                if head and head.get('max_group_head'):
+                    scene_explorer.reparent(context, list(head.children), head.parent)
+                    bpy.data.objects.remove(head, do_unlink=True)
+        return {'FINISHED'}
+
+
+class MAX_OT_set_workspace(bpy.types.Operator):
+    bl_idname = 'max.set_workspace'
+    bl_label = 'Workspace'
+    bl_description = 'Activate the requested existing workspace'
     name: StringProperty()
 
     def execute(self, context):
-        ws = bpy.data.workspaces.get(self.name)
-        if ws:
-            context.window.workspace = ws
-        return {"FINISHED"}
+        workspace = bpy.data.workspaces.get(self.name)
+        if workspace is None or context.window is None:
+            return {'CANCELLED'}
+        context.window.workspace = workspace
+        return {'FINISHED'}
 
 
-class MAX_OT_apply(Operator):
-    """Turn Blender into 3ds Max: theme, navigation and a freshly rebuilt '3ds Max' workspace
-    (Scene Explorer, quad viewports, Command Panel). Also resets a rearranged layout"""
-    bl_idname = "max.apply"
-    bl_label = "Apply 3ds Max Look"
+def _explorer_layout(context):
+    from . import max_editor_windows
+    viewport, _ = find_view3d(context)
+    if viewport is None:
+        return
+    # Dock ownership is transient. Loaded files do not acquire a second schema.
+    for area in context.screen.areas:
+        host = max_editor_windows._docked.get(area.as_pointer())
+        if host:
+            max_editor_windows._configure(host)
+        elif area.type == 'OUTLINER' and area.x < viewport.x:
+            max_editor_windows.attach_explorer(context, area)
 
+
+def apply_layout(context, quad=False):
+    if context.window is None:
+        return
+    window, scene = context.window, context.scene
+    key = window.as_pointer()
+    if key not in _layout_snapshot:
+        _layout_snapshot[key] = (window, context.workspace, context.workspace.name)
+    workspace = window.workspace
+    if window.workspace.name != WS_NAME:
+        workspace = bpy.data.workspaces.get(WS_NAME)
+        if workspace is None:
+            before = set(bpy.data.workspaces)
+            bpy.ops.workspace.duplicate()
+            workspace = next((w for w in bpy.data.workspaces if w not in before), None)
+            if workspace is None:
+                raise RuntimeError('Could not create the Maxxed workspace')
+            workspace.name = WS_NAME
+        window.workspace = workspace
+    cancel_layout(window)
+    phase = 0
+
+    def construct():
+        nonlocal phase
+        from . import ui_menus, max_chrome, cursor_policy
+        try:
+            live = any(w.as_pointer() == key for w in bpy.context.window_manager.windows)
+            if not ui_menus._installed or not live or window.workspace != workspace or window.scene != scene:
+                _layout_jobs.pop(key, None)
+                return None
+            with bpy.context.temp_override(window=window):
+                if phase == 0:
+                    if _arrange_workspace(bpy.context):
+                        phase = 1
+                    return .1
+                phase = 2
+                max_chrome.apply_layout(bpy.context, quad=quad)
+                if quad:
+                    area, _ = find_view3d(bpy.context)
+                    if area:
+                        setup_quad_views(bpy.context, window, area)
+                cursor_policy.reset_scene(scene)
+                cursor_policy.enforce()
+        except Exception:
+            _layout_jobs.pop(key, None)
+            raise
+        finally:
+            if phase == 2:
+                _layout_jobs.pop(key, None)
+        return None
+
+    _layout_jobs[key] = construct
+    bpy.app.timers.register(construct, first_interval=.1)
+
+
+def cancel_layout(window=None):
+    keys = [window.as_pointer()] if window else list(_layout_jobs)
+    for key in keys:
+        callback = _layout_jobs.pop(key, None)
+        if callback and bpy.app.timers.is_registered(callback):
+            bpy.app.timers.unregister(callback)
+
+
+def _arrange_workspace(context):
+    from . import max_editor_windows, max_chrome
+    if bpy.app.background:
+        return True
+    window = context.window
+    area, region = find_view3d(context)
+    if area is None:
+        return True
+    if any(a.type == 'OUTLINER' and a.x < area.x for a in context.screen.areas):
+        return True
+    if any(a.as_pointer() in max_editor_windows._docked for a in context.screen.areas):
+        return True
+    # Close the factory right-hand editor column in the duplicated workspace.
+    for other in tuple(window.screen.areas):
+        if other.type in {'OUTLINER', 'PROPERTIES'}:
+            with context.temp_override(window=window, area=other):
+                bpy.ops.screen.area_close()
+            # Closing an area invalidates the active screen context until redraw.
+            return False
+    viewports = [a for a in window.screen.areas if a.type == 'VIEW_3D' and not max_chrome.timeline_area(a)]
+    if len(viewports) > 1:
+        min(viewports, key=lambda a: a.x).type = 'OUTLINER'
+        return True
+    if region is None:
+        return True
+    with context.temp_override(window=window, area=area, region=region):
+        bpy.ops.screen.area_split(direction='VERTICAL', factor=.18)
+    return False
+
+
+def restore_layout(context):
+    from . import max_editor_windows
+    cancel_layout()
+    for window, workspace, name in list(_layout_snapshot.values()):
+        try:
+            workspace.name = name
+            window.workspace = workspace
+        except (ReferenceError, RuntimeError):
+            continue
+    _layout_snapshot.clear()
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            max_editor_windows.detach_explorer(area)
+
+
+class MAX_OT_apply(bpy.types.Operator):
+    bl_idname = 'max.apply'
+    bl_label = 'Apply 3ds Max Look'
+    bl_description = 'Apply Maxxed appearance and a single Perspective workspace without changing scene units or timing'
     theme: BoolProperty(default=True)
-    layout_: BoolProperty(name="Layout", default=True)
+    layout_: BoolProperty(default=True)
     quad: BoolProperty(default=False)
 
     def execute(self, context):
+        from . import theme
         if self.theme:
-            theme.apply_theme()
-        theme.apply_prefs()
+            theme.apply(context)
         if self.layout_:
             apply_layout(context, quad=self.quad)
-        self.report({"INFO"}, "3ds Max mode applied")
-        return {"FINISHED"}
+        return {'FINISHED'}
 
 
-class MAX_OT_restore(Operator):
-    """Restore Blender's default theme, preferences and layout"""
-    bl_idname = "max.restore"
-    bl_label = "Restore Blender Look"
+class MAX_OT_restore(bpy.types.Operator):
+    bl_idname = 'max.restore'
+    bl_label = 'Restore Blender Look'
+    bl_description = 'Restore the workspace and appearance captured by Apply'
 
     def execute(self, context):
-        theme.reset_theme()
-        theme.restore_prefs()
+        from . import theme
         restore_layout(context)
-        self.report({"INFO"}, "Blender look restored")
-        return {"FINISHED"}
+        theme.restore(context)
+        return {'FINISHED'}
 
 
-class MAX_OT_block_cursor(Operator):
-    """Swallow Blender's Shift+right-click 3D cursor placement (Max has no 3D cursor)"""
-    bl_idname = "max.block_cursor"
-    bl_label = "Block 3D Cursor"
-    bl_options = {"INTERNAL"}
+class MAX_OT_block_cursor(bpy.types.Operator):
+    bl_idname = 'max.block_cursor'
+    bl_label = 'Block 3D Cursor'
+    bl_description = 'Keep the protected snap gesture from placing the backend cursor'
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.workspace is not None and context.workspace.name == WS_NAME
+
+    def execute(self, context):
+        return {'FINISHED'}
 
     def invoke(self, context, event):
-        return {"FINISHED"}
+        return self.execute(context)
 
 
 classes = (
-    MAX_OT_block_cursor,
-    MAX_OT_subobject, MAX_OT_set_view, MAX_OT_zoom_extents, MAX_OT_toggle, MAX_OT_expert_mode,
-    MAX_OT_select_all, MAX_OT_delete, MAX_OT_select_by_name, MAX_OT_clone, MAX_OT_edit_poly,
-    MAX_OT_object_cmd, MAX_OT_camera_from_view, MAX_OT_open_editor, MAX_OT_transform_typein,
-    MAX_OT_add_modifier, MAX_OT_modifier_set_active, MAX_OT_apply, MAX_OT_restore, MAX_OT_toggle_quad, MAX_OT_set_workspace, MAX_OT_group, MAX_OT_melt_preset, MAX_OT_set_key, MAX_OT_animate_melt, MAX_OT_key_melt, MAX_OT_adaptive_degradation,
+    MAX_OT_subobject, MAX_OT_set_view, MAX_OT_zoom_extents, MAX_OT_toggle,
+    MAX_OT_expert_mode, MAX_OT_select_all, MAX_OT_delete, MAX_OT_select_by_name,
+    MAX_OT_clone, MAX_OT_edit_poly, MAX_OT_object_cmd, MAX_OT_camera_from_view,
+    MAX_OT_open_editor, MAX_OT_transform_typein, MAX_OT_add_modifier,
+    MAX_OT_melt_preset, MAX_OT_animate_melt, MAX_OT_key_melt,
+    MAX_OT_modifier_set_active, MAX_OT_toggle_quad, MAX_OT_adaptive_degradation,
+    MAX_OT_set_key, MAX_OT_group, MAX_OT_set_workspace, MAX_OT_apply,
+    MAX_OT_restore, MAX_OT_block_cursor,
 )

@@ -1,648 +1,723 @@
-"""Quad menus, Modifier List, top menus, the Main Toolbar and the status bar."""
-
+"""Curated command menus and the single workspace-chrome installation."""
 import bpy
-from . import max_icons, mode_feedback
-from bpy.types import Menu
+from bpy.app.handlers import persistent
+from bpy.props import EnumProperty
+from . import max_chrome, max_icons, max_status, max_toolbar, mode_feedback
+from .operators import WS_NAME
 
-# (Max name, "BLENDER_TYPE[:option]") grouped like the 3ds Max Modifier List
-MODIFIER_LIST = [
-    ("MESH EDITING", [
-        ("Edit Poly", "EDIT_POLY"), ("Symmetry", "SYMMETRY"), ("Mirror", "MIRROR"),
-        ("Vertex Weld", "WELD"), ("ProOptimizer", "DECIMATE"), ("Optimize", "DECIMATE:PLANAR"),
-        ("MultiRes", "DECIMATE"), ("Turn to Mesh", "TRIANGULATE"), ("Delete Mesh", "MASK"),
-        ("Smooth", "EDGE_SPLIT"), ("Edit Normals", "NORMAL_EDIT"), ("Weighted Normals", "WEIGHTED_NORMAL"),
-        ("Retopology", "REMESH"), ("Quadify Mesh", "REMESH:QUAD"),
-    ]),
-    ("SUBDIVISION", [
-        ("TurboSmooth", "TURBOSMOOTH"), ("MeshSmooth", "SUBSURF"), ("OpenSubdiv", "SUBSURF"),
-        ("Tessellate", "SUBSURF:SIMPLE"), ("Subdivide", "SUBSURF:SIMPLE"), ("HSDS", "MULTIRES"),
-    ]),
-    ("GEOMETRY", [
-        ("Shell", "SOLIDIFY"), ("Chamfer", "BEVEL"), ("Array", "ARRAY"), ("Boolean", "BOOLEAN"),
-        ("ProBoolean", "BOOLEAN"), ("Lattice", "WIREFRAME"), ("Skin", "SKIN"), ("Slice", "GN:SLICE"),
-        ("Displace", "DISPLACE"),
-    ]),
-    ("PARAMETRIC DEFORMERS", [
-        ("Bend", "SIMPLE_DEFORM:BEND"), ("Twist", "SIMPLE_DEFORM:TWIST"), ("Taper", "SIMPLE_DEFORM:TAPER"),
-        ("Stretch", "SIMPLE_DEFORM:STRETCH"), ("Skew", "GN:SKEW"), ("Squeeze", "GN:SQUEEZE"),
-        ("Melt", "GN:MELT"), ("Noise", "GN:NOISE"), ("Push", "GN:PUSH"), ("Spherify", "GN:SPHERIFY"),
-        ("Relax", "LAPLACIANSMOOTH"), ("Smooth Deform", "SMOOTH"), ("Wave", "WAVE"),
-        ("Ripple", "WAVE:RIPPLE"), ("Affect Region", "WARP"),
-    ]),
-    ("FREE FORM / SURFACE", [
-        ("FFD 2x2x2", "LATTICE:2"), ("FFD 3x3x3", "LATTICE:3"), ("FFD 4x4x4", "LATTICE:4"),
-        ("FFD Box", "LATTICE:5"), ("Shrink Wrap", "SHRINKWRAP"), ("Conform", "SHRINKWRAP:PROJECT"),
-        ("Path Deform", "CURVE"), ("Skin Wrap", "SURFACE_DEFORM"), ("Skin Morph", "MESH_DEFORM"),
-        ("Skin", "ARMATURE"), ("Linked XForm", "HOOK"),
-    ]),
-    ("UV / SHAPE / ANIMATION", [
-        ("UVW Map", "UV_PROJECT"), ("Unwrap UVW", "UNWRAP"), ("UVW XForm", "UV_WARP"),
-        ("Extrude", "EXTRUDE_SHAPE"), ("Lathe", "SCREW"), ("Sweep / Renderable", "SWEEP"),
-        ("Cloth", "CLOTH"), ("Flex", "SOFT_BODY"), ("Point Cache", "MESH_CACHE"),
-        ("Particle Flow", "PARTICLE_SYSTEM"), ("Hair and Fur", "PARTICLE_SYSTEM:HAIR"),
-        ("Ocean (Blender)", "OCEAN"),
-    ]),
+
+# Catalogue values are frozen public interface data from the Wave 2 addendum.
+MODIFIER_LIST = [('MESH EDITING',
+  [('EDIT_POLY', 'Edit Poly'),
+   ('SYMMETRY', 'Symmetry'),
+   ('MIRROR', 'Mirror'),
+   ('WELD', 'Vertex Weld'),
+   ('DECIMATE', 'ProOptimizer'),
+   ('DECIMATE:PLANAR', 'Optimize'),
+   ('DECIMATE', 'MultiRes'),
+   ('TRIANGULATE', 'Turn to Mesh'),
+   ('MASK', 'Delete Mesh'),
+   ('EDGE_SPLIT', 'Smooth'),
+   ('NORMAL_EDIT', 'Edit Normals'),
+   ('WEIGHTED_NORMAL', 'Weighted Normals'),
+   ('REMESH', 'Retopology'),
+   ('REMESH:QUAD', 'Quadify Mesh')]),
+ ('SUBDIVISION',
+  [('TURBOSMOOTH', 'TurboSmooth'),
+   ('SUBSURF', 'MeshSmooth'),
+   ('SUBSURF', 'OpenSubdiv'),
+   ('SUBSURF:SIMPLE', 'Tessellate'),
+   ('SUBSURF:SIMPLE', 'Subdivide'),
+   ('MULTIRES', 'HSDS')]),
+ ('GEOMETRY',
+  [('SOLIDIFY', 'Shell'),
+   ('BEVEL', 'Chamfer'),
+   ('ARRAY', 'Array'),
+   ('BOOLEAN', 'Boolean'),
+   ('BOOLEAN', 'ProBoolean'),
+   ('WIREFRAME', 'Lattice'),
+   ('SKIN', 'Skin'),
+   ('GN:SLICE', 'Slice'),
+   ('DISPLACE', 'Displace')]),
+ ('PARAMETRIC DEFORMERS',
+  [('SIMPLE_DEFORM:BEND', 'Bend'),
+   ('SIMPLE_DEFORM:TWIST', 'Twist'),
+   ('SIMPLE_DEFORM:TAPER', 'Taper'),
+   ('SIMPLE_DEFORM:STRETCH', 'Stretch'),
+   ('GN:SKEW', 'Skew'),
+   ('GN:SQUEEZE', 'Squeeze'),
+   ('GN:MELT', 'Melt'),
+   ('GN:NOISE', 'Noise'),
+   ('GN:PUSH', 'Push'),
+   ('GN:SPHERIFY', 'Spherify'),
+   ('LAPLACIANSMOOTH', 'Relax'),
+   ('SMOOTH', 'Smooth Deform'),
+   ('WAVE', 'Wave'),
+   ('WAVE:RIPPLE', 'Ripple'),
+   ('WARP', 'Affect Region')]),
+ ('FREE FORM / SURFACE',
+  [('LATTICE:2', 'FFD 2x2x2'),
+   ('LATTICE:3', 'FFD 3x3x3'),
+   ('LATTICE:4', 'FFD 4x4x4'),
+   ('LATTICE:5', 'FFD Box'),
+   ('SHRINKWRAP', 'Shrink Wrap'),
+   ('SHRINKWRAP:PROJECT', 'Conform'),
+   ('CURVE', 'Path Deform'),
+   ('SURFACE_DEFORM', 'Skin Wrap'),
+   ('MESH_DEFORM', 'Skin Morph'),
+   ('ARMATURE', 'Skin'),
+   ('HOOK', 'Linked XForm')]),
+ ('UV / SHAPE / ANIMATION',
+  [('UV_PROJECT', 'UVW Map'),
+   ('UNWRAP', 'Unwrap UVW'),
+   ('UV_WARP', 'UVW XForm'),
+   ('EXTRUDE_SHAPE', 'Extrude'),
+   ('SCREW', 'Lathe'),
+   ('SWEEP', 'Sweep / Renderable'),
+   ('CLOTH', 'Cloth'),
+   ('SOFT_BODY', 'Flex'),
+   ('MESH_CACHE', 'Point Cache'),
+   ('PARTICLE_SYSTEM', 'Particle Flow'),
+   ('PARTICLE_SYSTEM:HAIR', 'Hair and Fur'),
+   ('OCEAN', 'Ocean (Blender)')])]
+CATEGORY_MENUS = []
+MAX_MENUBAR = [
+    ('TOPBAR_MT_file', 'File'), ('MAX_MT_edit', 'Edit'), ('MAX_MT_tools', 'Tools'),
+    ('MAX_MT_group', 'Group'), ('MAX_MT_views', 'Views'), ('MAX_MT_create', 'Create'),
+    ('MAX_MT_modifier_list', 'Modifiers'), ('MAX_MT_animation', 'Animation'),
+    ('MAX_MT_graph_editors', 'Graph Editors'), ('MAX_MT_rendering', 'Rendering'),
+    ('MAX_MT_customize', 'Customize'), ('MAX_MT_scripting', 'Scripting'),
+    ('TOPBAR_MT_help', 'Help'),
 ]
+_installed = False
+_installed_services = []
+_drawing_adapters = []
 
 
-def _modifier_items(self, context):
-    items = []
-    for title, entries in MODIFIER_LIST:
-        cat = title.title()
-        for label, spec in entries:
-            items.append((f"{spec}|{label}", label, cat))
-    _modifier_items.cache = items
-    return items
+def _item(layout, command, text, *, art=None, enabled=True, pressed=False, **values):
+    row = layout.row(align=True)
+    row.enabled = enabled
+    icons = max_icons.ui(art, 'NONE') if art else {}
+    button = row.operator(command, text=text, depress=pressed, **icons)
+    for key, value in values.items():
+        setattr(button, key, value)
+    return button
+
+
+def _object(layout, token, label, **kwargs):
+    kwargs.setdefault('enabled', token in {'UNHIDE', 'UNFREEZE', 'LINK'} or bool(bpy.context.selected_objects))
+    return _item(layout, 'max.object_cmd', label, cmd=token, **kwargs)
+
+
+def _edit(layout, token, label):
+    return _item(layout, 'max.edit_poly', label, op=token)
+
+
+def _editor(layout, token, label):
+    return _item(layout, 'max.open_editor', label, editor=token)
+
+
+def _unavailable(layout, label, reason):
+    _item(layout, 'max.chrome_unavailable', label, enabled=False, reason=reason)
+
+
+def _modifier_items(include_backend=False):
+    result = []
+    for _, entries in MODIFIER_LIST:
+        for token, label in entries:
+            if token == 'OCEAN' and not include_backend:
+                continue
+            result.append((token + '|' + label, label, 'Add ' + label))
+    return result
 
 
 class MAX_OT_modifier_search(bpy.types.Operator):
-    """Modifier List: type to find a modifier, Enter to add it (stays open until you pick one)"""
-    bl_idname = "max.modifier_search"
-    bl_label = "Modifier List"
-    bl_property = "kind"
-    bl_options = {"REGISTER", "UNDO"}
-
-    kind: bpy.props.EnumProperty(items=_modifier_items)
-
-    @classmethod
-    def poll(cls, context):
-        return context.active_object is not None
+    bl_idname = 'max.modifier_search'
+    bl_label = 'Modifier List'
+    bl_description = 'Search supported modifiers by their Max names'
+    bl_property = 'search_kind'
+    kind: EnumProperty(items=lambda self, context: _modifier_enum)
+    search_kind: EnumProperty(items=lambda self, context: _modifier_search_enum, options={'SKIP_SAVE'})
 
     def invoke(self, context, event):
         context.window_manager.invoke_search_popup(self)
-        return {"RUNNING_MODAL"}
+        return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        return bpy.ops.max.add_modifier(kind=self.kind)
+        value = self.search_kind if self.properties.is_property_set('search_kind') else self.kind
+        return bpy.ops.max.add_modifier(kind=value)
 
 
-def _make_category_menu(index, title, entries):
-    def draw(self, context):
-        for label, spec in entries:
-            self.layout.operator("max.add_modifier", text=label).kind = f"{spec}|{label}"
-    return type(f"MAX_MT_modlist_{index}", (Menu,), {
-        "bl_label": title.title(), "bl_idname": f"MAX_MT_modlist_{index}",
-        "bl_options": {"SEARCH_ON_KEY_PRESS"}, "draw": draw})
-
-
-CATEGORY_MENUS = [_make_category_menu(i, t, e) for i, (t, e) in enumerate(MODIFIER_LIST)]
-
-
-class MAX_MT_modifier_list(Menu):
-    """Compact one-column Modifier List (categories as submenus; type to search)"""
-    bl_label = "Modifier List"
-    bl_idname = "MAX_MT_modifier_list"
-    bl_options = {"SEARCH_ON_KEY_PRESS"}
+class MAX_MT_modifier_list(bpy.types.Menu):
+    bl_label = 'Modifier List'
 
     def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("max.modifier_search", text="Search Modifiers...", **max_icons.ui("search", "VIEWZOOM"))
-        lay.separator()
-        lay.operator("max.turbosmooth", text="TurboSmooth")
-        lay.operator("max.add_modifier", text="FFD 4x4x4").kind = "LATTICE:4|FFD 4x4x4"
-        lay.operator("max.add_modifier", text="Melt").kind = "GN:MELT|Melt"
-        lay.separator()
-        for i, (title, _entries) in enumerate(MODIFIER_LIST):
-            lay.menu(f"MAX_MT_modlist_{i}", text=title.title())
+        _item(self.layout, 'max.modifier_search', 'Search Modifiers...', art='modifier_list')
+        self.layout.separator()
+        for cls in CATEGORY_MENUS:
+            self.layout.menu(cls.__name__)
 
 
-# ---------------------------------------------------------------------------
-# Quad menus
-# ---------------------------------------------------------------------------
-
-def _quad(layout):
-    """Return four columns: top-left, top-right, bottom-left, bottom-right."""
-    split = layout.split(factor=0.5)
-    left, right = split.column(), split.column()
-    return left, right
+def _draw_category(self, context):
+    for token, label in MODIFIER_LIST[self.category][1]:
+        if token == 'OCEAN':
+            continue
+        _item(self.layout, 'max.add_modifier', label, kind=token + '|' + label,
+              enabled=context.active_object is not None)
 
 
-def _header(col, text):
-    col.label(text=text)
-    col.separator()
-
-
-class MAX_MT_quad(Menu):
-    """3ds Max default quad menu (right-click)"""
-    bl_label = "Quad Menu"
-    bl_idname = "MAX_MT_quad"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.operator_context = "INVOKE_DEFAULT"
-        left, right = _quad(layout)
-        edit = context.mode == "EDIT_MESH"
-
-        # top-left: display  |  top-right: tools 1
-        _header(left, "display")
-        left.operator("max.object_cmd", text="Isolate Selection").cmd = "ISOLATE"
-        left.operator("max.object_cmd", text="Unfreeze All").cmd = "UNFREEZE"
-        left.operator("max.object_cmd", text="Freeze Selection").cmd = "FREEZE"
-        left.operator("max.unfreeze_by_name", text="Unfreeze by Name...")
-        left.operator("max.unfreeze_by_hit", text="Unfreeze by Hit")
-        left.operator("max.select_by_name", text="Unhide by Name")
-        left.operator("max.object_cmd", text="Unhide All").cmd = "UNHIDE"
-        left.operator("max.object_cmd", text="Hide Unselected").cmd = "HIDE_UNSEL"
-        left.operator("max.object_cmd", text="Hide Selection").cmd = "HIDE_SEL"
-
-        if edit:
-            _header(right, "tools 1")
-            right.menu("MAX_MT_sublevels", text="Sub-objects")
-            for op, text in (("REPEAT", "Repeat Last"), ("SWIFT_LOOP", "SwiftLoop"), ("CUT", "Cut"),
-                             ("CONNECT", "Connect"), ("EXTRUDE", "Extrude"), ("CHAMFER", "Chamfer"),
-                             ("WELD", "Weld"), ("TARGET_WELD", "Target Weld"), ("BRIDGE", "Bridge")):
-                if op == "REPEAT":
-                    right.operator("screen.repeat_last", text=text)
-                else:
-                    right.operator("max.edit_poly", text=text).op = op
-        else:
-            _header(right, "tools 1")
-            right.menu("MAX_MT_sublevels", text="Sub-objects")
-            right.operator("max.turbosmooth", text="TurboSmooth")
-            right.operator("max.object_cmd", text="Reset XForm").cmd = "RESET_XFORM"
-            right.operator("max.object_cmd", text="Center Pivot").cmd = "CENTER_PIVOT"
-            right.operator("max.object_cmd", text="Attach").cmd = "ATTACH"
-            right.operator("object.shade_smooth", text="Smooth Shading")
-            right.operator("object.shade_flat", text="Flat Shading")
-
-        left.separator()
-        right.separator()
-
-        # bottom-left: tools 2   |  bottom-right: transform
-        _header(left, "tools 2")
-        if edit:
-            for op in ("REMOVE", "COLLAPSE", "DETACH", "INSET", "FLIP", "CAP", "MAKE_PLANAR", "RELAX"):
-                left.operator("max.edit_poly", text=op.replace("_", " ").title()).op = op
-        else:
-            left.operator("max.object_cmd", text="Select and Link").cmd = "LINK"
-            left.operator("max.object_cmd", text="Unlink Selection").cmd = "UNLINK"
-            left.operator("max.object_cmd", text="Mirror").cmd = "MIRROR"
-            left.operator("max.object_cmd", text="Display as Box").cmd = "DISPLAY_BOX"
-            left.operator("max.object_cmd", text="See-Through").cmd = "SEE_THROUGH"
-
-        _header(right, "transform")
-        right.operator("max.select_transform", text="Move", depress=mode_feedback.tool_pressed(context, "MOVE")).kind = "MOVE"
-        right.operator("max.select_transform", text="Rotate", depress=mode_feedback.tool_pressed(context, "ROTATE")).kind = "ROTATE"
-        right.operator("max.select_transform", text="Scale", depress=mode_feedback.tool_pressed(context, "SCALE")).kind = "SCALE"
-        right.operator("wm.tool_set_by_id", text="Select").name = "builtin.select_box"
-        if not edit:
-            right.operator("object.select_grouped", text="Select Similar").type = "TYPE"
-            right.operator("max.clone", text="Clone")
-            right.operator("max.object_properties", text="Object Properties...")
-            right.operator("max.transform_typein", text="Transform Type-In")
-            right.operator("max.open_editor", text="Curve Editor...").editor = "CURVE_EDITOR"
-            right.operator("max.open_editor", text="Dope Sheet...").editor = "DOPE_SHEET"
-            right.menu("MAX_MT_convert", text="Convert To:")
-        else:
-            right.operator("max.subobject", text="Top-level").level = 0
-
-
-class MAX_MT_quad_modeling(Menu):
-    """Modeling quad (Ctrl+Right-click)"""
-    bl_label = "Modeling"
-    bl_idname = "MAX_MT_quad_modeling"
-
-    def draw(self, context):
-        left, right = _quad(self.layout)
-        _header(left, "modeling")
-        mode_feedback.draw_sublevel_menu(left, context, (1, 2, 3, 4, 5, 0))
-        _header(right, "tools")
-        if context.mode == "EDIT_MESH":
-            for op in ("EXTRUDE", "BEVEL", "OUTLINE", "INSET", "CHAMFER", "CONNECT", "BRIDGE", "CUT",
-                       "SWIFT_LOOP", "OPEN_EDGES", "GROW", "SHRINK", "LOOP", "RING"):
-                right.operator("max.edit_poly", text=op.replace("_", " ").title()).op = op
-            right.operator("max.quad_cap", text="Quad Cap")
-            right.operator("max.loop_regularize", text="Edge Loop Regularizer")
-        else:
-            right.operator("max.turbosmooth", text="TurboSmooth")
-            right.menu("MAX_MT_convert", text="Convert To:")
-            right.menu("MAX_MT_modifier_list", text="Add Modifier")
-
-
-class MAX_MT_sublevels(Menu):
-    bl_label = "Sub-object"
-    bl_idname = "MAX_MT_sublevels"
+class MAX_MT_sublevels(bpy.types.Menu):
+    bl_label = 'Sub-object'
 
     def draw(self, context):
         mode_feedback.draw_sublevel_menu(self.layout, context)
 
 
-class MAX_MT_convert(Menu):
-    bl_label = "Convert To"
-    bl_idname = "MAX_MT_convert"
+class MAX_MT_convert(bpy.types.Menu):
+    bl_label = 'Convert To'
 
     def draw(self, context):
-        self.layout.operator("max.object_cmd", text="Convert to Editable Poly").cmd = "CONVERT_POLY"
-        self.layout.operator("max.object_cmd", text="Convert to Editable Spline").cmd = "CONVERT_SPLINE"
+        _object(self.layout, 'CONVERT_POLY', 'Convert to Editable Poly')
+        _object(self.layout, 'CONVERT_SPLINE', 'Convert to Editable Spline')
 
 
-# ---------------------------------------------------------------------------
-# Top menu bar additions
-# ---------------------------------------------------------------------------
-
-class MAX_MT_create(Menu):
-    bl_label = "Create"
-    bl_idname = "MAX_MT_create"
+class MAX_MT_quad(bpy.types.Menu):
+    bl_label = 'Quad Menu'
 
     def draw(self, context):
-        from . import create
-        lay = self.layout
-        lay.label(text="Standard Primitives")
-        for k, (label, icon, _, _) in create.PRIMITIVES.items():
-            if k == "PLANEPLUS" or k in create.extended_primitives.PRIMITIVES:
-                continue
-            lay.operator("max.create", text=label).kind = k
-        lay.separator()
-        lay.label(text="Extended Primitives")
-        for k in create.extended_primitives.DISPLAY_ORDER:
-            label, icon, _, _ = create.PRIMITIVES[k]
-            lay.operator("max.create", text=label).kind = k
-        lay.separator()
-        lay.label(text="JokerMartini")
-        lay.operator("max.plane_plus", text="PlanePlus")
-        lay.separator()
-        lay.label(text="Shapes")
-        for k, label, icon in create.SHAPES:
-            lay.operator("max.create_shape", text=label).kind = k
-        lay.separator()
-        lay.label(text="Lights")
-        for k, label, icon in create.LIGHTS:
-            lay.operator("max.create_light", text=label).kind = k
-        lay.separator()
-        lay.operator("max.create_camera", text="Target Camera").target = True
-        lay.operator("max.create_camera", text="Physical Camera").target = False
-        lay.operator("max.camera_from_view", text="Create Camera From View")
-        lay.separator()
-        lay.label(text="V-Ray")
-        lay.operator_menu_enum("max.vray_light", "kind", text="VRayLight")
-        lay.operator("max.vray_camera", text="VRayPhysicalCamera")
-        lay.operator("max.vray_plane", text="VRayPlane")
+        # W2.D replaces this compatibility menu with the four-quadrant host.
+        col = self.layout.column()
+        col.label(text='Display')
+        for token, label in [('HIDE_SEL', 'Hide Selection'), ('HIDE_UNSEL', 'Hide Unselected'),
+                             ('UNHIDE', 'Unhide All'), ('FREEZE', 'Freeze Selection'),
+                             ('UNFREEZE', 'Unfreeze All')]:
+            _object(col, token, label)
+        _item(col, 'max.scene_selection_dialog', 'Hide by Name...', hide=True)
+        _item(col, 'max.unfreeze_by_name', 'Unfreeze by Name...')
+        col.separator()
+        col.label(text='Transform')
+        for token, label in [('MOVE', 'Move'), ('ROTATE', 'Rotate'), ('SCALE', 'Scale')]:
+            _item(col, 'max.select_transform', label, kind=token,
+                  pressed=mode_feedback.tool_pressed(context, token))
+        _item(col, 'max.transform_typein', 'Transform Type-In...')
+        col.menu('MAX_MT_convert')
+        _item(col, 'max.object_properties', 'Object Properties...')
 
 
-class MAX_MT_views(Menu):
-    bl_label = "Views"
-    bl_idname = "MAX_MT_views"
+class MAX_MT_quad_modeling(bpy.types.Menu):
+    bl_label = 'Modeling'
 
     def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        for v, key in (("TOP", "T"), ("BOTTOM", "B"), ("FRONT", "F"), ("BACK", "K"), ("LEFT", "L"),
-                       ("PERSP", "P"), ("ORTHO", "U"), ("CAMERA", "C")):
-            lay.operator("max.set_view", text=f"{v.title()}    ({key})").view = v
-        lay.separator()
-        lay.operator("max.zoom_extents", text="Zoom Extents Selected   (Z)")
-        lay.operator("max.toggle_quad", text="Maximize Viewport Toggle   (Alt+W)")
-        lay.operator("max.expert_mode", text="Expert Mode   (Ctrl+X)")
-        lay.operator("max.toggle", text="Show Grid   (G)").what = "GRID"
-        lay.operator("max.toggle", text="Wireframe / Shaded   (F3)").what = "WIREFRAME"
-        lay.operator("max.toggle", text="Edged Faces   (F4)").what = "EDGED_FACES"
-        lay.operator("max.toggle", text="xView: Show Statistics   (7)").what = "STATS"
-        lay.menu("MAX_MT_xview", text="xView")
-        lay.prop(context.scene.render, "use_simplify", text="Adaptive Degradation   (O)")
+        mode_feedback.draw_sublevel_menu(self.layout, context, order=(1, 2, 3, 4, 5, 0))
+        self.layout.separator()
+        for token, label in [('EXTRUDE', 'Extrude'), ('CHAMFER', 'Chamfer'),
+                             ('CONNECT', 'Connect'), ('BRIDGE', 'Bridge'), ('RELAX', 'Relax'),
+                             ('LOOP', 'Loop'), ('RING', 'Ring'), ('TARGET_WELD', 'Target Weld')]:
+            _edit(self.layout, token, label)
+        _item(self.layout, 'max.quad_cap', 'Quad Cap')
+        _item(self.layout, 'max.loop_regularize', 'Loop Regularizer')
 
 
-class MAX_MT_rendering(Menu):
-    bl_label = "Rendering"
-    bl_idname = "MAX_MT_rendering"
+class MAX_MT_create(bpy.types.Menu):
+    bl_label = 'Create'
 
     def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("render.render", text="Render   (Shift+Q)", **max_icons.ui("render_production", "RENDER_STILL")).use_viewport = True
-        lay.operator("max.open_editor", text="Render Setup...   (F10)").editor = "RENDER_SETUP"
-        lay.operator("max.open_editor", text="Environment...   (8)").editor = "ENVIRONMENT"
-        lay.operator("max.open_editor", text="Material Editor...   (M)").editor = "MATERIAL"
-        lay.operator("render.view_show", text="Rendered Frame Window")
-        lay.separator()
-        lay.menu("MAX_MT_vray", text="V-Ray", **max_icons.ui("render_production", "SHADING_RENDERED"))
+        for menu, label in [('MAX_MT_workspace_standard', 'Standard Primitives'),
+                            ('MAX_MT_workspace_extended', 'Extended Primitives'),
+                            ('MAX_MT_workspace_planeplus', 'JokerMartini'),
+                            ('MAX_MT_workspace_shapes', 'Shapes'),
+                            ('MAX_MT_workspace_lights', 'Lights'),
+                            ('MAX_MT_workspace_cameras', 'Cameras'),
+                            ('MAX_MT_workspace_helpers', 'Helpers')]:
+            self.layout.menu(menu, text=label)
 
 
-class MAX_MT_edit(Menu):
-    bl_label = "Edit"
-    bl_idname = "MAX_MT_edit"
-
-    def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("ed.undo", text="Undo", **max_icons.ui("undo", "LOOP_BACK"))
-        lay.operator("ed.redo", text="Redo", **max_icons.ui("redo", "LOOP_FORWARDS"))
-        lay.menu("TOPBAR_MT_undo_history", text="Undo History")
-        lay.separator()
-        lay.operator("max.delete", text="Delete")
-        lay.operator("max.clone", text="Clone")
-        lay.separator()
-        lay.operator("max.select_transform", text="Move").kind = "MOVE"
-        lay.operator("max.select_transform", text="Rotate").kind = "ROTATE"
-        lay.operator("max.select_transform", text="Scale").kind = "SCALE"
-        lay.operator("max.transform_typein", text="Transform Type-In...")
-        lay.separator()
-        lay.operator("max.select_all", text="Select All").action = "SELECT"
-        lay.operator("max.select_all", text="Select None").action = "DESELECT"
-        lay.operator("max.select_all", text="Select Invert").action = "INVERT"
-        lay.operator("object.select_grouped", text="Select Similar").type = "TYPE"
-        lay.operator("max.select_by_name", text="Select by Name...")
-        lay.separator()
-        lay.menu("TOPBAR_MT_edit", text="More (Blender Edit)")
+def _create_family(self, context):
+    from . import create, prims
+    family = self.family
+    if family == 'standard':
+        for kind in ('BOX', 'CONE', 'SPHERE', 'GEOSPHERE', 'CYLINDER', 'TUBE', 'TORUS', 'PYRAMID', 'PLANE'):
+            label = prims.PRIMITIVES[kind][0]
+            _item(self.layout, 'max.create', label, kind=kind)
+        _unavailable(self.layout, 'Teapot', 'Teapot is not supplied')
+        _unavailable(self.layout, 'TextPlus', 'TextPlus is not supplied')
+    elif family == 'extended':
+        from . import extended_primitives
+        for kind, record in extended_primitives.PRIMITIVES.items():
+            _item(self.layout, 'max.create', record[0], kind=kind)
+    elif family == 'planeplus':
+        _item(self.layout, 'max.plane_plus', 'PlanePlus')
+    elif family in {'shapes', 'lights', 'helpers'}:
+        catalogue = getattr(create, family.upper())
+        route = {'shapes': 'max.create_shape', 'lights': 'max.create_light', 'helpers': 'max.create_helper'}[family]
+        for kind, label, *_ in catalogue:
+            _item(self.layout, route, label, kind=kind)
+    else:
+        _item(self.layout, 'max.create_camera', 'Free Camera', target=False)
+        _item(self.layout, 'max.create_camera', 'Target Camera', target=True)
 
 
-class MAX_MT_tools(Menu):
-    bl_label = "Tools"
-    bl_idname = "MAX_MT_tools"
+class MAX_MT_views(bpy.types.Menu):
+    bl_label = 'Views'
 
     def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("max.open_editor", text="Scene Explorer").editor = "SCENE_EXPLORER"
-        lay.separator()
-        lay.operator("max.object_cmd", text="Isolate Selection").cmd = "ISOLATE"
-        lay.operator("max.object_cmd", text="Mirror...").cmd = "MIRROR"
-        lay.operator("max.add_modifier", text="Array...").kind = "ARRAY|Array"
-        lay.operator("max.object_cmd", text="Align...").cmd = "ALIGN"
-        lay.operator("object.duplicate_move", text="Snapshot")
-        lay.separator()
-        lay.operator("max.snap_settings", text="Grid and Snap Settings")
-        lay.operator("max.object_cmd", text="Reset XForm").cmd = "RESET_XFORM"
+        for token, label in [('PERSP', 'Perspective'), ('ORTHO', 'Orthographic'),
+                             ('TOP', 'Top'), ('BOTTOM', 'Bottom'), ('FRONT', 'Front'),
+                             ('BACK', 'Back'), ('LEFT', 'Left'), ('RIGHT', 'Right'), ('CAMERA', 'Camera')]:
+            _item(self.layout, 'max.set_view', label, view=token)
+        self.layout.separator()
+        _item(self.layout, 'max.zoom_extents', 'Zoom Extents Selected')
+        _item(self.layout, 'max.toggle_quad', 'Maximize Viewport Toggle')
+        _item(self.layout, 'max.expert_mode', 'Expert Mode')
+        _item(self.layout, 'max.viewcube_configure', 'ViewCube Settings...')
+        _item(self.layout, 'max.viewport_configure', 'Viewport Configuration...')
+        self.layout.menu('MAX_MT_xview', text='xView')
 
 
-class MAX_MT_group(Menu):
-    bl_label = "Group"
-    bl_idname = "MAX_MT_group"
+class MAX_MT_rendering(bpy.types.Menu):
+    bl_label = 'Rendering'
 
     def draw(self, context):
-        lay = self.layout
-        lay.operator("max.group", text="Group...").action = "GROUP"
-        lay.operator("max.group", text="Ungroup").action = "UNGROUP"
-        lay.separator()
-        lay.operator("object.move_to_collection", text="Move to Layer (Collection)...")
+        _item(self.layout, 'render.render', 'Render', use_viewport=True)
+        _editor(self.layout, 'RENDER_SETUP', 'Render Setup...')
+        _editor(self.layout, 'ENVIRONMENT', 'Environment and Effects...')
+        _editor(self.layout, 'MATERIAL', 'Material Editor...')
+        _item(self.layout, 'render.view_show', 'Rendered Frame Window')
 
 
-class MAX_MT_animation(Menu):
-    bl_label = "Animation"
-    bl_idname = "MAX_MT_animation"
-
-    def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("max.toggle", text="Toggle Auto Key   (N)").what = "AUTOKEY"
-        lay.operator("max.set_key", text="Set Key   (K)")
-        lay.operator("anim.keyframe_delete_v3d", text="Delete Keys")
-        lay.separator()
-        lay.operator_menu_enum("object.constraint_add", "type", text="Constraints")
-        lay.separator()
-        lay.operator("screen.animation_play", text="Play / Stop   (/)")
-
-
-class MAX_MT_graph_editors(Menu):
-    bl_label = "Graph Editors"
-    bl_idname = "MAX_MT_graph_editors"
+class MAX_MT_edit(bpy.types.Menu):
+    bl_label = 'Edit'
 
     def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("max.open_editor", text="Track View - Curve Editor...").editor = "CURVE_EDITOR"
-        lay.operator("max.open_editor", text="Track View - Dope Sheet...").editor = "DOPE_SHEET"
-        lay.operator("max.open_editor", text="Schematic View...").editor = "SCHEMATIC"
+        _item(self.layout, 'ed.undo', 'Undo', art='undo')
+        _item(self.layout, 'ed.redo', 'Redo', art='redo')
+        self.layout.separator()
+        for token, label in [('SELECT', 'Select All'), ('DESELECT', 'Select None'), ('INVERT', 'Select Invert')]:
+            _item(self.layout, 'max.select_all', label, action=token)
+        _item(self.layout, 'max.select_by_name', 'Select From Scene...', art='select_by_name')
+        self.layout.menu('MAX_MT_sublevels')
+        self.layout.separator()
+        _item(self.layout, 'max.clone', 'Clone...')
+        _item(self.layout, 'max.delete', 'Delete')
+        _item(self.layout, 'max.object_properties', 'Object Properties...')
+        self.layout.menu('MAX_MT_workspace_advanced', text='Advanced')
 
 
-class MAX_MT_customize(Menu):
-    bl_label = "Customize"
-    bl_idname = "MAX_MT_customize"
-
-    def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("screen.userpref_show", text="Preferences...")
-        lay.operator("max.gizmo_preferences", text="Gizmos Preferences...")
-        lay.operator("preferences.addon_show", text="Hotkeys (3ds Maxxed)...").module = __package__
-        lay.operator("max.import_hsx", text="Import 3ds Max Hotkeys (.hsx)...")
-        lay.separator()
-        lay.operator("max.apply", text="Apply 3ds Max Look (reset layout)")
-        lay.operator("max.restore", text="Restore Blender Look")
-        lay.separator()
-        from . import updater
-        if updater.status["state"] == "available":
-            lay.operator("max.install_update", text=f"Update to {updater.status['latest']}", icon="IMPORT")
-        lay.operator("max.check_update", text="Check for Updates", icon="FILE_REFRESH")
-        lay.separator()
-        lay.menu("TOPBAR_MT_window", text="Window")
-
-
-class MAX_MT_scripting(Menu):
-    bl_label = "Scripting"
-    bl_idname = "MAX_MT_scripting"
+class MAX_MT_tools(bpy.types.Menu):
+    bl_label = 'Tools'
 
     def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("max.open_editor", text="Script Editor...").editor = "SCRIPT_EDITOR"
-        lay.operator("max.open_editor", text="Python Listener...").editor = "LISTENER"
+        _item(self.layout, 'max.transform_typein', 'Transform Type-In...')
+        _object(self.layout, 'MIRROR', 'Mirror...')
+        _object(self.layout, 'ALIGN', 'Align...')
+        _item(self.layout, 'max.workspace_align_world', 'Align to World')
+        self.layout.separator()
+        _object(self.layout, 'RESET_XFORM', 'Reset XForm')
+        _object(self.layout, 'CENTER_PIVOT', 'Center Pivot')
+        _object(self.layout, 'PIVOT_TO_WORLD', 'Pivot to World Origin')
+        _item(self.layout, 'max.snap_settings', 'Grid and Snap Settings...')
+        _item(self.layout, 'max.gizmo_preferences', 'Transform Gizmo Preferences...')
+        self.layout.separator()
+        self.layout.menu('MAX_MT_workspace_utilities', text='Maxxed Utilities')
 
 
-class MAX_MT_workspaces(Menu):
-    bl_label = "Workspaces"
-    bl_idname = "MAX_MT_workspaces"
+class MAX_MT_group(bpy.types.Menu):
+    bl_label = 'Group'
 
     def draw(self, context):
-        for ws in bpy.data.workspaces:
-            self.layout.operator("max.set_workspace", text=ws.name,
-                                 icon="CHECKMARK" if ws == context.window.workspace else "BLANK1").name = ws.name
+        _item(self.layout, 'max.group', 'Group', action='GROUP')
+        _item(self.layout, 'max.group', 'Ungroup', action='UNGROUP')
+        self.layout.separator()
+        _item(self.layout, 'max.layer_dialog', 'Move to Layer...')
+        _item(self.layout, 'max.workspace_layer_explorer', 'Layer Explorer...')
 
 
-MAX_MENUBAR = (
-    ("TOPBAR_MT_file", "File"), ("MAX_MT_edit", "Edit"), ("MAX_MT_tools", "Tools"),
-    ("MAX_MT_group", "Group"), ("MAX_MT_views", "Views"), ("MAX_MT_create", "Create"),
-    ("MAX_MT_modifier_list", "Modifiers"), ("MAX_MT_animation", "Animation"),
-    ("MAX_MT_graph_editors", "Graph Editors"), ("MAX_MT_rendering", "Rendering"),
-    ("MAX_MT_customize", "Customize"), ("MAX_MT_scripting", "Scripting"), ("TOPBAR_MT_help", "Help"),
-)
+class MAX_MT_animation(bpy.types.Menu):
+    bl_label = 'Animation'
 
-_orig_topbar = {}
+    def draw(self, context):
+        _item(self.layout, 'max.toggle', 'Auto Key', what='AUTOKEY', pressed=context.tool_settings.use_keyframe_insert_auto)
+        _item(self.layout, 'max.set_key', 'Set Key')
+        _item(self.layout, 'max.chrome_time_config', 'Time Configuration...')
+        self.layout.separator()
+        _editor(self.layout, 'CURVE_EDITOR', 'Curve Editor...')
+        _editor(self.layout, 'DOPE_SHEET', 'Dope Sheet...')
 
 
-def _menubar_on():
-    from . import get_prefs
-    p = get_prefs()
-    return p is None or p.max_menubar
+class MAX_MT_graph_editors(bpy.types.Menu):
+    bl_label = 'Graph Editors'
+
+    def draw(self, context):
+        for token, label in [('CURVE_EDITOR', 'Track View - Curve Editor...'),
+                             ('DOPE_SHEET', 'Track View - Dope Sheet...'),
+                             ('SCHEMATIC', 'Schematic View...'), ('SCENE_EXPLORER', 'Scene Explorer...')]:
+            _editor(self.layout, token, label)
+
+
+class MAX_MT_customize(bpy.types.Menu):
+    bl_label = 'Customize'
+
+    def draw(self, context):
+        _item(self.layout, 'max.preferences_dialog', 'Preference Settings...')
+        _item(self.layout, 'max.import_hsx', 'Import 3ds Max Hotkeys...')
+        _item(self.layout, 'max.clear_hsx_hotkeys', 'Clear Imported Hotkeys')
+        self.layout.menu('MAX_MT_workspaces')
+        self.layout.separator()
+        _item(self.layout, 'max.apply', 'Apply Maxxed Appearance and Layout')
+        _item(self.layout, 'max.restore', 'Restore Previous Appearance and Layout')
+        self.layout.menu('MAX_MT_workspace_advanced', text='Advanced')
+
+
+class MAX_MT_scripting(bpy.types.Menu):
+    bl_label = 'Scripting'
+
+    def draw(self, context):
+        _editor(self.layout, 'SCRIPT_EDITOR', 'Python Script Editor...')
+        _editor(self.layout, 'LISTENER', 'Python Listener...')
+
+
+class MAX_MT_workspaces(bpy.types.Menu):
+    bl_label = 'Workspaces'
+
+    def draw(self, context):
+        _item(self.layout, 'max.chrome_layout', 'Single Perspective', quad=False)
+        _item(self.layout, 'max.chrome_layout', 'Four Viewports', quad=True)
+
+
+class MAX_MT_workspace_file(bpy.types.Menu):
+    bl_label = 'File'
+
+    def draw(self, context):
+        for token, label in [('NEW', 'New Scene...'), ('OPEN', 'Open Scene (.blend)...'),
+                             ('SAVE', 'Save Scene (.blend)'), ('SAVE_AS', 'Save Scene As (.blend)...')]:
+            _item(self.layout, 'max.scene_file_dialog', label, action=token)
+        _item(self.layout, 'max.scene_file_dialog', 'Reset Scene...', action='NEW')
+        self.layout.separator()
+        _item(self.layout, 'max.open_max', 'Open 3ds Max (.max)...')
+        _item(self.layout, 'max.merge_max', 'Merge 3ds Max (.max)...')
+        _item(self.layout, 'max.import_max_fbx', 'Import FBX...')
+        _item(self.layout, 'max.export_max_fbx', 'Export FBX...')
+        self.layout.separator()
+        _item(self.layout, 'wm.quit_blender', 'Exit')
+
+
+class MAX_MT_workspace_help(bpy.types.Menu):
+    bl_label = 'Help'
+
+    def draw(self, context):
+        _item(self.layout, 'wm.url_open', '3ds Max 2026 Help', url='https://help.autodesk.com/view/3DSMAX/2026/ENU/')
+        _item(self.layout, 'max.preferences_dialog', 'Maxxed Preferences and Hotkeys...')
+        _item(self.layout, 'wm.splash_about', 'About Blender / Maxxed Backend')
+        self.layout.menu('MAX_MT_workspace_advanced', text='Advanced')
+
+
+class MAX_MT_workspace_advanced(bpy.types.Menu):
+    bl_label = 'Advanced'
+
+    def draw(self, context):
+        _item(self.layout, 'screen.userpref_show', 'Blender Preferences...')
+        _editor(self.layout, 'LISTENER', 'Python Listener...')
+        _item(self.layout, 'wm.sysinfo', 'Save Blender System Information...')
+
+
+class MAX_MT_workspace_utilities(bpy.types.Menu):
+    bl_label = 'Maxxed Utilities'
+
+    def draw(self, context):
+        _item(self.layout, 'max.animate_melt', 'Animate Melt...')
+        _item(self.layout, 'max.key_melt', 'Key Melt Amount')
+        _item(self.layout, 'max.quad_cap', 'Quad Cap')
+        _item(self.layout, 'max.loop_regularize', 'Loop Regularizer')
+
+
+class MAX_OT_workspace_align_world(bpy.types.Operator):
+    bl_idname = 'max.workspace_align_world'
+    bl_label = 'Align to World'
+    bl_description = 'Align selected object axes to World without moving their pivots'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT' and bool(context.selected_objects)
+
+    def execute(self, context):
+        from mathutils import Matrix, Quaternion
+        from .operators import _write_world
+        snapshots = {o: o.matrix_world.copy() for o in context.selected_objects}
+        children = {c: c.matrix_world.copy() for o in snapshots for c in o.children if c not in snapshots}
+        aligned = {}
+        for obj, matrix in snapshots.items():
+            position, _, scale = matrix.decompose()
+            aligned[obj] = Matrix.LocRotScale(position, Quaternion(), scale)
+        _write_world(context, {**aligned, **children})
+        return {'FINISHED'}
+
+
+class MAX_OT_workspace_layer_explorer(bpy.types.Operator):
+    bl_idname = 'max.workspace_layer_explorer'
+    bl_label = 'Layer Explorer'
+    bl_description = 'Open the shared Scene Explorer and its layer controls'
+
+    def execute(self, context):
+        return bpy.ops.max.open_editor(editor='SCENE_EXPLORER')
+
+
+def _menus(layout, context):
+    for route, label in MAX_MENUBAR:
+        route = {'TOPBAR_MT_file': 'MAX_MT_workspace_file', 'TOPBAR_MT_help': 'MAX_MT_workspace_help'}.get(route, route)
+        layout.menu(route, text=label)
 
 
 def topbar_draw_left(self, context):
-    if not _menubar_on():
-        return _orig_topbar["left"](self, context)
-    lay = self.layout
-    lay.menu("TOPBAR_MT_blender", text="", icon="BLENDER")
-    for idname, text in MAX_MENUBAR:
-        lay.menu(idname, text=text)
+    _menus(self.layout, context)
 
 
 def topbar_draw_right(self, context):
-    if not _menubar_on():
-        return _orig_topbar["right"](self, context)
-    lay = self.layout
-    screen = context.screen
-    if not screen.show_statusbar:
-        lay.template_reports_banner()
-        lay.template_running_jobs()
-    row = lay.row(align=True)
-    row.label(text="Workspaces:")
-    sub = row.row(align=True)
-    sub.ui_units_x = 7
-    sub.menu("MAX_MT_workspaces", text=context.window.workspace.name)
-
-
-# ---------------------------------------------------------------------------
-# Main Toolbar (drawn at the start of the viewport tool header)
-# ---------------------------------------------------------------------------
-
-def _active_tool(context):
-    try:
-        return context.workspace.tools.from_space_view3d_mode(context.mode, create=False).idname
-    except Exception:
-        return ""
+    self.layout.menu('MAX_MT_workspaces', text=WS_NAME)
 
 
 def view3d_header_draw(self, context):
-    """In the '3ds Max' workspace the viewport header becomes the 3ds Max Main Toolbar."""
-    from . import get_prefs
-    from .operators import WS_NAME
-    p = get_prefs()
-    if (p is None or p.show_toolbar) and context.workspace and context.workspace.name == WS_NAME:
-        draw_main_toolbar(self, context)
-        lay = self.layout
-        lay.separator_spacer()
-        row = lay.row(align=True)
-        row.prop(context.scene.tool_settings, "use_keyframe_insert_auto", text="Auto Key", toggle=True)
-        space = context.space_data
-        row = lay.row(align=True)
-        row.prop(space.overlay, "show_overlays", text="", icon="OVERLAY")
-        row.popover(panel="VIEW3D_PT_overlay", text="")
-        row = lay.row(align=True)
-        row.prop(space.shading, "type", text="", expand=True)
-        row.popover(panel="VIEW3D_PT_shading", text="")
-        return
-    _orig_topbar["v3d"](self, context)
+    draw_main_toolbar(self, context)
 
 
 def draw_main_toolbar(self, context):
-    lay = self.layout
-    ts = context.tool_settings
-    tool = _active_tool(context)
-
-    row = lay.row(align=True)
-    row.operator("ed.undo", text="", **max_icons.ui("undo", "LOOP_BACK"))
-    row.operator("ed.redo", text="", **max_icons.ui("redo", "LOOP_FORWARDS"))
-    row = lay.row(align=True)
-    row.enabled = context.mode == "OBJECT"
-    row.operator("wm.tool_set_by_id", text="", depress=mode_feedback.tool_pressed(context, "LINK"), **max_icons.ui("link", "LINKED")).name = "max.select_link"
-    row.operator("max.object_cmd", text="", **max_icons.ui("unlink", "UNLINKED")).cmd = "UNLINK"
-
-    row = lay.row(align=True)
-    row.operator("wm.tool_set_by_id", text="", depress=mode_feedback.tool_pressed(context, "SELECT"), **max_icons.ui("select_object", "RESTRICT_SELECT_OFF")).name = "builtin.select_box"
-    row.operator("max.select_by_name", text="", **max_icons.ui("select_by_name", "VIEWZOOM"))
-    row.operator("max.icon_tool", text="", **max_icons.ui("region_rect", "SELECT_SET"),
-                 depress=tool == "builtin.select_box").tool = "RECT"
-    row.operator("max.icon_tool", text="", **max_icons.ui("region_circle", "MESH_CIRCLE"),
-                 depress=tool == "builtin.select_circle").tool = "CIRCLE"
-    row.operator("max.icon_tool", text="", **max_icons.ui("region_fence", "SELECT_INTERSECT"),
-                 depress=tool == "builtin.select_lasso").tool = "FENCE"
-
-    row = lay.row(align=True)
-    row.scale_x = 1.1
-    for idname, icon, custom in (("builtin.move", "OBJECT_ORIGIN", "move"), ("builtin.rotate", "ORIENTATION_GIMBAL", "rotate"),
-                                 ("builtin.scale", "FULLSCREEN_ENTER", "scale")):
-        row.operator("max.select_transform", text="", depress=mode_feedback.tool_pressed(context, {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]), **max_icons.ui(custom, icon)).kind = {"builtin.move": "MOVE", "builtin.rotate": "ROTATE", "builtin.scale": "SCALE"}[idname]
-
-    slot = context.scene.transform_orientation_slots[0]
-    from . import max_rotate
-    if tool in {"max.rotate", "max.snap_move", "max.poly_move", "max.snap_scale"}:
-        max_rotate.draw_managers(lay, context)
-    else:
-        sub = lay.row(align=True)
-        sub.ui_units_x = 4.5
-        sub.prop(slot, "type", text="", icon="NONE")
-        sub = lay.row(align=True)
-        sub.prop(ts, "transform_pivot_point", text="", icon_only=True, **max_icons.ui("pivot", "PIVOT_MEDIAN"))
-    lay.menu("MAX_MT_scale_flyout", text="", icon="DOWNARROW_HLT")
-
-    from . import snaps
-    snaps.draw_toolbar(lay, context)
-
-    row = lay.row(align=True)
-    row.operator("max.object_cmd", text="", **max_icons.ui("mirror", "MOD_MIRROR")).cmd = "MIRROR"
-    row.operator("max.object_cmd", text="", **max_icons.ui("align", "ALIGN_CENTER")).cmd = "ALIGN"
-    row = lay.row(align=True)
-    row.operator("max.open_editor", text="", **max_icons.ui("scene_explorer", "OUTLINER")).editor = "SCENE_EXPLORER"
-    row.operator("max.open_editor", text="", **max_icons.ui("curve_editor", "GRAPH")).editor = "CURVE_EDITOR"
-    row.operator("max.open_editor", text="", **max_icons.ui("schematic_view", "NODETREE")).editor = "SCHEMATIC"
-    row.operator("max.open_editor", text="", **max_icons.ui("material_editor", "MATERIAL")).editor = "MATERIAL"
-    row = lay.row(align=True)
-    row.operator("max.open_editor", text="", **max_icons.ui("render_setup", "SCENE")).editor = "RENDER_SETUP"
-    row.operator("render.render", text="", **max_icons.ui("render_production", "RENDER_STILL")).use_viewport = True
+    max_toolbar.draw(self.layout, context)
 
 
-# ---------------------------------------------------------------------------
-# Status bar: X / Y / Z type-in, Auto Key, Set Key
-# ---------------------------------------------------------------------------
+def _workspace_toolbar(layout, context):
+    """Use the W1.4 controls with the accepted operation-specific managers."""
+    from . import max_rotate, snaps
+    row = layout.row(align=True)
+    button = max_toolbar.button
+    optional = max_toolbar.optional
+    button(row, 'ed.undo', 'undo', 'LOOP_BACK')
+    button(row, 'ed.redo', 'redo', 'LOOP_FORWARDS')
+    row.separator()
+    button(row, 'wm.tool_set_by_id', 'link', 'LINKED', name='max.select_link',
+           pressed=mode_feedback.tool_pressed(context, 'LINK'))
+    button(row, 'max.object_cmd', 'unlink', 'UNLINKED', cmd='UNLINK')
+    button(row, 'max.chrome_unavailable', 'bind_space_warp', reason='Space Warp binding is not supported')
+    row.separator()
+    _unavailable(row, 'All', 'Only the All selection filter is supported')
+    button(row, 'wm.tool_set_by_id', 'select_object', 'RESTRICT_SELECT_OFF',
+           name='builtin.select_box', pressed=mode_feedback.tool_pressed(context, 'SELECT'))
+    optional(row, 'select_by_name', 'select_by_name', 'Select From Scene')
+    row.menu('MAX_MT_chrome_region', text='', **max_icons.ui('region_rect', 'SELECT_SET'))
+    crossing = row.row(align=True)
+    crossing.enabled = context.mode == 'OBJECT'
+    crossing.prop(context.window_manager, 'max_chrome_crossing', text='', toggle=True,
+                  **max_icons.ui('window_crossing', 'SELECT_INTERSECT'))
+    row.separator()
+    for kind, key in [('MOVE', 'move'), ('ROTATE', 'rotate'), ('SCALE', 'scale')]:
+        button(row, 'max.select_transform', key, 'ORIENTATION_GLOBAL', kind=kind,
+               pressed=mode_feedback.tool_pressed(context, kind))
+        if kind == 'SCALE':
+            row.menu('MAX_MT_scale_flyout', text='', icon='DOWNARROW_HLT')
+    optional(row, 'select_place', 'select_place', 'Select and Place')
+    row.separator()
+    max_rotate.draw_managers(row, context)
+    row.separator()
+    optional(row, 'shortcut_override', 'shortcut_override', 'Keyboard Shortcut Override')
+    snaps.draw_toolbar(row, context)
+    row.separator()
+    row.menu('MAX_MT_chrome_sets', text='Named Selection Sets')
+    row.separator()
+    optional(row, 'mirror', 'mirror', 'Mirror')
+    row.menu('MAX_MT_chrome_align', text='', **max_icons.ui('align', 'ALIGN_CENTER'))
+    row.separator()
+    for name, art, label in [('scene_explorer', 'scene_explorer', 'Scene Explorer'),
+                              ('layer_explorer', 'layer_explorer', 'Layer Explorer'),
+                              ('ribbon', 'ribbon', 'Toggle Ribbon'),
+                              ('track_view', 'track_view', 'Track View'),
+                              ('schematic_view', 'schematic_view', 'Schematic View')]:
+        optional(row, name, art, label)
+
+
+def _workspace_status(layout, context):
+    # Native transform instructions retain precedence over idle tool prompts.
+    native = next((old for owner, name, old, _ in _drawing_adapters if owner is bpy.types.STATUSBAR_HT_header), None)
+    passive = mode_feedback.PASSIVE_MODALS | {'MAX_OT_editor_interact'}
+    if any(op and op.bl_idname not in passive
+           for op in getattr(context.window, 'modal_operators', ())):
+        if native:
+            return native(type('StatusHost', (), {'layout': layout})(), context)
+    _status_draw(layout, context)
+
+
+def _workspace_prompt(context):
+    # The time host draws the separate prompt line for the modeling viewport.
+    from . import operators
+    with operators._viewport(context):
+        return _provider_function(max_status, 'prompt_text')(bpy.context)
+
+
+def _auxiliary_area(context):
+    from . import max_editor_windows
+    area = getattr(context, 'area', None)
+    if area is None or not hasattr(area, 'as_pointer'):
+        return False
+    window = getattr(context, 'window', None)
+    host = max_editor_windows._hosts.get(window.as_pointer()) if window else None
+    return (max_chrome.timeline_area(area)
+            or area.as_pointer() in max_editor_windows._docked
+            or bool(host and host.area == area))
+
+
+def _provider_function(owner, name):
+    return next(old for target, attribute, old, _ in _drawing_adapters if target is owner and attribute == name)
+
+
+def _workspace_labels(context):
+    from . import overlay
+    return not _auxiliary_area(context) and _provider_function(overlay, '_visible')(context)
+
+
+def _workspace_tool(context):
+    return '' if _auxiliary_area(context) else _provider_function(mode_feedback, 'active_tool')(context)
+
+
+def _workspace_border(context):
+    if not _auxiliary_area(context):
+        _provider_function(mode_feedback, '_draw_view_border')(context)
+
+
+def _workspace_cube(context):
+    from . import viewcube
+    return not _auxiliary_area(context) and _provider_function(viewcube, 'visible')(context)
+
+
+def _adapt(owner, name, callback):
+    _drawing_adapters.append((owner, name, getattr(owner, name), callback))
+    setattr(owner, name, callback)
+
 
 def draw_statusbar(self, context):
-    from . import get_prefs
-    p = get_prefs()
-    if p is not None and not p.show_statusbar:
-        return
-    lay = self.layout
-    row = lay.row(align=True)
-    row.label(text=mode_feedback.selection_text(context))
-    ob = context.active_object
-    if ob is not None and context.mode == "OBJECT":
-        row = lay.row(align=True)
-        row.ui_units_x = 18
-        row.prop(ob, "location", index=0, text="X")
-        row.prop(ob, "location", index=1, text="Y")
-        row.prop(ob, "location", index=2, text="Z")
-    space = context.space_data if context.space_data and context.space_data.type == "VIEW_3D" else None
-    from . import snaps
-    units = context.scene.unit_settings
-    spacing = snaps.settings(context).grid_spacing
-    value = (bpy.utils.units.to_string(units.system, "LENGTH", spacing * units.scale_length)
-             if units.system != "NONE" else f"{spacing:g}")
-    lay.label(text=f"Grid = {value}")
-    ts = context.tool_settings
-    row = lay.row(align=True)
-    row.alert = ts.use_keyframe_insert_auto
-    row.prop(ts, "use_keyframe_insert_auto", text="Auto Key", toggle=True)
-    row.operator("max.set_key", text="Set Key")
-
-
-classes = tuple(CATEGORY_MENUS) + (
-    MAX_OT_modifier_search, MAX_MT_modifier_list, MAX_MT_quad, MAX_MT_quad_modeling, MAX_MT_sublevels, MAX_MT_convert,
-    MAX_MT_create, MAX_MT_views, MAX_MT_rendering, MAX_MT_edit, MAX_MT_tools, MAX_MT_group,
-    MAX_MT_animation, MAX_MT_graph_editors, MAX_MT_customize, MAX_MT_scripting, MAX_MT_workspaces,
-)
+    max_status.draw(self.layout, context)
 
 
 def max_statusbar_draw(self, context):
-    return mode_feedback.draw_status(self, context, _orig_topbar["status"], draw_statusbar)
+    draw_statusbar(self, context)
 
 
 def register_draw():
-    tb = bpy.types.TOPBAR_HT_upper_bar
-    _orig_topbar["left"] = tb.draw_left
-    _orig_topbar["right"] = tb.draw_right
-    tb.draw_left = topbar_draw_left
-    tb.draw_right = topbar_draw_right
-    hd = bpy.types.VIEW3D_HT_header
-    _orig_topbar["v3d"] = hd.draw
-    hd.draw = view3d_header_draw
-    _orig_topbar["status"] = bpy.types.STATUSBAR_HT_header.draw
-    bpy.types.STATUSBAR_HT_header.draw = max_statusbar_draw
+    global _installed
+    if _installed:
+        return
+    from . import max_layers, scene_explorer, max_dialogs, max_preferences, max_editor_windows
+    from . import operators, overlay, viewcube
+    for service in (max_layers, scene_explorer, max_dialogs, max_preferences, max_editor_windows):
+        service.install()
+        _installed_services.append(service)
+    # Adapt provider drawing once. max_chrome still owns all native callbacks.
+    _drawing_adapters.append((bpy.types.STATUSBAR_HT_header, 'draw', bpy.types.STATUSBAR_HT_header.draw, None))
+    _adapt(max_toolbar, 'draw', _workspace_toolbar)
+    _adapt(max_status, 'draw', _workspace_status)
+    _adapt(max_status, 'prompt_text', _workspace_prompt)
+    _adapt(overlay, '_visible', _workspace_labels)
+    _adapt(mode_feedback, 'active_tool', _workspace_tool)
+    _adapt(mode_feedback, '_draw_view_border', _workspace_border)
+    _adapt(viewcube, 'visible', _workspace_cube)
+    max_chrome.install(feedback=mode_feedback, draw_menus=_menus,
+                       apply_explorer=operators._explorer_layout,
+                       read_transform=operators.read_transform, write_transform=operators.write_transform,
+                       commands={
+                           'select_by_name': 'max.select_by_name', 'mirror': 'max.workspace_mirror',
+                           'align': 'max.workspace_align', 'scene_explorer': 'max.workspace_scene_explorer',
+                           'layer_explorer': 'max.workspace_layer_explorer',
+                           'track_view': 'max.workspace_track_view', 'schematic_view': 'max.workspace_schematic',
+                       })
+    max_dialogs.configure_transform(reader=operators.read_transform, writer=operators.write_transform)
+    bpy.app.handlers.load_pre.append(_before_file_load)
+    bpy.app.handlers.load_post.append(_after_file_load)
+    _installed = True
 
 
 def unregister_draw():
-    tb = bpy.types.TOPBAR_HT_upper_bar
-    if _orig_topbar:
-        tb.draw_left = _orig_topbar["left"]
-        tb.draw_right = _orig_topbar["right"]
-    if "v3d" in _orig_topbar:
-        bpy.types.VIEW3D_HT_header.draw = _orig_topbar["v3d"]
-    if "status" in _orig_topbar:
-        bpy.types.STATUSBAR_HT_header.draw = _orig_topbar["status"]
+    global _installed
+    if not _installed:
+        return
+    from . import operators
+    max_chrome.uninstall()
+    operators.close_material_compat()
+    operators.restore_layout(bpy.context)
+    if _before_file_load in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.remove(_before_file_load)
+    if _after_file_load in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_after_file_load)
+    for owner, name, old, ours in reversed(_drawing_adapters):
+        if ours is not None and getattr(owner, name) is ours:
+            setattr(owner, name, old)
+    _drawing_adapters.clear()
+    for service in reversed(_installed_services):
+        service.uninstall()
+    _installed_services.clear()
+    _installed = False
+
+
+def _status_draw(layout, context):
+    original = next(old for owner, name, old, _ in _drawing_adapters if owner is max_status)
+    original(layout, context)
+
+
+@persistent
+def _before_file_load(*_):
+    from . import operators
+    operators.cancel_layout()
+    operators.close_material_compat()
+    operators._layout_snapshot.clear()
+
+
+@persistent
+def _after_file_load(*_):
+    if not _installed or bpy.app.background:
+        return
+    from . import operators
+    for window in bpy.context.window_manager.windows:
+        if window.workspace.name == WS_NAME:
+            with bpy.context.temp_override(window=window):
+                operators._explorer_layout(bpy.context)
+
+
+def _toolbar_route(self, context):
+    if self.action in {'MIRROR', 'ALIGN'}:
+        return bpy.ops.max.object_cmd('INVOKE_DEFAULT', cmd=self.action)
+    return bpy.ops.max.open_editor(editor=self.action)
+
+
+def _finish_catalogues():
+    global _modifier_enum, _modifier_search_enum
+    _modifier_enum = _modifier_items(include_backend=True)
+    _modifier_search_enum = _modifier_items()
+    for index, (label, _) in enumerate(MODIFIER_LIST):
+        CATEGORY_MENUS.append(type(f'MAX_MT_modlist_{index}', (bpy.types.Menu,), {
+            '__module__': __name__, 'bl_label': label.title(), 'category': index, 'draw': _draw_category,
+        }))
+
+
+_create_menus = [type('MAX_MT_workspace_' + family, (bpy.types.Menu,), {
+    '__module__': __name__, 'bl_label': family.title(), 'family': family, 'draw': _create_family,
+}) for family in ('standard', 'extended', 'planeplus', 'shapes', 'lights', 'cameras', 'helpers')]
+
+_toolbar_routes = [type('MAX_OT_workspace_' + suffix, (bpy.types.Operator,), {
+    '__module__': __name__,
+    'bl_idname': 'max.workspace_' + suffix, 'bl_label': label,
+    'bl_description': description, 'action': action, 'execute': _toolbar_route,
+}) for suffix, action, label, description in (
+    ('mirror', 'MIRROR', 'Mirror', 'Open Mirror options for the selection'),
+    ('align', 'ALIGN', 'Align', 'Open Align options for the selection'),
+    ('scene_explorer', 'SCENE_EXPLORER', 'Scene Explorer', 'Open the shared scene hierarchy'),
+    ('track_view', 'CURVE_EDITOR', 'Track View', 'Open the animation Curve Editor'),
+    ('schematic', 'SCHEMATIC', 'Schematic View', 'Open object relationship links'),
+)]
+
+# The catalogue initializer runs after the frozen data block below.
+
+_finish_catalogues()
+classes = (MAX_OT_modifier_search, *CATEGORY_MENUS, MAX_MT_modifier_list,
+           MAX_MT_quad, MAX_MT_quad_modeling, MAX_MT_sublevels, MAX_MT_convert,
+           MAX_MT_create, *_create_menus, MAX_MT_views, MAX_MT_rendering, MAX_MT_edit,
+           MAX_MT_tools, MAX_MT_group, MAX_MT_animation, MAX_MT_graph_editors,
+           MAX_MT_customize, MAX_MT_scripting, MAX_MT_workspaces,
+           MAX_MT_workspace_file, MAX_MT_workspace_help, MAX_MT_workspace_advanced,
+           MAX_MT_workspace_utilities, MAX_OT_workspace_align_world,
+           MAX_OT_workspace_layer_explorer, *_toolbar_routes)
