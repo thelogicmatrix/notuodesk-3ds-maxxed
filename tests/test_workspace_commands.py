@@ -30,7 +30,7 @@ class WorkspaceCommands(unittest.TestCase):
             'max.melt_preset', 'max.animate_melt', 'max.key_melt',
             'max.modifier_set_active', 'max.toggle_quad', 'max.adaptive_degradation',
             'max.set_key', 'max.group', 'max.set_workspace', 'max.apply',
-            'max.restore', 'max.block_cursor',
+            'max.restore', 'max.block_cursor', 'max.primitive_edit_guard',
         }
         self.assertEqual({c.bl_idname for c in commands.classes}, expected)
         self.assertEqual([c.__name__ for c in ui_menus.CATEGORY_MENUS],

@@ -106,6 +106,7 @@ NAVIGATION = [
 ]
 
 OBJECT_MODE = [
+    K("max.primitive_edit_guard", "TAB"),
     K("max.clone", "V", ctrl=True),
     K("max.camera_from_view", "C", ctrl=True),
     K("max.set_key", "K"),

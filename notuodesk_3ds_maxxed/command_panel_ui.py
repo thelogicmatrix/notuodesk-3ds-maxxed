@@ -123,6 +123,7 @@ def install():
     if _installed:
         return
     _installed = True
+    bpy.types.UI_MT_button_context_menu.append(stack_context_menu)
     for cls in _panel_types(bpy.types.Panel):
         if (getattr(cls, 'bl_space_type', '') != 'VIEW_3D' or
                 getattr(cls, 'bl_region_type', '') != 'UI' or
@@ -153,6 +154,7 @@ def install():
 def uninstall():
     global _installed, _rail_handle
     _installed = False
+    bpy.types.UI_MT_button_context_menu.remove(stack_context_menu)
     _listeners.clear()
     if bpy.app.timers.is_registered(_start_listeners):
         bpy.app.timers.unregister(_start_listeners)
@@ -227,6 +229,14 @@ def stack_button(layout, ob, action, text='', *, art=None, fallback='NONE', name
                       **(max_icons.ui(art, fallback) if art else {}))
     op.action, op.name = action, name
     return op
+
+
+def stack_context_menu(self, context):
+    """Max's base-object conversion route on the native stack button menu."""
+    button = getattr(context, 'button_operator', None)
+    if button and button.bl_rna.identifier == 'MAX_OT_modifier_set_active' and not button.name:
+        self.layout.separator()
+        self.layout.menu('MAX_MT_convert', text='Convert To:')
 
 
 def draw_stack(layout, context, ob):

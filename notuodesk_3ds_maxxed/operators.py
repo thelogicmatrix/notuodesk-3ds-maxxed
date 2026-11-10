@@ -241,6 +241,8 @@ class MAX_OT_subobject(bpy.types.Operator):
         kind = _active_tool(context)
         obj = _owner(context)
         level = 0 if self.level == current_level(context) else self.level
+        if level and obj.type == 'MESH' and obj.max_prim.kind:
+            return {'CANCELLED'}
         cage_owner = obj.get('max_ffd_owner')
         if cage_owner and level == 0:
             from . import ffd
@@ -562,6 +564,34 @@ def _pivot_world(obj):
     return True
 
 
+def convert_to_editable_poly(context):
+    """Collapse the selected viewport-evaluated stacks into Editable Poly bases.
+
+    Call from an UNDO operator, after committing any external edit cage. Native
+    conversion evaluates enabled viewport modifiers and drops the entire stack.
+    The caller owns the single undo transaction. No extra undo step is pushed.
+    """
+    from . import poly_tools, symmetry
+    _owner(context)
+    if not context.selected_objects:
+        return {'CANCELLED'}
+    _object_mode(context)
+    result = bpy.ops.object.convert(target='MESH')
+    if result != {'FINISHED'}:
+        return result
+    for converted in context.selected_objects:
+        converted.max_prim.kind = ''
+        converted.display_type = 'TEXTURED'
+        converted.modifiers.active = None
+        converted.max_stack_index = -1
+        converted.max_feedback_expanded = True
+    context.window_manager.max_cmd_tab = 'MODIFY'
+    sync_sublevel(context)
+    poly_tools.bake_converted_text_pivots(context.selected_objects)
+    symmetry.reconcile()
+    return {'FINISHED'}
+
+
 class MAX_OT_object_cmd(bpy.types.Operator):
     bl_idname = 'max.object_cmd'
     bl_label = 'Object Command'
@@ -604,11 +634,17 @@ class MAX_OT_object_cmd(bpy.types.Operator):
             self.report({'WARNING'}, 'Select an object first')
             return {'CANCELLED'}
         _object_mode(context)
-        if token.startswith('CONVERT_'):
-            bpy.ops.object.convert(target='MESH' if token == 'CONVERT_POLY' else 'CURVE')
+        if token == 'CONVERT_POLY':
+            return convert_to_editable_poly(context)
+        elif token.startswith('CONVERT_'):
+            bpy.ops.object.convert(target='CURVE')
             for converted in context.selected_objects:
                 converted.max_prim.kind = ''
                 converted.display_type = 'TEXTURED'
+                converted.modifiers.active = None
+                converted.max_feedback_expanded = True
+            context.window_manager.max_cmd_tab = 'MODIFY'
+            sync_sublevel(context)
             poly_tools.bake_converted_text_pivots(context.selected_objects)
             symmetry.reconcile()
         elif token == 'RESET_XFORM':
@@ -1401,6 +1437,21 @@ class MAX_OT_block_cursor(bpy.types.Operator):
         return self.execute(context)
 
 
+class MAX_OT_primitive_edit_guard(bpy.types.Operator):
+    bl_idname = 'max.primitive_edit_guard'
+    bl_label = 'Parametric Object'
+    bl_description = 'Convert to Editable Poly before editing components'
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.active_object
+        return bool(ob and ob.type == 'MESH' and ob.max_prim.kind)
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+
 classes = (
     MAX_OT_subobject, MAX_OT_set_view, MAX_OT_zoom_extents, MAX_OT_toggle,
     MAX_OT_expert_mode, MAX_OT_select_all, MAX_OT_delete, MAX_OT_select_by_name,
@@ -1409,5 +1460,5 @@ classes = (
     MAX_OT_melt_preset, MAX_OT_animate_melt, MAX_OT_key_melt,
     MAX_OT_modifier_set_active, MAX_OT_toggle_quad, MAX_OT_adaptive_degradation,
     MAX_OT_set_key, MAX_OT_group, MAX_OT_set_workspace, MAX_OT_apply,
-    MAX_OT_restore, MAX_OT_block_cursor,
+    MAX_OT_restore, MAX_OT_block_cursor, MAX_OT_primitive_edit_guard,
 )
