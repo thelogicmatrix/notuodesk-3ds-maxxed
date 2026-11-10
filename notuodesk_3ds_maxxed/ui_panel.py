@@ -138,6 +138,7 @@ def rollout(label, tabs, order, closed=False):
             '__module__': __name__, 'bl_idname': identifier, 'bl_label': label,
             'bl_space_type': 'VIEW_3D', 'bl_region_type': 'UI', 'bl_category': 'Command Panel',
             'bl_parent_id': 'MAX_PT_command_panel', 'bl_order': order,
+            'max_default_closed': closed,
             'bl_options': {'HIDE_HEADER'},
             'poll': classmethod(poll), 'draw': draw,
         })

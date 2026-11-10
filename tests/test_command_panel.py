@@ -1,5 +1,7 @@
 """Run in an isolated Blender process through run_checks.py."""
 import unittest
+import os
+from pathlib import Path
 import addon_utils
 import bpy
 
@@ -76,6 +78,16 @@ class CommandPanelTests(unittest.TestCase):
         self.ob.modifiers.active = mod
         self.assertEqual(bpy.ops.max.command_stack(action='REMOVE'), {'FINISHED'})
         self.assertEqual(len(self.ob.modifiers), 0)
+
+    def test_z_rollout_state_survives_save_open(self):
+        key = '_max_rollout_MAX_PT_poly_selection'
+        name = bpy.context.workspace.name
+        bpy.context.workspace[key] = True
+        path = Path(os.environ['MAXXED_OUT']) / 'rollout-state.blend'
+        bpy.ops.wm.save_as_mainfile(filepath=str(path))
+        bpy.context.workspace[key] = False
+        bpy.ops.wm.open_mainfile(filepath=str(path))
+        self.assertTrue(bpy.data.workspaces[name][key])
 
 
 if __name__ == '__main__':
