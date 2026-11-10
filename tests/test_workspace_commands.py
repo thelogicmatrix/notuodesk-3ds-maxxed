@@ -135,6 +135,34 @@ class WorkspaceCommands(unittest.TestCase):
         self.assertEqual(result, {'FINISHED'})
         self.assertEqual(calls, ['INVOKE_DEFAULT'])
 
+    def test_control_shift_shortcut_keeps_the_immediate_route(self):
+        calls = []
+        request = SimpleNamespace(op='CONNECT', run=lambda context, how: calls.append(how) or {'FINISHED'})
+        result = commands.MAX_OT_edit_poly.invoke(request, bpy.context, SimpleNamespace(shift=True, ctrl=True, alt=False))
+        self.assertEqual(result, {'FINISHED'})
+        self.assertEqual(calls, ['INVOKE_DEFAULT'])
+
+    def test_typein_poll_only_reads_live_window_identity(self):
+        from notuodesk_3ds_maxxed import max_rotate
+        context = SimpleNamespace(active_object=None, window_manager=SimpleNamespace(
+            windows=[SimpleNamespace(as_pointer=lambda: 17)]))
+        with patch.object(max_rotate, 'floating_window', side_effect=AssertionError('poll created a window')), \
+             patch.object(max_rotate, '_typein_windows', {17}):
+            self.assertTrue(commands.MAX_OT_transform_typein.poll(context))
+        with patch.object(max_rotate, '_typein_windows', {29}):
+            self.assertFalse(commands.MAX_OT_transform_typein.poll(context))
+
+    def test_remove_honors_isolated_vertex_cleanup(self):
+        bpy.ops.max.subobject(level=2)
+        obj = bpy.context.object
+        obj.max_poly.delete_isolated = True
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.verts.new((9, 9, 9))
+        bmesh.update_edit_mesh(obj.data)
+        bpy.ops.mesh.select_all(action='DESELECT')
+        bpy.ops.max.edit_poly(op='REMOVE')
+        self.assertEqual(len(bmesh.from_edit_mesh(obj.data).verts), 8)
+
     def test_hide_by_name_is_a_hide_dialog(self):
         calls = []
         class Layout:

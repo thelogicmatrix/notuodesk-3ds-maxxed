@@ -229,7 +229,8 @@ class MAX_OT_subobject(bpy.types.Operator):
 
     @classmethod
     def description(cls, context, properties):
-        return _description(cls.bl_idname, {'level': properties.level}, cls.bl_description)
+        label = LEVEL_NAMES[properties.level]
+        return _description(cls.bl_idname, {'level': properties.level}, label + '. Choose again to return to Object')
 
     @classmethod
     def poll(cls, context):
@@ -480,7 +481,7 @@ class MAX_OT_edit_poly(bpy.types.Operator):
 
     def invoke(self, context, event):
         from . import poly_caddies
-        if event.shift and self.op in poly_caddies.SHIFT_ACTIONS:
+        if event.shift and not getattr(event, 'ctrl', False) and not getattr(event, 'alt', False) and self.op in poly_caddies.SHIFT_ACTIONS:
             return bpy.ops.max.poly_settings('INVOKE_DEFAULT', action=self.op)
         return self.run(context, 'INVOKE_DEFAULT')
 
@@ -508,6 +509,7 @@ class MAX_OT_edit_poly(bpy.types.Operator):
                 ops.dissolve_edges(use_verts=action == 'REMOVE_WITH_VERTS')
             else:
                 ops.dissolve_faces(use_verts=action == 'REMOVE_WITH_VERTS')
+            editable_poly.cleanup_isolated(context)
         elif action == 'CAP':
             ops.edge_face_add()
         elif action == 'FLIP':
@@ -708,22 +710,15 @@ class MAX_OT_transform_typein(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         from . import max_rotate
-        return bool(context.active_object or max_rotate.floating_window(context, max_rotate._typein_windows))
+        live = {window.as_pointer() for window in context.window_manager.windows}
+        return bool(context.active_object or max_rotate._typein_windows.intersection(live))
 
     def invoke(self, context, event):
         from . import max_rotate
-        if _active_tool(context) == 'ROTATE' or max_rotate.floating_window(context, max_rotate._typein_windows):
+        live = {window.as_pointer() for window in context.window_manager.windows}
+        if _active_tool(context) == 'ROTATE' or max_rotate._typein_windows.intersection(live):
             return bpy.ops.max.rotate_typein('INVOKE_DEFAULT')
-        kind, values, _ = read_transform(context, False)
-        if values is None and kind != 'SCALE':
-            return {'CANCELLED'}
-        if kind == 'SCALE' and values is None:
-            self.offset = True
-        elif kind == 'SCALE':
-            self.absolute_scale = values
-        else:
-            self.absolute_move = values
-        return context.window_manager.invoke_props_dialog(self, width=310)
+        return bpy.ops.max.typein_dialog('INVOKE_DEFAULT', group='OFFSET' if self.offset else 'ABSOLUTE')
 
     def draw(self, context):
         from . import max_widgets, max_rotate
@@ -1133,13 +1128,17 @@ def setup_quad_views(context, window, area):
     with context.temp_override(window=window, area=area, region=region):
         if not area.spaces.active.region_quadviews:
             quadview_op()()
+    from mathutils import Euler
     rotations = ('TOP', 'FRONT', 'LEFT')
-    for index, view in enumerate(area.spaces.active.region_quadviews):
+    regions = sorted((r for r in area.regions if r.type == 'WINDOW'), key=lambda r: (-r.y, r.x))
+    for index, region in enumerate(regions):
+        view = region.data
         unlock_region(view)
         if index < 3:
             view.view_rotation = VIEW_ROTATIONS[rotations[index]]
             view.view_perspective = 'ORTHO'
         else:
+            view.view_rotation = Euler((math.radians(65), 0, math.radians(-45))).to_quaternion()
             view.view_perspective = 'PERSP'
 
 
@@ -1280,19 +1279,22 @@ def apply_layout(context, quad=False):
                     if _arrange_workspace(bpy.context):
                         phase = 1
                     return .1
-                phase = 2
-                max_chrome.apply_layout(bpy.context, quad=quad)
+                if phase == 1:
+                    max_chrome.apply_layout(bpy.context, quad=quad)
+                    phase = 2
+                    return .1
                 if quad:
                     area, _ = find_view3d(bpy.context)
                     if area:
                         setup_quad_views(bpy.context, window, area)
                 cursor_policy.reset_scene(scene)
                 cursor_policy.enforce()
+                phase = 3
         except Exception:
             _layout_jobs.pop(key, None)
             raise
         finally:
-            if phase == 2:
+            if phase == 3:
                 _layout_jobs.pop(key, None)
         return None
 

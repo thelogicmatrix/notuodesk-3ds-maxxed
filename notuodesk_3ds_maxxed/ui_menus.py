@@ -484,6 +484,10 @@ def draw_main_toolbar(self, context):
     max_toolbar.draw(self.layout, context)
 
 
+def _active_tool(context):
+    return mode_feedback.active_tool(context)
+
+
 def _workspace_toolbar(layout, context):
     """Use the W1.4 controls with the accepted operation-specific managers."""
     from . import max_rotate, snaps
@@ -586,6 +590,14 @@ def _workspace_cube(context):
     return not _auxiliary_area(context) and _provider_function(viewcube, 'visible')(context)
 
 
+@persistent
+def _order_saved_editors(*_):
+    from . import max_editor_windows
+    # Opening a native auxiliary window changes Blender's screen context until
+    # the next event-loop turn. Restore the main window's docks before that.
+    max_editor_windows._saved_hosts.sort(key=lambda item: item[0] != 'DOCK')
+
+
 def _adapt(owner, name, callback):
     _drawing_adapters.append((owner, name, getattr(owner, name), callback))
     setattr(owner, name, callback)
@@ -615,6 +627,7 @@ def register_draw():
     _adapt(max_status, 'prompt_text', _workspace_prompt)
     _adapt(overlay, '_visible', _workspace_labels)
     _adapt(mode_feedback, 'active_tool', _workspace_tool)
+    _adapt(mode_feedback, 'PASSIVE_MODALS', mode_feedback.PASSIVE_MODALS | {'MAX_OT_editor_interact'})
     _adapt(mode_feedback, '_draw_view_border', _workspace_border)
     _adapt(viewcube, 'visible', _workspace_cube)
     max_chrome.install(feedback=mode_feedback, draw_menus=_menus,
@@ -629,6 +642,7 @@ def register_draw():
     max_dialogs.configure_transform(reader=operators.read_transform, writer=operators.write_transform)
     bpy.app.handlers.load_pre.append(_before_file_load)
     bpy.app.handlers.load_post.append(_after_file_load)
+    bpy.app.handlers.save_pre.append(_order_saved_editors)
     _installed = True
 
 
@@ -644,6 +658,8 @@ def unregister_draw():
         bpy.app.handlers.load_pre.remove(_before_file_load)
     if _after_file_load in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(_after_file_load)
+    if _order_saved_editors in bpy.app.handlers.save_pre:
+        bpy.app.handlers.save_pre.remove(_order_saved_editors)
     for owner, name, old, ours in reversed(_drawing_adapters):
         if ours is not None and getattr(owner, name) is ours:
             setattr(owner, name, old)
