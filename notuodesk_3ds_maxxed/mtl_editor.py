@@ -1,5 +1,6 @@
 """Compact samples and material controls over Blender's rendered materials."""
 import math
+from types import SimpleNamespace
 
 import bpy
 from bpy.app.handlers import persistent
@@ -38,6 +39,7 @@ _catalogue = []
 _preview_textures = {}
 _preview_signatures = {}
 _preview_requests = set()
+_preview_requested = set()
 _preview_hosts = set()
 _pickers = []
 _generation = 0
@@ -186,9 +188,10 @@ def new_default_material(index):
     material['max_type'] = 'STANDARD'
     material.max_diffuse = (.5, .5, .5)
     material.max_specular = (1, 1, 1)
-    material.max_spec_level = 50
-    material.max_glossiness = 30
+    material.max_spec_level = 0
+    material.max_glossiness = 10
     material.max_opacity = 100
+    material.max_two_sided = False
     material.max_std.shader = 'BLINN'
     return material
 
@@ -387,12 +390,19 @@ def invalidate_preview(material=None):
         _preview_signatures.pop(pointer, None)
         material.update_tag()
         if _preview_hosts and not bpy.app.background:
-            _preview_requests.add(pointer)
-            if not bpy.app.timers.is_registered(_render_previews):
-                bpy.app.timers.register(_render_previews, first_interval=.2)
+            _request_preview(material)
     else:
         _preview_textures.clear()
         _preview_signatures.clear()
+        _preview_requested.clear()
+
+
+def _request_preview(material):
+    pointer = material.as_pointer()
+    _preview_requested.add(pointer)
+    _preview_requests.add(pointer)
+    if not bpy.app.timers.is_registered(_render_previews):
+        bpy.app.timers.register(_render_previews, first_interval=.2)
 
 
 def _render_previews():
@@ -488,8 +498,8 @@ class MAX_OT_mtl_reset(bpy.types.Operator):
             clear_map(material, key)
         material.max_diffuse = (.5, .5, .5)
         material.max_specular = (1, 1, 1)
-        material.max_spec_level, material.max_glossiness, material.max_opacity = 50, 30, 100
-        material.max_ior, material.max_two_sided = 1.5, True
+        material.max_spec_level, material.max_glossiness, material.max_opacity = 0, 10, 100
+        material.max_ior, material.max_two_sided = 1.5, False
         for field in material.max_std.bl_rna.properties:
             if field.identifier != 'rna_type' and not field.is_readonly:
                 material.max_std.property_unset(field.identifier)
@@ -731,57 +741,75 @@ def object_at_event(context, event):
     return obj.original if hit else None
 
 
+def _end_pointer(session):
+    if session._done:
+        return
+    session._done = True
+    for window in bpy.context.window_manager.windows:
+        if window.as_pointer() in session._windows:
+            window.cursor_modal_restore()
+            window.workspace.status_text_set(None)
+    if session in _pickers:
+        _pickers.remove(session)
+
+
+def _pointer_event(session, context, event):
+    if (session._done or session._generation != _generation or session._scene != context.scene
+            or session._owner not in {w.as_pointer() for w in context.window_manager.windows}):
+        _end_pointer(session)
+        return {'CANCELLED'}
+    if event.type in {'ESC', 'RIGHTMOUSE'}:
+        _end_pointer(session)
+        return {'CANCELLED'}
+    if event.type == 'LEFTMOUSE' and event.value == session.commit_event:
+        obj = object_at_event(context, event)
+        applied = False
+        if obj:
+            try:
+                if session.kind == 'DRAG':
+                    applied = assign_material(obj, session.material)
+                elif obj.active_material:
+                    editor = state(context)
+                    if session.slot < len(editor.slots):
+                        editor.slots[session.slot].material = obj.active_material
+                        applied = True
+            except ReferenceError:
+                pass
+        if applied:
+            _end_pointer(session)
+            bpy.ops.ed.undo_push(message=session.label)
+            return {'FINISHED'}
+        if session.commit_event == 'RELEASE':
+            _end_pointer(session)
+            return {'CANCELLED'}
+    return {'RUNNING_MODAL'}
+
+
 class _MaterialPointer:
     def _begin(self, context):
-        self._generation = _generation
-        self._scene = context.scene
-        self._windows = tuple(context.window_manager.windows)
-        self._owner = context.window.as_pointer()
-        self._token = str(id(self))
-        self._done = False
-        for window in self._windows:
+        # A relay can outlive the initiating operator's RNA. Keep its shared
+        # state in Python, with no reference back to that operator.
+        self._session = session = SimpleNamespace(_generation=_generation, _scene=context.scene,
+            _windows=tuple(w.as_pointer() for w in context.window_manager.windows),
+            _owner=context.window.as_pointer(), _token=str(id(self)), _done=False,
+            kind='DRAG' if self._commit_event == 'RELEASE' else 'PICK',
+            material=getattr(self, '_material', None), slot=state(context).active,
+            commit_event=self._commit_event, label=self.bl_label)
+        for window in context.window_manager.windows:
             window.cursor_modal_set('EYEDROPPER')
-        _pickers.append(self)
-        for window in self._windows:
+        _pickers.append(session)
+        for window in context.window_manager.windows:
             if window != context.window:
                 area = next((a for a in window.screen.areas if a.type == 'VIEW_3D'), None)
                 if area:
                     with context.temp_override(window=window, area=area):
-                        bpy.ops.max.mtl_pointer_relay('INVOKE_DEFAULT', token=self._token)
+                        bpy.ops.max.mtl_pointer_relay('INVOKE_DEFAULT', token=session._token)
         context.workspace.status_text_set('Pick an object. Right-click or Esc cancels.')
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
 
-    def _end(self, context=None):
-        if self._done:
-            return
-        self._done = True
-        live = tuple(bpy.context.window_manager.windows)
-        for window in self._windows:
-            if window in live:
-                window.cursor_modal_restore()
-                window.workspace.status_text_set(None)
-        if self in _pickers:
-            _pickers.remove(self)
-
     def modal(self, context, event):
-        if (self._done or self._generation != _generation or self._scene != context.scene
-                or self._owner not in {w.as_pointer() for w in context.window_manager.windows}):
-            self._end(context)
-            return {'CANCELLED'}
-        if event.type in {'ESC', 'RIGHTMOUSE'}:
-            self._end(context)
-            return {'CANCELLED'}
-        if event.type == 'LEFTMOUSE' and event.value == self._commit_event:
-            obj = object_at_event(context, event)
-            if obj and self._apply(context, obj):
-                self._end(context)
-                bpy.ops.ed.undo_push(message=self.bl_label)
-                return {'FINISHED'}
-            if self._commit_event == 'RELEASE':
-                self._end(context)
-                return {'CANCELLED'}
-        return {'RUNNING_MODAL'}
+        return _pointer_event(self._session, context, event)
 
 
 class MAX_OT_mtl_pointer_relay(bpy.types.Operator):
@@ -801,9 +829,7 @@ class MAX_OT_mtl_pointer_relay(bpy.types.Operator):
     def modal(self, context, event):
         if self._picker._done:
             return {'FINISHED', 'PASS_THROUGH'}
-        result = self._picker.modal(context, event)
-        # The initiating operator owns the undo entry. Relays never add one.
-        return result
+        return _pointer_event(self._picker, context, event)
 
 
 class MAX_OT_mtl_pick(_MaterialPointer, bpy.types.Operator):
@@ -815,14 +841,6 @@ class MAX_OT_mtl_pick(_MaterialPointer, bpy.types.Operator):
     def invoke(self, context, event):
         ensure_slots(context.scene)
         return self._begin(context)
-
-    def _apply(self, context, obj):
-        material = obj.active_material
-        if material:
-            editor = state(context)
-            editor.slots[editor.active].material = material
-        return bool(material)
-
 
 class MAX_OT_mtl_drag(_MaterialPointer, bpy.types.Operator):
     bl_idname = 'max.mtl_drag'
@@ -839,13 +857,6 @@ class MAX_OT_mtl_drag(_MaterialPointer, bpy.types.Operator):
         if self._material is None:
             return {'CANCELLED'}
         return self._begin(context)
-
-    def _apply(self, context, obj):
-        try:
-            return assign_material(obj, self._material)
-        except ReferenceError:
-            return False
-
 
 class MAX_OT_mtl_value(bpy.types.Operator):
     bl_idname = 'max.mtl_value'
@@ -1125,6 +1136,8 @@ def _sample(host, material, index, bounds, active, context, scale):
     _box(x, y, right-x, top-y, (.95, .95, .95, 1) if active else (.12, .12, .12, 1))
     _box(x+scale, y+scale, right-x-2*scale, top-y-2*scale, (.48, .48, .48, 1))
     if material:
+        if material.as_pointer() not in _preview_requested and not bpy.app.background:
+            _request_preview(material)
         preview = material.preview
         if preview and preview.image_size[0] and preview.image_size[1]:
             import gpu
@@ -1143,6 +1156,7 @@ def _sample(host, material, index, bounds, active, context, scale):
                     data=gpu.types.Buffer('FLOAT', len(preview.image_pixels_float), preview.image_pixels_float[:]))
                 _preview_textures[pointer] = texture
                 _preview_signatures[pointer] = signature
+            gpu.state.blend_set('ALPHA')
             draw_texture_2d(texture, (x+2*scale, y+2*scale), right-x-4*scale, top-y-4*scale)
         else:
             _label(x+8*scale, y+(top-y)/2, 'Preview...', round(11*scale))
@@ -1461,15 +1475,12 @@ def prepare_host(host, context):
     host.material_scene = context.scene
     ensure_slots(context.scene)
     _preview_hosts.add(host.area_pointer)
-    for slot in state(context).slots:
-        if slot.material:
-            slot.material.preview_ensure()
-            if not bpy.app.background:
-                invalidate_preview(slot.material)
 
 
 def close_host(host):
     _preview_hosts.discard(host.area_pointer)
+    for session in list(_pickers):
+        _end_pointer(session)
     edit = getattr(host, 'material_edit', None)
     if edit:
         try:
@@ -1489,7 +1500,7 @@ def clear_runtime(*_):
     global _generation
     _generation += 1
     for picker in list(_pickers):
-        picker._end()
+        _end_pointer(picker)
     _preview_hosts.clear()
     _preview_requests.clear()
     if bpy.app.timers.is_registered(_render_previews):
@@ -1518,10 +1529,15 @@ def register_props():
             _props_installed.append((owner, key))
     if clear_runtime not in bpy.app.handlers.load_pre:
         bpy.app.handlers.load_pre.append(clear_runtime)
+    from . import max_editor_windows
+    max_editor_windows.register_material_adapter(open_editor)
 
 
 def unregister_props():
     clear_runtime()
+    from . import max_editor_windows
+    if max_editor_windows._material_adapter == open_editor:
+        max_editor_windows.register_material_adapter(None)
     if clear_runtime in bpy.app.handlers.load_pre:
         bpy.app.handlers.load_pre.remove(clear_runtime)
     for owner, key in reversed(_props_installed):

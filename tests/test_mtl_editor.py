@@ -28,6 +28,8 @@ class MaterialTests(unittest.TestCase):
         editor = mtl.state(self.context)
         self.assertEqual(len(editor.slots), 24)
         self.assertEqual(editor.visible, '6')
+        self.assertEqual((self.material.max_spec_level, self.material.max_glossiness), (0, 10))
+        self.assertFalse(self.material.max_two_sided)
         for visible, shape in [('6', (3, 2)), ('15', (5, 3)), ('24', (6, 4))]:
             editor.visible = visible
             self.assertEqual(mtl.grid_shape(editor), shape)
@@ -212,9 +214,10 @@ class MaterialTests(unittest.TestCase):
     def test_ordinary_material_classification_is_read_only(self):
         material = bpy.data.materials.new('Unclassified')
         before = dict(material.items())
+        before_shader = mtl.shader(material)
         self.assertEqual(mtl.material_kind(material), 'STANDARD')
         self.assertEqual(dict(material.items()), before)
-        self.assertIsNone(mtl.shader(material))
+        self.assertEqual(mtl.shader(material), before_shader)
 
     def test_custom_surface_is_not_silently_replaced(self):
         tree = self.material.node_tree
@@ -235,7 +238,6 @@ class MaterialTests(unittest.TestCase):
 
     def test_picker_disable_restores_cursor_and_invalidates_session(self):
         picker = SimpleNamespace(_done=False, _windows=())
-        picker._end = lambda: mtl._MaterialPointer._end(picker)
         mtl._pickers.append(picker)
         before = mtl._generation
         mtl.clear_runtime()

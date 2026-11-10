@@ -5,7 +5,7 @@ import os
 import bpy
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, IntProperty, StringProperty
-from . import scene_explorer, max_layers, max_dialogs
+from . import scene_explorer, max_dialogs
 
 TITLES = {
     "MATERIAL": "Compact Material Editor", "RENDER_SETUP": "Render Setup",
@@ -89,8 +89,7 @@ def _native_frame(host, handles):
     handle = wintypes.HWND(host.native_handle)
     user32.SetWindowTextW(handle, 'Material Editor' if host.kind == 'MATERIAL' else TITLES[host.kind])
     if host.kind == 'MATERIAL':
-        dpi = user32.GetDpiForWindow(handle) if hasattr(user32, 'GetDpiForWindow') else 96
-        scale = max(1, dpi/96) * bpy.context.preferences.view.ui_scale
+        scale = bpy.context.preferences.view.ui_scale
         # Compact is a portrait editor. This is its opening size, not a test override.
         user32.SetWindowPos(handle, None, 0, 0, round(480*scale), round(820*scale), 0x16)
 

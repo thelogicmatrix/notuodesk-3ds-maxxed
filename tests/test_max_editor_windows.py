@@ -61,7 +61,9 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(editors.owned_windows(), [])
 
     def test_no_material_host_without_integrator(self):
-        self.assertFalse(editors.available("MATERIAL"))
+        from unittest.mock import patch
+        with patch.object(editors, '_material_adapter', None):
+            self.assertFalse(editors.available("MATERIAL"))
         self.assertIn("Python", editors.TITLES["SCRIPT_EDITOR"])
         self.assertIn("Python", editors.TITLES["LISTENER"])
 
