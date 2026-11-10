@@ -112,6 +112,8 @@ its saved shader and map fields. Its compatibility diffuse default is RGB
 The Compact toolbars include disabled controls where their Max operation has
 no implemented backend. Material ID Channel edits Blender's material pass index.
 On Windows, the native title follows the active material name.
+Windows can shorten the visible caption at the narrow opening width. The full
+title remains installed on the window. Other platforms use the drawn title.
 
 ## Shift-drag cloning
 

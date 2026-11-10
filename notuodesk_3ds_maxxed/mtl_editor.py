@@ -1395,49 +1395,60 @@ def _tool_icon(key, x, y, s, enabled=True):
                 _line(point, points[(i+1) % len(points)], color)
     def arrow(cx, cy, direction='DOWN', color=aqua):
         _triangle(x+cx*s, y+cy*s, .6*s, direction, color)
-    def checker(cx, cy, radius=6):
-        circle(cx, cy, radius, (.75, .75, .75, 1) if enabled else (.25, .25, .25, 1), True)
+    def checker(cx, cy, radius=6, light=None, shade=None):
+        circle(cx, cy, radius, light or ((.75, .75, .75, 1) if enabled else (.25, .25, .25, 1)), True)
+        cell = radius/2.4
         for row in range(-2, 3):
             for col in range(-2, 3):
                 if (row+col) % 2 and col*col+row*row < 6:
-                    box(cx+col*2.5-1.25, cy+row*2.5-1.25, 2.5, 2.5, (.28, .28, .28, 1) if enabled else dark)
+                    box(cx+(col-.5)*cell, cy+(row-.5)*cell, cell, cell,
+                        shade or ((.28, .28, .28, 1) if enabled else dark))
         circle(cx, cy, radius, dark)
     if key in {'sample', 'viewport', 'background'}:
         if key != 'sample':
             box(2, 2, 18, 18, dark)
             box(3, 3, 16, 16, aqua if key == 'background' else ink)
         if key in {'viewport', 'background'}:
-            checker(11, 11, 7)
+            checker(11, 11, 7, (.8, .94, .94, 1) if key == 'viewport' else None,
+                    aqua if key == 'viewport' else None)
         else:
             circle(11, 11, 8, ink, True)
-            for i in range(5):
-                box(2+i*4, 1, 2, 1)
-                box(2+i*4, 21, 2, 1)
-            for i in range(4):
-                box(1, 4+i*4, 1, 2)
-                box(21, 4+i*4, 1, 2)
+            for i in range(8):
+                box(1+i*3, 1, 1, 1)
+                box(1+i*3, 23, 1, 1)
+                box(1, 1+i*3, 1, 1)
+                box(23, 1+i*3, 1, 1)
             arrow(18, 0, color=ink)
     elif key == 'backlight':
-        circle(14, 13, 7, ink, True)
-        circle(14, 13, 6, dark, True)
+        circle(15, 15, 6, aqua, True)
+        circle(15, 15, 6, dark)
+        box(12, 6, 6, 5, aqua)
+        line((12, 6), (18, 6), dark)
+        line((12, 8), (18, 8), dark)
         circle(8, 8, 6, aqua, True)
         circle(8, 8, 6, ink)
     elif key == 'tiling':
         box(3, 3, 17, 17)
         arrow(17, 0, color=ink)
     elif key == 'video':
-        for i, color in enumerate([(.87, .25, .22, 1), (.26, .76, .27, 1), (.94, .72, .27, 1), (.39, .63, .70, 1)]):
-            box(3+i*4, 5, 3, 14, color if enabled else ink)
-        line((3, 2), (20, 2))
+        for i, color in enumerate([(.26, .76, .27, 1), (.94, .72, .27, 1), (.12, .72, .88, 1), (.87, .25, .22, 1)]):
+            box(3+i*4, 6, 3, 14, color if enabled else ink)
+        for i in range(16):
+            value = .15+i*.045 if enabled else .2+i*.004
+            box(3+i, 1, 1, 4, (value, value, value, 1))
     elif key == 'preview':
-        box(3, 3, 17, 16, dark)
-        for i in range(4):
-            box(4+i*4, 16, 2, 2)
-            box(4+i*4, 4, 2, 2)
-        line((5, 8), (5, 14))
-        line((5, 14), (18, 14))
-        line((18, 14), (18, 8))
-        arrow(10, 7, color=(.95, .72, .26, 1) if enabled else ink)
+        box(2, 2, 19, 19, ink)
+        box(3, 3, 17, 17, dark)
+        for i in range(5):
+            box(4+i*3, 18, 1, 1)
+            box(4+i*3, 4, 1, 1)
+        box(5, 6, 6, 10, ink)
+        box(12, 6, 6, 10, ink)
+        gold = (.95, .72, .26, 1) if enabled else ink
+        box(15, 1, 3, 12, dark)
+        box(10, 5, 13, 3, dark)
+        box(16, 1, 2, 12, gold)
+        box(10, 6, 13, 2, gold)
     elif key == 'options':
         checker(8, 14, 6)
         cx, cy, radius = 16, 6, 4
@@ -1449,8 +1460,7 @@ def _tool_icon(key, x, y, s, enabled=True):
     elif key == 'navigator':
         for row in range(2):
             cy = 6+row*9
-            line((5, cy-2), (9, cy+2))
-            line((5, cy+2), (9, cy-2))
+            checker(6, cy, 3)
             line((12, cy), (20, cy))
     elif key == 'select':
         checker(9, 14, 7)
@@ -1458,11 +1468,11 @@ def _tool_icon(key, x, y, s, enabled=True):
         for a, b in [((15, 2), (12, 13)), ((12, 13), (21, 7)), ((21, 7), (17, 6)), ((17, 6), (15, 2))]:
             line(a, b)
     elif key == 'get':
-        for row in range(2):
-            for col in range(2):
-                box(3+col*7, 4+row*7, 6, 6, dark)
-                box(4+col*7, 5+row*7, 4, 4, aqua)
-        checker(15, 9, 5)
+        outline = [(2, 3), (2, 21), (8, 21), (8, 18), (20, 18), (20, 3)]
+        _polygon([(x+a*s, y+b*s) for a, b in outline], aqua)
+        for a, b in zip(outline, outline[1:]+outline[:1]):
+            line(a, b, dark)
+        checker(15, 8, 7)
     elif key in {'put_scene', 'assign'}:
         line((3, 4), (20, 4))
         line((3, 4), (6, 11))
@@ -1470,8 +1480,12 @@ def _tool_icon(key, x, y, s, enabled=True):
         box(4, 12, 5, 4)
         box(11, 14, 5, 4)
         if key == 'assign':
-            box(14, 4, 6, 7, aqua)
-            arrow(14, 12)
+            box(3, 4, 17, 15, (.263, .263, .263, 1))
+            checker(5, 17, 4)
+            box(12, 2, 8, 8, ink)
+            box(13, 3, 6, 6, (.55, .55, .55, 1))
+            box(14, 12, 5, 8, aqua)
+            _polygon([(x+11*s, y+13*s), (x+22*s, y+13*s), (x+16.5*s, y+7*s)], aqua)
         else:
             arrow(11, 7, 'UP')
     elif key == 'reset':
@@ -1480,25 +1494,33 @@ def _tool_icon(key, x, y, s, enabled=True):
         for a, b in [((7, 15), (7, 3)), ((17, 15), (17, 3)), ((7, 3), (17, 3)),
                      ((10, 13), (10, 5)), ((14, 13), (14, 5))]:
             line(a, b)
-    elif key in {'copy', 'unique', 'parent', 'sibling'}:
-        circle(8, 7, 4)
-        circle(15, 14, 4)
-        line((3, 17), (8, 12))
-        line((3, 17), (12, 17))
-        if key in {'copy', 'unique'}:
-            line((17, 2), (21, 2))
-            line((19, 0), (19, 4))
-        elif key == 'parent':
-            arrow(2, 12, 'UP', ink)
-        else:
-            arrow(16, 2, 'RIGHT', ink)
+    elif key == 'copy':
+        checker(7, 6, 6)
+        checker(18, 18, 4)
+        for a, b in [((13, 18), (4, 18)), ((4, 18), (4, 12))]:
+            line(a, b)
+        arrow(1, 10, 'DOWN', ink)
+    elif key == 'unique':
+        for cx, cy in [(5, 18), (18, 18), (18, 5)]:
+            checker(cx, cy, 4)
+        line((5, 13), (5, 5))
+        line((5, 5), (12, 5))
+        arrow(11, 2, 'RIGHT', ink)
+    elif key in {'parent', 'sibling'}:
+        checker(7, 16, 6)
+        for a, b in [((11, 12), (17, 12)), ((17, 12), (17, 5)), ((17, 5), (11, 5))]:
+            line(a, b)
+        arrow(14, 12, 'UP' if key == 'parent' else 'RIGHT', ink)
     elif key == 'library':
         box(3, 3, 17, 17, dark)
         box(4, 4, 15, 15)
         box(6, 11, 11, 7, dark)
         box(7, 12, 9, 5)
-        box(6, 5, 10, 4, dark)
-        arrow(15, 0)
+        box(6, 5, 5, 4, dark)
+        box(7, 5, 3, 3)
+        for row in range(3):
+            for col in range(3):
+                box(15+col*2, 1+row*2, 2, 2, aqua if (row+col) % 2 else dark)
     elif key == 'id':
         box(2, 2, 18, 18)
         _label(x+6*s, y+3*s, '0', round(18*s), dark)
@@ -1557,7 +1579,8 @@ def _color(host, material, path, x, y, width, s, enabled=True):
     enabled = enabled and shader(material) is not None
     data, key = _field_owner(material, path)
     value = getattr(data, key)
-    display = tuple(12.92*v if v <= .0031308 else 1.055*v**(1/2.4)-.055 for v in value[:3])
+    display = tuple(round(255*(12.92*v if v <= .0031308 else 1.055*v**(1/2.4)-.055))/255
+                    for v in value[:3])
     _box(x, y, width, 25*s, (0, 0, 0, 1))
     _box(x+s, y+2*s, width-2*s, 22*s, (*display, 1))
     if enabled and not material.library:
@@ -1635,7 +1658,7 @@ def _draw_physical(host, context, material, width, top, s):
         _label(59*u, row+8*u, 'Metalness:', round(13*u))
         _number(host, material, 'physical.metalness', 127*u, row, 76*u, u)
         _physical_map(host, material, 'REFLECTION', 205*u, row, u)
-        _label(288*u, row+8*u, 'IOR:', round(13*u))
+        _label(313*u, row+8*u, 'IOR:', round(13*u))
         _number(host, material, 'max_ior', 343*u, row, 78*u, u)
         _physical_map(host, material, None, 423*u, row, u)
         y -= 92*u
@@ -1682,7 +1705,7 @@ def _rounded(x, y, width, height, radius, color):
     _polygon(points, color)
 
 
-def _control(host, x, y, width, height, text, action, scale, selected=False, color=None, text_color=None):
+def _control(host, x, y, width, height, text, action, scale, selected=False, color=None, text_color=None, centered=False):
     _rounded(x, y, width, height, 3*scale, (.65, .65, .65, 1) if selected else (.255, .255, .255, 1))
     _rounded(x+scale, y+scale, width-2*scale, height-2*scale, 2*scale, color or (.392, .392, .392, 1))
     if text:
@@ -1693,7 +1716,8 @@ def _control(host, x, y, width, height, text, action, scale, selected=False, col
         clipped = str(text)
         while clipped and blf.dimensions(font, clipped)[0] > width-8*scale:
             clipped = clipped[:-1]
-        _label(x+6*scale, y+height*.3, clipped, round(13*scale), text_color or (.89, .89, .89, 1))
+        text_x = x+(width-blf.dimensions(font, clipped)[0])/2 if centered else x+6*scale
+        _label(text_x, y+height*.3, clipped, round(13*scale), text_color or (.89, .89, .89, 1))
     if action:
         _hit(host, (x, y, x+width, y+height), action)
 
@@ -1749,7 +1773,9 @@ def _rollout(host, title, x, y, width, scale):
 def _sample(host, material, index, bounds, active, context, scale):
     x, y, right, top = bounds
     _box(x, y, right-x, top-y, (.95, .95, .95, 1) if active else (.12, .12, .12, 1))
-    _box(x+scale, y+scale, right-x-2*scale, top-y-2*scale, (.48, .48, .48, 1))
+    if not active:
+        _box(x+scale, y+scale, right-x-2*scale, top-y-2*scale, (.75, .75, .75, 1))
+    _box(x+2*scale, y+2*scale, right-x-4*scale, top-y-4*scale, (.48, .48, .48, 1))
     if material:
         if (material.as_pointer() not in _preview_requested or
                 _preview_types.get(material.as_pointer()) != material.preview_render_type) and not bpy.app.background:
@@ -1811,8 +1837,11 @@ def _frame_group(x, top, width, height, title, scale):
                  ((x+width, top-height), (x+width, top)), ((x, top), (x+width, top))]:
         _line(a, b, color)
     if title:
-        _box(x+5*scale, top-7*scale, (len(title)*6.5+7)*scale, 15*scale, (.314, .314, .314, 1))
-        _label(x+8*scale, top-3*scale, title, round(11*scale))
+        import blf
+        _label(0, 0, '', round(12*scale))
+        span = blf.dimensions(_fonts['normal'], title)[0]
+        _box(x+5*scale, top-7*scale, span+7*scale, 15*scale, (.314, .314, .314, 1))
+        _label(x+8*scale, top-3*scale, title, round(12*scale))
 
 
 def _highlight_plot(material, x, y, width, height):
@@ -1955,7 +1984,7 @@ def draw_host(host, context, width, height, scale):
         _hit(host, (width-164*s, y, width-139*s, y+24*s), _invoke('max.mtl_get'))
     _control(host, max(70*s, width-134*s), y, 117*s, 24*s,
              {'STANDARD': 'Standard (Legacy)', 'VRAY': 'VRayMtl', 'PHYSICAL': 'Physical Material'}.get(material_kind(material), 'Material'),
-             _invoke('max.mtl_set_type'), s)
+             _invoke('max.mtl_set_type'), s, centered=True)
     host.material_elements['name-type'] = (104*s, y, width-17*s, y+25*s)
     y -= 8*s
     if material is None:
@@ -2016,9 +2045,9 @@ def draw_host(host, context, width, height, scale):
                          _invoke('max.mtl_load_map', channel=channel), s)
             y -= 12*s
         host.material_scroll_max = max(0, math.ceil((host.scroll*26*s-y)/max(1, 26*s)))
-        _box(width-9*s, 0, 7*s, rollout_clip, (.21, .21, .21, 1))
-        thumb = max(24*s, rollout_clip/(host.material_scroll_max+1))
-        _rounded(width-8*s, max(0, rollout_clip-thumb-host.scroll*6*s), 5*s, thumb, 2*s, (.39, .39, .39, 1))
+        _box(width-11*s, 0, 10*s, rollout_clip, (.205, .205, .205, 1))
+        thumb = min(125*s, max(24*s, rollout_clip/(host.material_scroll_max+1)))
+        _rounded(width-9*s, max(0, rollout_clip-thumb-s-host.scroll*6*s), 7*s, thumb, 2*s, (.32, .32, .32, 1))
     finally:
         gpu.state.scissor_test_set(False)
     # Discard invisible hit regions so a scrolled rollout cannot cover the toolbar.

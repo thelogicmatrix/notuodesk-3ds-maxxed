@@ -478,7 +478,8 @@ def _draw():
             _rect(0, 0, width, height, (.18, .18, .18, 1))
         if host.kind != "MATERIAL" or not host.native_handle:
             _rect(0, height-38*scale, width, 38*scale, (.12, .12, .12, 1))
-            _text(14*scale, height-25*scale, TITLES[host.kind], round(15*scale))
+            caption = getattr(host, 'material_title', TITLES[host.kind]) if host.kind == 'MATERIAL' else TITLES[host.kind]
+            _text(14*scale, height-25*scale, caption, round(15*scale))
             close = (lambda c, e: detach_explorer(host.area)) if host.original_type else (lambda c, e: close_editor(host.window))
             small = width < 300*scale
             if host.kind == 'SCENE_EXPLORER':
