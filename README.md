@@ -104,6 +104,15 @@ connection. Standard, Physical and V-Ray-labelled materials use Principled
 shading equivalents. Wire, Faceted, Face Map and Soften have no renderer mapping
 in this editor and stay disabled.
 
+New samples use Physical Material. Its Base Color, Base Weight, Roughness,
+Metalness, IOR, Transparency and Coating controls edit Principled shading.
+Standard (Legacy) remains available from the material type button and retains
+its saved shader and map fields. Its compatibility diffuse default is RGB
+150/255 per channel. Opening a saved material does not replace its values.
+The Compact toolbars include disabled controls where their Max operation has
+no implemented backend. Material ID Channel edits Blender's material pass index.
+On Windows, the native title follows the active material name.
+
 ## Shift-drag cloning
 
 With Move (W), Rotate (E) or Scale (R) active, hold Shift and drag a gizmo handle or the selected geometry. The original stays put. Release to open **Clone Options** with **Copy**, **Instance**, **Reference**, **Number of Copies** and **Name**. Extra copies repeat the same move, rotation or scale. The dialog remembers your choices during the Blender session.
