@@ -426,16 +426,18 @@ def _draw_geometry(data):
             text = "[%.2f, %.2f, %.2f]" % tuple(0 if abs(v)<.0001 else v for v in values)
             # CAE9185F: 95 x 11 px readout above a 76 px main ring.
             # Fit glyph dimensions, so UI scale does not change its proportions.
-            size = data["radius"]*.2
+            # Rasterize at the reference radius, then scale both axes. Resizing
+            # the font first changes hinted glyph bearings at each viewport size.
+            size = 76*.2
             reference_text = "[-416.99, 0.00, 0.00]"
             blf.size(0, size)
             width, height = blf.dimensions(0, reference_text)
-            blf.size(0, size*data["radius"]*11/76/max(height, 1))
+            blf.size(0, size*11/max(height, 1))
             width, height = blf.dimensions(0, reference_text)
             with gpu.matrix.push_pop():
                 gpu.matrix.translate((data["xy"].x-data["radius"]*.375, data["xy"].y+data["radius"]*1.34, 0))
-                # BLF's advance includes side bearings beyond the visible ink.
-                gpu.matrix.scale((data["radius"]*98/76/max(width, 1), 1, 1))
+                gpu.matrix.scale((data["radius"]*95/76/max(width, 1),
+                                  data["radius"]*11/76/max(height, 1), 1))
                 blf.position(0, 0, 0, 0)
                 blf.color(0, *YELLOW)
                 blf.draw(0, text)
