@@ -39,9 +39,12 @@ def element_color(operation, element, handle, native, active, locked):
     if operation == "SCALE" and center and element == "shaft":
         return native  # Only the part inside the uniform volume turns yellow.
     if element == "fill":
-        # The overview centre is about quarter-strength yellow on black.
-        # Linear overlay blending needs 6% alpha for that display brightness.
-        return (*TRANSFORM_YELLOW[:3], .06) if selected else native
+        if not selected:
+            return native
+        if handle in {"XY", "YZ", "ZX"}:
+            # A neutral overlay darkens the viewport into Max's grey plane.
+            return (0, 0, 0, .35)
+        return (*TRANSFORM_YELLOW[:3], .24 if operation == "SCALE" else .06)
     if operation == "MOVE" and handle == "CENTER":
         return TRANSFORM_YELLOW
     if operation == "SCALE" and element == "outline" and center:

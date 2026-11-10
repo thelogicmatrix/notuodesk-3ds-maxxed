@@ -48,14 +48,32 @@ class GizmoColors(unittest.TestCase):
     def test_uniform_center_fills_yellow_only_when_active(self):
         clear = (0, 0, 0, 0)
         for active, locked in (('CENTER', 'X'), ('OFF', 'XYZ')):
-            self.assertEqual(g.element_color('SCALE', 'fill', 'CENTER', clear, active, locked),
-                             (*g.TRANSFORM_YELLOW[:3], .06))
+            fill = g.element_color('SCALE', 'fill', 'CENTER', clear, active, locked)
+            self.assertEqual(fill[:3], g.TRANSFORM_YELLOW[:3])
+            self.assertGreaterEqual(fill[3], .18)
+            self.assertLess(fill[3], .6)
             for axis, native in zip('XYZ', g.TRANSFORM_COLORS):
                 self.assertEqual(g.element_color('SCALE', 'shaft', axis, native, active, locked), native)
                 self.assertEqual(g.element_color('SCALE', 'uniform_inner', axis, native, active, locked),
                                  g.TRANSFORM_YELLOW)
         self.assertEqual(g.element_color('SCALE', 'fill', 'CENTER', clear, 'X', 'XYZ'), clear)
         self.assertEqual(g.element_color('SCALE', 'fill', 'YZ', clear, 'CENTER', 'X'), clear)
+
+    def test_active_planes_darken_background_without_a_colour_tint(self):
+        clear = (0, 0, 0, 0)
+        for operation in ('MOVE', 'SCALE'):
+            for plane in ('XY', 'YZ', 'ZX'):
+                for active, locked in ((plane, 'X'), ('OFF', plane)):
+                    fill = g.element_color(operation, 'fill', plane, clear, active, locked)
+                    self.assertLess(max(fill[:3]) - min(fill[:3]), .001)
+                    self.assertGreaterEqual(fill[3], .25)
+                    self.assertLess(fill[3], .6)
+                    for background in (.035, .4, 1):
+                        composite = sum(fill[:3]) / 3 * fill[3] + background * (1 - fill[3])
+                        self.assertLess(composite, background * .8)
+                    self.assertEqual(g.element_color(operation, 'outline', plane, g.GREY,
+                                                     active, locked), g.TRANSFORM_YELLOW)
+                self.assertEqual(g.element_color(operation, 'fill', plane, clear, 'X', 'Z'), clear)
 
     def test_move_center_box_stays_yellow(self):
         for locked in ('X', 'Y', 'Z', 'XY', 'YZ', 'ZX'):
