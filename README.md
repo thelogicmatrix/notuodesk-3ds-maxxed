@@ -35,7 +35,7 @@ Selected objects have white edged faces and white wireframe selection. Press J f
 | Command Panel: Create, Modify, Hierarchy, Motion, Display, Utilities | Right sidebar with collapsible rollouts |
 | Click-drag creation (base first, then height) | Box, Cone, Sphere, GeoSphere, Cylinder, Tube, Torus, Pyramid, Plane. Right-click stops creating |
 | Keyboard Entry and Creation Method | Type grid coordinates and dimensions, then click Create. Choose Edge / Center, Cube / Box, Base/Apex / Center or Rectangle / Square for mouse creation |
-| Parametric primitives | Length/Width/Height/Segs stay editable in **Parameters** until you convert to Editable Poly or enter sub-object mode |
+| Parametric primitives | Box and the other primitives keep live **Parameters** until you explicitly convert to Editable Poly. Keys 1-5 and Tab leave an unconverted primitive at Object level |
 | Modifier List and stack | About 60 modifiers under their Max names (see below). Newest is on top, with a visibility toggle per modifier |
 | Editable Poly | Selection, Edit Vertices/Edges/Borders/Polygons/Elements and Edit Geometry rollouts |
 | Cut and SwiftLoop | Hover previews and click-to-commit cuts and loops. Right-click ends the tool |
@@ -245,7 +245,7 @@ Choose **Create > Geometry > Extended Primitives** in the Command Panel. It has 
 
 Drag the footprint, release, then click to set height. ChamferBox, ChamferCyl and Gengon have a final Fillet step. OilTank and Spindle finish with Cap Height. L-Ext and C-Ext finish with wall width. Hedra needs only the radius drag. Torus Knot uses its second step for Cross Section Radius. Prism starts with an isosceles triangle. The tool stays active for the next object until you right-click.
 
-The objects keep their parameters in **Create > Parameters** and **Modify > Parameters**, including segment counts, Smooth and Generate Mapping Coords. Editing or collapsing an object makes it an Editable Poly, as with Standard Primitives. OilTank, Spindle and Capsule have Overall/Centers height options. Torus Knot has Knot/Circle base curves, winding numbers, warp, eccentricity, twist and lumps.
+The objects keep their parameters in **Create > Parameters** and **Modify > Parameters**, including segment counts, Smooth and Generate Mapping Coords. Use **Convert To > Convert to Editable Poly** in the quad menu or the base stack entry's right-click menu to bake the object. Nathan.hsx maps Ctrl+Alt+E to the same conversion. OilTank, Spindle and Capsule have Overall/Centers height options. Torus Knot has Knot/Circle base curves, winding numbers, warp, eccentricity, twist and lumps.
 
 Object Type follows Max's button order. Parameters use compact labelled fields. Prism limits impossible side lengths to a valid triangle and shows the corrected lengths in Parameters.
 
@@ -594,7 +594,7 @@ Keep Scene Upright also controls clicked views. Turn it off to carry the current
 - Rotate Transform Type-In and Gizmos Preferences use floating Blender editor windows. Their controls occupy the sidebar, and Blender supplies the frame and canvas. Absolute sub-object rotation uses the object's frame. Local sub-object Type-In exposes offsets only.
 - Rotate deliberately ignores geometry snap targets, including Max's documented ability to use a snapped point as a rotation pivot. This keeps Angle Snap independent of S.
 - Shift-drag reuses the shared cloning module when installed. The standalone fallback provides Copy, Instance, a one-way Reference geometry dependency, mesh separation/naming and Edge/Border extension. Its dialog frame and hierarchy controller options differ from the shared module.
-- Entering a sub-object level on a primitive converts it straight to Editable Poly; in Max you would add an Edit Poly modifier instead.
+- Edit Poly is still a base-mesh editing shortcut, not a non-destructive modifier. Shift+E imported from Nathan.hsx resolves to that shortcut. It cannot edit an unconverted primitive. A separate stack design is needed to retain Box beneath Edit Poly.
 - Keyboard Entry uses the existing viewport construction planes. It has no custom grid objects or AutoGrid. GeoSphere keeps Blender's icosphere tessellation.
 - Keyboard Entry uses Blender's numeric widgets and unit formatting. Spinner arrows and unit spacing differ from Max.
 - Keyboard Entry rejects equal Tube radii and a zero Torus cross-section radius rather than creating zero-thickness geometry.

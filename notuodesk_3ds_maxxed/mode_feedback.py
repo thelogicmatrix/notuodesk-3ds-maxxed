@@ -323,7 +323,15 @@ def refresh():
     if (not ctx.window_manager or not hasattr(ctx.window_manager, 'max_sublevel')
             or not hasattr(ctx, 'selected_objects')):
         return .1
-    from .operators import sync_sublevel
+    from .operators import sync_sublevel, viewport_override
+    if ctx.mode == 'EDIT_MESH' and any(
+            ob.max_prim.kind for ob in ctx.objects_in_mode_unique_data if ob.type == 'MESH'):
+        override = viewport_override(ctx)
+        if override:
+            with ctx.temp_override(**override):
+                bpy.ops.object.mode_set(mode='OBJECT')
+        elif bpy.app.background:
+            bpy.ops.object.mode_set(mode='OBJECT')
     sync_sublevel(ctx)
     for wm in bpy.data.window_managers:
         if len(wm.max_feedback_levels) != 5:
