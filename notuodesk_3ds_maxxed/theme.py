@@ -29,7 +29,6 @@ def apply(context=None):
     for owner, name, value in (
         (prefs.view, 'show_splash', False),
         (prefs.view, 'show_tooltips_python', False),
-        (prefs.view, 'show_tooltips', True),
         (prefs.view, 'show_statusbar_version', False),
         (prefs.inputs, 'use_emulate_3_button_mouse', True),
         (prefs.inputs, 'view_rotate_method', 'TURNTABLE'),
@@ -56,7 +55,7 @@ def apply(context=None):
             'grid': (.27, .27, .27),
         }.items():
             _remember(view, name, value)
-        for section in ('view_3d', 'properties', 'outliner', 'dopesheet_editor'):
+        for section in ('view_3d', 'properties', 'outliner', 'dopesheet_editor', 'topbar', 'statusbar'):
             space = getattr(theme, section, None)
             space = getattr(space, 'space', None)
             if space:
@@ -102,8 +101,10 @@ def _live_owners(context):
     yield prefs.inputs
     for palette in prefs.themes:
         yield palette.view_3d
-        for section in ('view_3d', 'properties', 'outliner', 'dopesheet_editor'):
-            yield getattr(palette, section).space
+        for section in ('view_3d', 'properties', 'outliner', 'dopesheet_editor', 'topbar', 'statusbar'):
+            section_theme = getattr(palette, section, None)
+            if section_theme:
+                yield section_theme.space
         for name in ('wcol_regular', 'wcol_tool', 'wcol_num', 'wcol_text', 'wcol_menu', 'wcol_list_item',
                      'wcol_pulldown', 'wcol_radio', 'wcol_toggle', 'wcol_tooltip'):
             yield getattr(palette.user_interface, name)

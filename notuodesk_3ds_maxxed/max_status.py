@@ -198,7 +198,11 @@ def draw(layout, context):
         field = row.row(align=True)
         field.ui_units_x = 4
         field.enabled = _writer is not None and values is not None
-        field.prop(context.window_manager, 'max_chrome_' + field_name, index=i, text=name + ':')
+        field.label(text=name + ':')
+        if values is None:
+            field.operator('max.chrome_unavailable',text=' ',emboss=True).reason = 'No transform selection'
+        else:
+            field.prop(context.window_manager, 'max_chrome_' + field_name, index=i, text='')
     row.separator()
     row.label(text=grid_text(context))
 
