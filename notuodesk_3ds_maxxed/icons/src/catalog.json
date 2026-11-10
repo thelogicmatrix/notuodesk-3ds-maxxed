@@ -3627,6 +3627,176 @@
       "spot": "toolbar",
       "note": "Drawn against supplied Max overview",
       "baseline": "manipulate"
+    },
+    {
+      "name": "status_lock",
+      "section": "chrome",
+      "idea": "status lock",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "status_lock"
+    },
+    {
+      "name": "status_absolute",
+      "section": "chrome",
+      "idea": "status absolute",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "status_absolute"
+    },
+    {
+      "name": "status_offset",
+      "section": "chrome",
+      "idea": "status offset",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "status_offset"
+    },
+    {
+      "name": "status_time_tag",
+      "section": "chrome",
+      "idea": "status time tag",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "status_time_tag"
+    },
+    {
+      "name": "time_key_mode",
+      "section": "chrome",
+      "idea": "time key mode",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "time_key_mode"
+    },
+    {
+      "name": "time_set_key",
+      "section": "chrome",
+      "idea": "time set key",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "time_set_key"
+    },
+    {
+      "name": "time_selection_list",
+      "section": "chrome",
+      "idea": "time selection list",
+      "reference": "time",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "time_selection_list"
+    },
+    {
+      "name": "nav_zoom",
+      "section": "chrome",
+      "idea": "nav zoom",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "nav_zoom"
+    },
+    {
+      "name": "nav_zoom_all",
+      "section": "chrome",
+      "idea": "nav zoom all",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "nav_zoom_all"
+    },
+    {
+      "name": "nav_extents",
+      "section": "chrome",
+      "idea": "nav extents",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "nav_extents"
+    },
+    {
+      "name": "nav_extents_all",
+      "section": "chrome",
+      "idea": "nav extents all",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "nav_extents_all"
+    },
+    {
+      "name": "nav_zoom_region",
+      "section": "chrome",
+      "idea": "nav zoom region",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "nav_zoom_region"
+    },
+    {
+      "name": "nav_pan",
+      "section": "chrome",
+      "idea": "nav pan",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "nav_pan"
+    },
+    {
+      "name": "nav_orbit",
+      "section": "chrome",
+      "idea": "nav orbit",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "nav_orbit"
+    },
+    {
+      "name": "nav_maximize",
+      "section": "chrome",
+      "idea": "nav maximize",
+      "reference": "viewport",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "nav_maximize"
+    },
+    {
+      "name": "first_frame",
+      "section": "chrome",
+      "idea": "first frame",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "first_frame"
+    },
+    {
+      "name": "last_frame",
+      "section": "chrome",
+      "idea": "last frame",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "bottom chrome",
+      "note": "Round 2 reference pack",
+      "baseline": "last_frame"
     }
   ]
 }

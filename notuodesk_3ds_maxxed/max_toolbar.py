@@ -121,8 +121,8 @@ def draw_pixels():
             _rect(left,bottom,left+width,top,(95/255,138/255,193/255,1))
         if cell['art']:
             gpu.state.blend_set('ALPHA')
-            max_icons.draw(cell['art'], left+width/2, height/2, 26*scale)
-            if cell['hold']:
+            max_icons.draw(cell['art'], left+width/2, height/2, 22*scale)
+            if cell['hold'] or cell['menu'] == 'MAX_MT_transform_center':
                 _triangle(left+width-5*scale,bottom+2*scale,3*scale,(.85,.85,.85,1))
         else:
             _rect(left+2*scale,bottom+3*scale,left+width-2*scale,top-3*scale,(.25,.25,.25,1))

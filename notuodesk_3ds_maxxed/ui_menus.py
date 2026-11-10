@@ -463,7 +463,8 @@ class MAX_OT_workspace_layer_explorer(bpy.types.Operator):
 
 
 def _menus(layout, context):
-    layout.scale_x = .92
+    layout.scale_x = 1.0
+    layout.scale_y = .8
     for route, label in MAX_MENUBAR:
         route = {'TOPBAR_MT_file': 'MAX_MT_workspace_file', 'TOPBAR_MT_help': 'MAX_MT_workspace_help'}.get(route, route)
         layout.menu(route, text=label)
@@ -543,13 +544,7 @@ def _workspace_toolbar(layout, context):
 
 
 def _workspace_status(layout, context):
-    # Native transform instructions retain precedence over idle tool prompts.
-    native = next((old for owner, name, old, _ in _drawing_adapters if owner is bpy.types.STATUSBAR_HT_header), None)
-    passive = mode_feedback.PASSIVE_MODALS | {'MAX_OT_editor_interact'}
-    if any(op and op.bl_idname not in passive
-           for op in getattr(context.window, 'modal_operators', ())):
-        if native:
-            return native(type('StatusHost', (), {'layout': layout})(), context)
+    # Modal command guidance belongs in the prompt. Never replace either Max row.
     _status_draw(layout, context)
 
 

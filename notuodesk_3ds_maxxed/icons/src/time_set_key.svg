@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<!-- Original drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
+<title>time_set_key</title>
+<g stroke-linecap="butt" stroke-linejoin="miter"><path d="M5.5 1 H9.5 V5.5 H14 V9.5 H9.5 V14 H5.5 V9.5 H1 V5.5 H5.5 Z" fill="#d2d4d5" stroke="#555" stroke-width="0.6" /><circle cx="10.5" cy="11.5" r="2" fill="none" stroke="#50b9bf" stroke-width="1.2"/><path d="M12 10 15 7 M13 9 14 10 M14 8 15 9" fill="none" stroke="#50b9bf" stroke-width="1.2" /></g>
+</svg>

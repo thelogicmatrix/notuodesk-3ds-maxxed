@@ -17,6 +17,7 @@ _explorer_layout = None
 _command_panel_layout = None
 _region_overlap = None
 _label_callbacks = None
+_height_jobs = {}
 
 
 def _label_regions(context):
@@ -34,7 +35,7 @@ def _label_regions(context):
     x, y = 4*scale, region.height-14*scale
     result = []
     for menu, caption in labels:
-        text = '['+caption+(' ' if caption != '+' else '')+']'
+        text = '['+caption+']'
         width = blf.dimensions(face, text)[0]+2*scale
         if x+width > region.width-4*scale:
             break
@@ -77,6 +78,8 @@ class MAX_OT_chrome_pointer(bpy.types.Operator):
         if not active(context):
             return {'PASS_THROUGH'}
         if max_toolbar.pointer(context, event):
+            return {'RUNNING_MODAL'}
+        if max_timeline.pointer(context, event):
             return {'RUNNING_MODAL'}
         if event.type != 'LEFTMOUSE' or event.value != 'PRESS':
             return {'PASS_THROUGH'}
@@ -132,8 +135,12 @@ def _draw_time(self, context):
 def _draw_top(self, context):
     if context.region.alignment == 'RIGHT':
         row = self.layout.row(align=True)
+        row.scale_y = .8
         row.label(text='Workspaces:')
-        row.menu('MAX_MT_chrome_layouts', text='Default')
+        combo = row.row(align=True)
+        combo.ui_units_x = 6
+        combo.operator('wm.call_menu', text='Default').name = 'MAX_MT_chrome_layouts'
+        combo.operator('wm.call_menu', text='', icon='DOWNARROW_HLT').name = 'MAX_MT_chrome_layouts'
         return
     row = self.layout.row(align=True)
     if _menus:
@@ -178,6 +185,8 @@ def _use_timeline_host(area):
         space.show_region_ui = False
         space.show_region_toolbar = False
         space.show_region_tool_header = False
+        space.show_region_header = False
+        _set(window.screen, 'show_statusbar', False)
         header = next((r for r in area.regions if r.type == 'HEADER'), None)
         if header and header.alignment != 'BOTTOM':
             with bpy.context.temp_override(region=header):
@@ -189,6 +198,97 @@ def _adopt_timelines(screen):
         if area.type == 'DOPESHEET_EDITOR' and area.spaces.active.mode == 'TIMELINE':
             _timeline_areas[area.as_pointer()] = (area, area.type, area.ui_type)
             _use_timeline_host(area)
+
+
+def _size_timeline(context):
+    """Rebuild only the bottom row with native screen operators, never move the mouse."""
+    if bpy.app.background or context.window.as_pointer() in _height_jobs:
+        return
+    window = context.window
+    screen = window.screen
+    areas = [a for a in screen.areas if timeline_area(a)]
+    if len(areas) != 1:
+        return
+    timeline = areas[0]
+    target = round(92*context.preferences.system.ui_scale)
+    if abs(timeline.height-target) <= 2:
+        return
+    # The full-width bottom row must have exactly two editors above it.
+    # Other user layouts stay intact and keep their existing host height.
+    above = sorted((a for a in screen.areas if a.y > timeline.y),key=lambda a:a.x)
+    if len(above) != 2 or any(abs(a.y-(timeline.y+timeline.height)) > 12 for a in above):
+        return
+    key = window.as_pointer()
+    state = {'phase':0}
+
+    def construct():
+        if not _installed or key not in _height_jobs:
+            return None
+        try:
+            if window.screen != screen:
+                _height_jobs.pop(key,None)
+                return None
+            with bpy.context.temp_override(window=window):
+                phase = state['phase']
+                if phase == 0:
+                    state['bottom'] = timeline.y
+                    _timeline_areas.pop(timeline.as_pointer(),None)
+                    with bpy.context.temp_override(area=timeline,region=None):
+                        bpy.ops.screen.area_close()
+                elif phase in {1,2}:
+                    area = next(a for a in screen.areas if a.y == state['bottom'] and a.height > target*2)
+                    border = max(1,round(3*bpy.context.preferences.system.ui_scale)-1)
+                    with bpy.context.temp_override(area=area,region=None):
+                        bpy.ops.screen.area_split(direction='HORIZONTAL',factor=(target+border)/area.height)
+                elif phase == 3:
+                    strips = sorted((a for a in screen.areas if a.y == state['bottom']),key=lambda a:a.x)
+                    left,right = strips
+                    with bpy.context.temp_override(area=left,region=None):
+                        bpy.ops.screen.area_join(source_xy=(left.x+left.width//2,left.y+left.height//2),
+                            target_xy=(right.x+right.width//2,right.y+right.height//2))
+                else:
+                    area = min(screen.areas,key=lambda a:a.y)
+                    _timeline_areas[area.as_pointer()] = (area,'DOPESHEET_EDITOR','TIMELINE')
+                    _use_timeline_host(area)
+                    _height_jobs.pop(key,None)
+                    return None
+            state['phase'] += 1
+            return .08
+        except (ReferenceError,RuntimeError,StopIteration,ValueError):
+            _height_jobs.pop(key,None)
+            raise
+    _height_jobs[key] = construct
+    # Finish the native screen edits inside Apply. A deferred sequence can be
+    # interrupted by Save or a second Apply while no Timeline host exists.
+    # Native maximize/restore refreshes Area's cached bounds immediately.
+    # redraw_timer alone draws but does not process the screen notifier.
+    def redraw():
+        area = next(iter(screen.areas))
+        region = next((r for r in area.regions if r.type == 'WINDOW'), None)
+        # Closing an editor invalidates the caller's area/region context.
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            bpy.ops.screen.screen_full_area(use_hide_panels=False)
+        full = window.screen.areas[0]
+        with bpy.context.temp_override(window=window, area=full, region=None):
+            bpy.ops.screen.screen_full_area(use_hide_panels=False)
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+    try:
+        redraw()
+        for _ in range(5):
+            finished = construct() is None
+            if finished:
+                break
+            redraw()
+    finally:
+        _height_jobs.pop(key,None)
+
+
+def _cancel_height_jobs():
+    for callback in tuple(_height_jobs.values()):
+        if bpy.app.timers.is_registered(callback):
+            bpy.app.timers.unregister(callback)
+    _height_jobs.clear()
 
 
 def apply_layout(context, quad=False):
@@ -205,6 +305,8 @@ def apply_layout(context, quad=False):
             continue
         if area.type == 'VIEW_3D':
             space = area.spaces.active
+            _set(space.overlay, 'show_overlays', True)
+            _set(space.overlay, 'show_floor', True)
             _set(space.overlay, 'show_text', False)
             _set(space, 'show_region_toolbar', False)
             _set(space, 'show_region_tool_header', False)
@@ -223,10 +325,12 @@ def apply_layout(context, quad=False):
         _explorer_layout(context)
     if _command_panel_layout:
         _command_panel_layout(context)
+    _size_timeline(context)
 
 
 @persistent
 def _load(_):
+    _cancel_height_jobs()
     max_toolbar.cancel_pending()
     _pointers.clear()
     _layout_changes.clear()  # Old screen references must never be restored into a new file.
@@ -248,6 +352,9 @@ def _load(_):
 def _before_save(_):
     # Save real Timeline editor types. There is no second saved time-range or
     # layout marker, and a saved file opens normally even without this add-on.
+    for owner, name, value in _layout_changes:
+        if name == 'show_statusbar':
+            owner.show_statusbar = value
     for area, original_type, original_ui in _timeline_areas.values():
         try:
             window = _area_window(area)
@@ -321,6 +428,8 @@ def install(*, feedback=None, read_transform=None, write_transform=None, command
         bpy.utils.register_class(cls)
     bpy.types.Scene.max_chrome_sets = CollectionProperty(type=max_toolbar.MAX_PG_chrome_set)
     bpy.types.WindowManager.max_chrome_offset = BoolProperty(name='Absolute / Offset', default=False, options={'SKIP_SAVE'})
+    bpy.types.WindowManager.max_chrome_key_mode = BoolProperty(name='Key Mode', default=True, options={'SKIP_SAVE'},
+        description='Previous and Next move between selected-object keys instead of single frames')
     bpy.types.WindowManager.max_chrome_crossing = BoolProperty(name='Window / Crossing', default=False, options={'SKIP_SAVE'},
         description='Crossing intersects projected object bounds. Window encloses them. Applies to rectangular object selection')
     bpy.types.WindowManager.max_chrome_filter = EnumProperty(name='Selection Filter',
@@ -368,6 +477,12 @@ def uninstall():
     global _installed, _menus, _explorer_layout, _command_panel_layout, _region_overlap, _label_callbacks
     if not _installed:
         return
+    # Complete a pending native layout sequence before restoring editor types.
+    for callback in tuple(_height_jobs.values()):
+        for _ in range(5):
+            if callback() is None:
+                break
+    _cancel_height_jobs()
     _installed = False
     if bpy.app.timers.is_registered(_start_pointers):
         bpy.app.timers.unregister(_start_pointers)
@@ -427,6 +542,7 @@ def uninstall():
     theme.restore()
     # Retain saved Scene.max_chrome_sets ID data across disable and re-enable.
     del bpy.types.WindowManager.max_chrome_offset
+    del bpy.types.WindowManager.max_chrome_key_mode
     del bpy.types.WindowManager.max_chrome_crossing
     del bpy.types.WindowManager.max_chrome_filter
     del bpy.types.WindowManager.max_chrome_set
