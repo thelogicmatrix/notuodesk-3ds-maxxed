@@ -372,7 +372,7 @@ def hier_link(layout, context):
         row.label(text=label)
         for index, axis in enumerate('XYZ'):
             row.prop(ob, prop, index=index, text=axis, toggle=False,
-                     icon='CHECKBOX_HLT' if getattr(ob, prop)[index] else 'CHECKBOX_DEHLT', emboss=False)
+                     icon='CHECKBOX_DEHLT', emboss=False)
     layout.label(text='Inherit')
     host.unavailable(layout, 'Position / Rotation / Scale')
     layout.operator('max.object_cmd', text='Unlink Selection').cmd = 'UNLINK'

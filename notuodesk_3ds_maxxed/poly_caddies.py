@@ -935,14 +935,19 @@ class Caddy:
             box(cx-r+self.scale,cy-r+self.scale,2*r-2*self.scale,2*r-2*self.scale,
                 (.77,.77,.77,1),upper=(.97,.97,.97,1))
             s=5*self.scale
-            color = (.68,.06,.02,1) if kind == 'CANCEL' else (.08,.42,.02,1)
+            color = (.72,.29,.29,1) if kind == 'CANCEL' else (.30,.52,.30,1)
             points = ([(cx-s,cy),(cx-1*self.scale,cy-4*self.scale),
                        (cx-1*self.scale,cy-4*self.scale),(cx+s,cy+4*self.scale)] if kind == 'OK' else
                       [(cx-s,cy),(cx+s,cy),(cx,cy-s),(cx,cy+s)] if kind == 'APPLY' else
                       [(cx-s,cy-s),(cx+s,cy+s),(cx-s,cy+s),(cx+s,cy-s)])
-            gpu.state.line_width_set(2*self.scale)
-            lines(points,color)
-            gpu.state.line_width_set(1)
+            # Native wide GPU lines grow differently across display densities.
+            # Explicit quads keep each stroke proportional to the same disc.
+            for a, b in zip(points[::2], points[1::2]):
+                dx, dy = b[0]-a[0], b[1]-a[1]
+                length = (dx*dx+dy*dy)**.5
+                nx, ny = -dy/length*.85*self.scale, dx/length*.85*self.scale
+                polygon([(a[0]+nx,a[1]+ny), (b[0]+nx,b[1]+ny),
+                         (b[0]-nx,b[1]-ny), (a[0]-nx,a[1]-ny)],color)
         tip = tooltip(self.session,self.hover) if self.hover in self.keys else ''
         if tip:
             text(x,y-16*self.scale,tip,size=10)
