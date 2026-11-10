@@ -28,7 +28,10 @@ SUBLEVEL_NAMES = dict(enumerate(('vertex', 'edge', 'border', 'polygon', 'element
 EP_LABELS = {key: label for key, label, _ in operators.EDIT_POLY_OPS}
 ROLLOUTS = []
 BASE_NAMES = {'MESH': 'Editable Poly', 'CURVE': 'Editable Spline', 'FONT': 'Text',
-              'LIGHT': 'Light', 'CAMERA': 'Camera', 'EMPTY': 'Dummy', 'LATTICE': 'FFD'}
+              'SURFACE': 'NURBS Surface', 'LIGHT': 'Light', 'CAMERA': 'Camera',
+              'EMPTY': 'Dummy', 'ARMATURE': 'Bones', 'META': 'Blob Mesh',
+              'LATTICE': 'FFD', 'GREASEPENCIL': 'Grease Pencil', 'CURVES': 'Hair',
+              'POINTCLOUD': 'Point Cloud', 'VOLUME': 'Volume'}
 SKIP_PROPS = set()
 MELT_PRESETS = [('Ice', 2.), ('Glass', .5), ('Jelly', .4), ('Plastic', .1)]
 
