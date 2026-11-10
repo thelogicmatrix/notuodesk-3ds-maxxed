@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>Select and Uniform Scale</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<g transform="scale(.5)"><title>Select and Uniform Scale</title>
 <desc>Nested dashed cyan regions around a small lower-left square.</desc>
 <path d="M3 4 H28 V28 M3 13 H20 V28" stroke="#50b9bf" stroke-width="2" stroke-dasharray="5 3" fill="none"/>
 <rect x="3" y="19" width="10" height="10" fill="#cbd0d4" stroke="#8b9094" stroke-width="1"/>
+</g>
 </svg>

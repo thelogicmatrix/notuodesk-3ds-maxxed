@@ -271,7 +271,7 @@
     {
       "name": "scale",
       "section": "toolbar",
-      "idea": "Small solid square expanding into dashed square",
+      "idea": "Nested dashed cyan regions and lower-left solid square",
       "reference": "toolbar",
       "presentation": "icon-only",
       "spot": "toolbar",
@@ -351,7 +351,7 @@
     {
       "name": "angle_snap",
       "section": "toolbar",
-      "idea": "Open angle with an arc and tilted gold magnet",
+      "idea": "Square angle with quarter-circle arc and gold magnet",
       "reference": "toolbar",
       "presentation": "icon-only",
       "spot": "toolbar",
@@ -3607,6 +3607,26 @@
       "spot": "Grid and Snap Settings",
       "note": "",
       "baseline": null
+    },
+    {
+      "name": "shortcut_override",
+      "section": "toolbar",
+      "idea": "Raised key and upward override arrow",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "Drawn against supplied Max overview",
+      "baseline": "shortcut_override"
+    },
+    {
+      "name": "manipulate",
+      "section": "toolbar",
+      "idea": "Screen axes with three white handles and cyan top square",
+      "reference": "toolbar",
+      "presentation": "icon-only",
+      "spot": "toolbar",
+      "note": "Drawn against supplied Max overview",
+      "baseline": "manipulate"
     }
   ]
 }

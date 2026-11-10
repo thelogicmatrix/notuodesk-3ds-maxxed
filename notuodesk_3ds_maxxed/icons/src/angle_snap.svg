@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<title>Angle Snap Toggle</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<g transform="scale(.5)"><title>Angle Snap Toggle</title>
 <desc>Square angle, quarter-circle marker and tilted gold magnet.</desc>
 <path d="M5 5 V27 H26 M5 15 A12 12 0 0 1 17 27" stroke="#cbd0d4" stroke-width="3" fill="none"/>
 <path d="M15 11 20 6 Q26 1 29 6 Q32 10 27 15 L23 19" fill="none" stroke="#efb83d" stroke-width="3"/>
 <path d="M14 12 17 9 M22 20 25 17" stroke="#cbd0d4" stroke-width="3"/>
+</g>
 </svg>
