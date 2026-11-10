@@ -44,13 +44,35 @@ class MaterialTests(unittest.TestCase):
         physical.coating = .8
         physical.coat_roughness = .2
         node = mtl.shader(self.material)
-        self.assertAlmostEqual(node.inputs['Base Color'].default_value[2], .3)
+        adapter = node.inputs['Base Color'].links[0].from_node
+        self.assertEqual(adapter.blend_type, 'MULTIPLY')
+        self.assertAlmostEqual(adapter.inputs[1].default_value[2]*adapter.inputs[2].default_value[2], .3)
         for name, value in [('Roughness', .3), ('Metallic', .7),
                             ('Transmission Weight', .4), ('Coat Weight', .8), ('Coat Roughness', .2)]:
             self.assertAlmostEqual(node.inputs[name].default_value, value)
         copy = self.material.copy()
         copy.max_physical.base_weight = .9
         self.assertAlmostEqual(self.material.max_physical.base_weight, .5)
+
+    def test_physical_weight_multiplies_loaded_base_map_in_either_edit_order(self):
+        image = bpy.data.images.new('Weighted base fixture', width=4, height=4)
+        for weight_first in (True, False):
+            material = mtl.new_default_material(40)
+            if weight_first:
+                material.max_physical.base_weight = .4
+            texture = mtl.set_map(mat=material, channel='DIFFUSE', image=image)
+            if not weight_first:
+                material.max_physical.base_weight = .4
+            base = mtl.shader(material).inputs['Base Color'].links[0].from_node
+            self.assertEqual(base.blend_type, 'MULTIPLY')
+            amount = base.inputs[1].links[0].from_node
+            self.assertEqual(amount.inputs[2].links[0].from_node, texture)
+            self.assertAlmostEqual(base.inputs[2].default_value[0], .4)
+            material.max_physical.base_color = (.2, .3, .4)
+            self.assertAlmostEqual(amount.inputs[1].default_value[0], .2)
+            mtl.set_map_enabled(material, 'DIFFUSE', False)
+            self.assertEqual(amount.inputs[0].default_value, 0)
+            self.assertAlmostEqual(base.inputs[2].default_value[0], .4)
 
     def test_initial_slots_and_every_grid_preserve_saved_extras(self):
         editor = mtl.state(self.context)
@@ -267,6 +289,9 @@ class MaterialTests(unittest.TestCase):
         mtl.set_map(self.material, 'DIFFUSE', image)
         mtl.set_map_enabled(self.material, 'DIFFUSE', False)
         self.material.max_glossiness = 61
+        self.material.max_physical.base_weight = .7
+        self.material.max_physical.transparency = .3
+        self.material.max_physical.coating = .2
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / 'materials.blend')
             self.assertEqual(bpy.ops.max.mtl_put_library(filepath=path), {'FINISHED'})
@@ -277,6 +302,9 @@ class MaterialTests(unittest.TestCase):
             restored = target.materials[0]
             self.assertEqual(restored.max_glossiness, 61)
             self.assertEqual(mtl.map_badge(restored, 'DIFFUSE'), 'm')
+            self.assertAlmostEqual(restored.max_physical.base_weight, .7)
+            self.assertAlmostEqual(restored.max_physical.transparency, .3)
+            self.assertAlmostEqual(restored.max_physical.coating, .2)
 
     def test_ordinary_material_classification_is_read_only(self):
         material = bpy.data.materials.new('Unclassified')

@@ -96,7 +96,13 @@ def _native_frame(host, handles):
     if host.kind == 'MATERIAL':
         scale = bpy.context.preferences.view.ui_scale
         # Compact is a portrait editor. This is its opening size, not a test override.
-        user32.SetWindowPos(handle, None, 0, 0, round(499*scale), round(836*scale), 0x16)
+        outer, client = wintypes.RECT(), wintypes.RECT()
+        user32.GetWindowRect(handle, ctypes.byref(outer))
+        user32.GetClientRect(handle, ctypes.byref(client))
+        frame_width = outer.right-outer.left-client.right+client.left
+        frame_height = outer.bottom-outer.top-client.bottom+client.top
+        user32.SetWindowPos(handle, None, 0, 0, round(477*scale)+frame_width,
+                           round(780*scale)+frame_height, 0x16)
 
 
 def register_material_adapter(open_callback=None):

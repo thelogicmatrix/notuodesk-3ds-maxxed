@@ -92,6 +92,11 @@ def _socket_write(material, name, value):
     node = shader(material, create=True)
     if node and name in node.inputs:
         node.inputs[name].default_value = value
+        if name == 'Base Color':
+            adapter = material.node_tree.nodes.get('MaxPhysical_BaseWeight')
+            if adapter:
+                _set_base_fallback(adapter, value)
+                material.max_physical['base_color'] = tuple(value[:3])
         material.update_tag()
         invalidate_preview(material)
 
@@ -229,13 +234,47 @@ def _base_color_get(self):
 
 def _base_color_set(self, value):
     self['base_color'] = tuple(value)
-    _diffuse_set(self.id_data, tuple(v * self.base_weight for v in value))
+    _apply_base_weight(self)
 
 
 def _base_weight_set(self, value):
     color = _base_color_get(self)
     self['base_weight'] = value
-    _base_color_set(self, color)
+    self['base_color'] = color
+    _apply_base_weight(self)
+
+
+def _apply_base_weight(self):
+    material = self.id_data
+    node = shader(material, create=True)
+    if node is None or material.library:
+        return
+    tree = material.node_tree
+    destination = node.inputs['Base Color']
+    adapter = tree.nodes.get('MaxPhysical_BaseWeight')
+    if adapter is None:
+        adapter = tree.nodes.new('ShaderNodeMixRGB')
+        adapter.name = 'MaxPhysical_BaseWeight'
+        adapter.label = 'Physical Base Weight'
+        adapter.blend_type = 'MULTIPLY'
+        adapter.inputs[0].default_value = 1
+        if destination.is_linked:
+            tree.links.new(destination.links[0].from_socket, adapter.inputs[1])
+        tree.links.new(adapter.outputs[0], destination)
+    color = _base_color_get(self)
+    destination.default_value = (*color, 1)
+    _set_base_fallback(adapter, (*color, 1))
+    adapter.inputs[2].default_value = (self.base_weight, self.base_weight, self.base_weight, 1)
+    material.diffuse_color = (*(v*self.base_weight for v in color), material.diffuse_color[3])
+    invalidate_preview(material)
+
+
+def _set_base_fallback(adapter, color):
+    adapter.inputs[1].default_value = color
+    if adapter.inputs[1].is_linked:
+        source = adapter.inputs[1].links[0].from_node
+        if source.name == MAP_PREFIX+'DIFFUSE_Amount' and not source.inputs[1].is_linked:
+            source.inputs[1].default_value = color
 
 
 class MaxPhysicalMaterial(bpy.types.PropertyGroup):
@@ -409,6 +448,9 @@ def set_map(mat, channel, image):
     socket_name = _all_map_info[channel][1]
     if node and socket_name and socket_name in node.inputs:
         destination = node.inputs[socket_name]
+        weight = tree.nodes.get('MaxPhysical_BaseWeight')
+        if channel == 'DIFFUSE' and weight:
+            destination = weight.inputs[1]
         mix = _map_mix(material, channel)
         if mix is None:
             mix = tree.nodes.new('ShaderNodeMixRGB')
@@ -603,6 +645,9 @@ class MAX_OT_mtl_reset(bpy.types.Operator):
                 material.max_std.property_unset(field.identifier)
         _standard_update(material.max_std, context)
         _shader_update(material.max_std, context)
+        adapter = material.node_tree.nodes.get('MaxPhysical_BaseWeight') if material.node_tree else None
+        if adapter:
+            adapter.inputs[2].default_value = (1, 1, 1, 1)
         if material_kind(material) == 'PHYSICAL':
             material.max_physical.base_weight = 1
             material.max_physical.base_color = (.5, .5, .5)
@@ -1339,15 +1384,16 @@ def _tool_icon(key, x, y, s, enabled=True):
     def arrow(cx, cy, direction='DOWN', color=aqua):
         _triangle(x+cx*s, y+cy*s, .6*s, direction, color)
     def checker(cx, cy, radius=6):
-        circle(cx, cy, radius, aqua, True)
+        circle(cx, cy, radius, (.75, .75, .75, 1) if enabled else (.25, .25, .25, 1), True)
         for row in range(-2, 3):
             for col in range(-2, 3):
                 if (row+col) % 2 and col*col+row*row < 6:
-                    box(cx+col*2-1, cy+row*2-1, 2, 2, dark)
-        circle(cx, cy, radius, ink)
+                    box(cx+col*2.5-1.25, cy+row*2.5-1.25, 2.5, 2.5, (.28, .28, .28, 1) if enabled else dark)
+        circle(cx, cy, radius, dark)
     if key in {'sample', 'viewport', 'background'}:
         if key != 'sample':
-            box(3, 3, 16, 16, dark)
+            box(2, 2, 18, 18, dark)
+            box(3, 3, 16, 16, aqua if key == 'background' else ink)
         if key in {'viewport', 'background'}:
             checker(11, 11, 7)
         else:
@@ -1381,12 +1427,13 @@ def _tool_icon(key, x, y, s, enabled=True):
         line((18, 14), (18, 8))
         arrow(10, 7, color=(.95, .72, .26, 1) if enabled else ink)
     elif key == 'options':
-        for cx, cy, radius in [(8, 13, 5), (15, 7, 4)]:
-            circle(cx, cy, radius, ink if cx == 8 else (.88, .67, .18, 1))
-            for i in range(8):
-                angle = i*math.tau/8
-                line((cx+(radius-1)*math.cos(angle), cy+(radius-1)*math.sin(angle)),
-                     (cx+(radius+2)*math.cos(angle), cy+(radius+2)*math.sin(angle)))
+        checker(8, 14, 6)
+        cx, cy, radius = 16, 6, 4
+        circle(cx, cy, radius, (.88, .67, .18, 1))
+        for i in range(8):
+            angle = i*math.tau/8
+            line((cx+(radius-1)*math.cos(angle), cy+(radius-1)*math.sin(angle)),
+                 (cx+(radius+2)*math.cos(angle), cy+(radius+2)*math.sin(angle)), (.88, .67, .18, 1))
     elif key == 'navigator':
         for row in range(2):
             cy = 6+row*9
@@ -1394,9 +1441,10 @@ def _tool_icon(key, x, y, s, enabled=True):
             line((5, cy+2), (9, cy-2))
             line((12, cy), (20, cy))
     elif key == 'select':
-        circle(7, 14, 5)
-        circle(15, 10, 5)
-        _polygon([(x+12*s, y+4*s), (x+11*s, y+14*s), (x+20*s, y+7*s)], ink)
+        checker(9, 14, 7)
+        _polygon([(x+15*s, y+2*s), (x+12*s, y+13*s), (x+21*s, y+7*s)], dark)
+        for a, b in [((15, 2), (12, 13)), ((12, 13), (21, 7)), ((21, 7), (17, 6)), ((17, 6), (15, 2))]:
+            line(a, b)
     elif key == 'get':
         for row in range(2):
             for col in range(2):
@@ -1875,7 +1923,7 @@ def draw_host(host, context, width, height, scale):
     positions = (7, 35, 75, 111, 148, 185, 225, 265, 302, 341, 370, 398)
     for position, (key, label, operator) in zip(positions, COMPACT_TOOLS):
         action = _invoke(operator) if operator else None
-        if key == 'unique' and (not material or material.users < 2):
+        if key in {'copy', 'unique'} and (not material or material.users < 2):
             action = None
         if key == 'assign' and not context.selected_objects:
             action = None
