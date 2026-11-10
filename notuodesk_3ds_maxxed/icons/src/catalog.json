@@ -2,6 +2,10 @@
   "version": 1,
   "phase": "integrated",
   "references": {
+    "snap_types": {
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-C18F1E36-4FFC-43CF-A811-0ED6D5545C40.htm",
+      "evidence": "Standard Snaps toolbar imagery, not viewport markers"
+    },
     "toolbar": {
       "url": "https://help.autodesk.com/cloudhelp/2026/ENU/3DSMax-Basics/files/GUID-D60DB151-D25D-498D-AF02-410D4237A140.htm",
       "evidence": "references/toolbar-*.png"
@@ -2840,6 +2844,126 @@
       "presentation": "icon-only",
       "spot": "Symmetry Align to Face",
       "note": "Reference symmetry-04.png is an icon button.",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_grid_points",
+      "section": "snaps",
+      "idea": "Grid intersections",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_grid_lines",
+      "section": "snaps",
+      "idea": "Highlighted grid line",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_pivot",
+      "section": "snaps",
+      "idea": "Object pivot tripod",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_bounding_box",
+      "section": "snaps",
+      "idea": "Bounding-box corners",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_perpendicular",
+      "section": "snaps",
+      "idea": "Perpendicular foot",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_tangent",
+      "section": "snaps",
+      "idea": "Circle with tangent",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_vertex",
+      "section": "snaps",
+      "idea": "Mesh corner vertices",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_endpoint",
+      "section": "snaps",
+      "idea": "Edge endpoint",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_edge",
+      "section": "snaps",
+      "idea": "Highlighted edge segment",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_midpoint",
+      "section": "snaps",
+      "idea": "Edge midpoint",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_face",
+      "section": "snaps",
+      "idea": "Face surface",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
+      "baseline": null
+    },
+    {
+      "name": "snap_type_center_face",
+      "section": "snaps",
+      "idea": "Triangular face centre",
+      "reference": "snap_types",
+      "presentation": "icon plus text",
+      "spot": "Grid and Snap Settings",
+      "note": "",
       "baseline": null
     }
   ]

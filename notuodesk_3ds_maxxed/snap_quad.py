@@ -27,12 +27,12 @@ class MAX_OT_snap_quad(bpy.types.Operator):
         self.submenu = False
         self.mouse = (-1, -1)
         self.scale = context.preferences.system.ui_scale
-        self.row = 24 * self.scale
-        self.width = 240 * self.scale
-        self.left = max(0, min(event.mouse_x - self.region.x, self.region.width - 2 * self.width))
-        self.top = min(self.region.height - 8, max(13 * self.row + 8, event.mouse_y - self.region.y + self.row))
-        self.subleft = self.left + 2 * self.width if self.left + 3 * self.width <= self.region.width else max(0, self.left - self.width)
-        self.subtop = min(self.region.height - 8, max(12 * self.row + 8, self.top - self.row))
+        self.row = 16 * self.scale
+        self.width = 165 * self.scale
+        self.left = max(1, min(event.mouse_x - self.region.x, self.region.width - 264*self.scale-1))
+        self.top = min(self.region.height-1, max(194*self.scale+1, event.mouse_y-self.region.y+19*self.scale))
+        self.subleft = self.left+245*self.scale if self.left+405*self.scale < self.region.width else max(1,self.left-160*self.scale)
+        self.subtop = self.top-16*self.scale
         self.handle = bpy.types.SpaceView3D.draw_handler_add(self.paint, (), "WINDOW", "POST_PIXEL")
         _instances.append(self)
         snaps._quad_open = True
@@ -43,30 +43,36 @@ class MAX_OT_snap_quad(bpy.types.Operator):
     def entries(self):
         from . import snaps
         s = snaps.settings(bpy.context)
+        # x, y, width, height, key, caption, enabled, header, submenu
         return [
-            (0, 0, "settings", "Grid and Snap Settings...", True),
-            (0, 1, "snap_frozen", "Snaps To Frozen Objects", True),
-            (0, 2, "axis_constraints", "Snaps Use Axis Constraints", True),
-            (0, 3, "label", "snap options", False),
-            (1, 0, "label", "NURBS (not available)", False),
-            (1, 1, "standard", "Standard >", True),
-            (1, 2, "OFF", "None", bpy.context.scene.tool_settings.use_snap),
-            (1, 3, "LAST", "Last: " + dict(snaps.TYPES).get(s.last_override, "None"), s.last_override != "NONE"),
-            (1, 4, "label", "snap override", False),
-            (1, 6, "label", "snap toggles", False),
-        ] + [(1, i + 7, k, dict(snaps.TYPES)[k], True)
-             for i, k in enumerate(("grid_points", "pivot", "vertex", "midpoint", "edge", "face"))]
+            (0,19,165,16,'settings','Grid and Snap Settings...',True,False,False),
+            (0,35,165,16,'snap_frozen','Snaps To Frozen Objects',True,False,False),
+            (0,51,165,17,'axis_constraints','Snaps Use Axis Constraints',True,False,False),
+            (0,68,165,15,'options_header','snap options',False,True,False),
+            (165,0,79,18,'nurbs','NURBS',False,False,True),
+            (165,18,79,17,'standard','Standard',True,False,True),
+            (165,35,79,16,'OFF','None',bpy.context.scene.tool_settings.use_snap,False,False),
+            (165,51,79,17,'LAST',dict(snaps.TYPES).get(s.last_override,'Last'),s.last_override!='NONE',False,False),
+            (165,68,79,15,'override_header','snap override',False,True,False),
+            (165,83,99,15,'toggles_header','snap toggles',False,True,False),
+        ] + [(165,98+i*16,99,16,k,dict(snaps.TYPES)[k],True,False,False)
+             for i,k in enumerate(('grid_points','pivot','vertex','midpoint','edge','face'))]
+
+    def action_center(self, key):
+        x,y,w,h,*_ = next(row for row in self.entries() if row[4] == key)
+        return self.left+(x+w/2)*self.scale, self.top-(y+h/2)*self.scale
 
     def hit(self, x, y):
         from . import snaps
-        if self.submenu and self.subleft <= x < self.subleft + self.width:
-            index = int((self.subtop - y) // self.row)
+        if self.submenu and self.subleft <= x < self.subleft+160*self.scale:
+            index = int((self.subtop-y)//self.row)
             if 0 <= index < len(snaps.TYPES) and y <= self.subtop:
-                k, _ = snaps.TYPES[index]
-                return ("override", k) if k != "tangent" else None
-        for col, row, key, label, enabled in self.entries():
-            if enabled and self.left + col * self.width <= x < self.left + (col + 1) * self.width and self.top - (row + 1) * self.row <= y < self.top - row * self.row:
-                return ("action", key)
+                k,_ = snaps.TYPES[index]
+                return ('override',k) if k != 'tangent' else None
+        lx, ly = (x-self.left)/self.scale, (self.top-y)/self.scale
+        for xx, yy, w, h, key, label, enabled, header, arrow in self.entries():
+            if enabled and xx <= lx < xx+w and yy <= ly < yy+h:
+                return ('action',key)
         return None
 
     def close(self):
@@ -126,55 +132,24 @@ class MAX_OT_snap_quad(bpy.types.Operator):
     def paint(self):
         if self.closed or bpy.context.region.as_pointer() != self.region.as_pointer():
             return
-        import blf
         import gpu
-        from gpu_extras.batch import batch_for_shader
         from . import snaps
-        theme = bpy.context.preferences.themes[0].user_interface.wcol_menu
-        shader = gpu.shader.from_builtin("UNIFORM_COLOR")
-
-        def rect(x, y, w, h, color):
-            shader.bind()
-            shader.uniform_float("color", tuple(color[:3]) + (1,))
-            batch_for_shader(shader, "TRIS", {"pos": ((x,y),(x+w,y),(x+w,y-h),(x,y),(x+w,y-h),(x,y-h))}).draw(shader)
-
-        def text(x, y, label, enabled=True):
-            values = theme.text[:3]
-            color = tuple(c / 255 for c in values) if max(values) > 1 else tuple(values)
-            blf.size(0, int(12 * self.scale))
-            blf.color(0, *(color if enabled else tuple(c * .5 for c in color)), 1)
-            blf.position(0, x + 8 * self.scale, y - 17 * self.scale, 0)
-            blf.draw(0, label)
-
-        gpu.state.blend_set("ALPHA")
+        from .max_ui_draw import Canvas, EDGE
+        gpu.state.blend_set('ALPHA')
+        c = Canvas(self.left,self.top,self.scale,'arial')
         s = snaps.settings(bpy.context)
-        for col, height in ((0, 4), (1, 13)):
-            rect(self.left + col*self.width, self.top, self.width, height*self.row, theme.inner)
         hover = self.hit(*self.mouse)
-        for col, row, key, label, enabled in self.entries():
-            x, y = self.left + col*self.width, self.top - row*self.row
-            if hover == ("action", key):
-                rect(x, y, self.width, self.row, theme.inner_sel)
-            if key in {"snap_frozen", "axis_constraints", "grid_points", "pivot", "vertex", "midpoint", "edge", "face"}:
-                size = 12 * self.scale
-                bx, by = x + 7 * self.scale, y - 6 * self.scale
-                rect(bx, by, size, size, theme.outline)
-                rect(bx + self.scale, by - self.scale, size - 2*self.scale, size - 2*self.scale, theme.inner)
-                if getattr(s, key):
-                    shader.bind()
-                    values = theme.text[:3]
-                    color = tuple(c / 255 for c in values) if max(values) > 1 else tuple(values)
-                    shader.uniform_float("color", color + (1,))
-                    points = ((bx+2*self.scale,by-6*self.scale),(bx+5*self.scale,by-9*self.scale),
-                              (bx+5*self.scale,by-9*self.scale),(bx+10*self.scale,by-3*self.scale))
-                    batch_for_shader(shader, "LINES", {"pos": points}).draw(shader)
-                x += 20 * self.scale
-            text(x, y, label, enabled)
+        toggles = {'snap_frozen','axis_constraints','grid_points','pivot','vertex','midpoint','edge','face'}
+        for x,y,w,h,key,label,enabled,header,arrow in self.entries():
+            c.menu_row(x,y,w,label,enabled=enabled,header=header,arrow=arrow,
+                       checked=key in toggles and getattr(s,key),hover=hover==('action',key),height=h,
+                       align='LEFT' if key=='options_header' else 'CENTER' if x==0 else None)
+        for x,y,w,h in ((0,19,165,64),(165,0,79,83),(165,83,99,111)):
+            c.border(x,y,w,h,EDGE)
+        c.rect(165,35,79,1,EDGE)
         if self.submenu:
-            rect(self.subleft, self.subtop, self.width, len(snaps.TYPES)*self.row, theme.inner)
-            for i, (key, label) in enumerate(snaps.TYPES):
-                y = self.subtop - i*self.row
-                if hover == ("override", key):
-                    rect(self.subleft, y, self.width, self.row, theme.inner_sel)
-                text(self.subleft, y, label, key != "tangent")
-        gpu.state.blend_set("NONE")
+            c = Canvas(self.subleft,self.subtop,self.scale,'arial')
+            for i,(key,label) in enumerate(snaps.TYPES):
+                c.menu_row(0,i*16,160,label,enabled=key!='tangent',hover=hover==('override',key))
+            c.border(0,0,160,len(snaps.TYPES)*16)
+        gpu.state.blend_set('NONE')

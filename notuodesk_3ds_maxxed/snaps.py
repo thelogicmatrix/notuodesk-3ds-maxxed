@@ -397,40 +397,8 @@ def _draw():
     s = settings(context)
     if not s.marker:
         return
-    import blf
-    import gpu
-    from gpu_extras.batch import batch_for_shader
-    shader = gpu.shader.from_builtin("UNIFORM_COLOR")
-    lines = []
-    target = hit[0] if hit else raw
-    p = _screen(region, context.region_data, target)
-    b = _screen(region, context.region_data, base) if base is not None else None
-    size = s.marker_size * .5
-    if hit and p is not None:
-        x, y = p
-        kind = hit[1]
-        if kind in {"vertex", "endpoint", "pivot", "center_face"}:
-            pts = [(x + size * math.cos(i * math.tau / 16), y + size * math.sin(i * math.tau / 16)) for i in range(17)]
-            lines.extend(q for i in range(16) for q in (pts[i], pts[i + 1]))
-        else:
-            lines.extend(((x - size, y), (x + size, y), (x, y - size), (x, y + size)))
-        blf.size(0, 11)
-        blf.color(0, 0, 1, 1, 1)
-        blf.position(0, x + size + 5, y + size + 4, 0)
-        blf.draw(0, dict(TYPES).get(kind, kind))
-    if b is not None and p is not None and s.rubber_band:
-        lines.extend((tuple(b), tuple(p)))
-        x, y = b
-        pts = [(x + size * math.cos(i * math.tau / 16), y + size * math.sin(i * math.tau / 16)) for i in range(17)]
-        lines.extend(q for i in range(16) for q in (pts[i], pts[i + 1]))
-    if lines:
-        gpu.state.blend_set("ALPHA")
-        gpu.state.line_width_set(1.5)
-        shader.bind()
-        shader.uniform_float("color", (0, 1, 1, 1))
-        batch_for_shader(shader, "LINES", {"pos": lines}).draw(shader)
-        gpu.state.line_width_set(1)
-        gpu.state.blend_set("NONE")
+    from . import snap_markers
+    snap_markers.draw(context, hit, base, raw)
 
 
 def spinner_params(params, context):
@@ -468,6 +436,9 @@ def _load_settings(_unused=None):
     global _guard_generation
     from . import snap_quad
     snap_quad.close_all()
+    from . import snap_settings_ui, snap_flyout
+    snap_settings_ui.close_all()
+    snap_flyout.close_all()
     _guard_generation += 1
     _button_guards.clear()
     clear_preview()
@@ -501,8 +472,8 @@ def draw_settings(layout, context, tab):
             for k, name in column:
                 r = col.row()
                 r.enabled = k != "tangent"
-                r.prop(s, k, text=name)
-        layout.label(text="Tangent requires analytic spline support", icon="INFO")
+                from . import max_icons
+                r.prop(s, k, text=name, **max_icons.ui("snap_type_"+k,"NONE"))
         layout.label(text="Override OFF" if s.override == "NONE" else "Override: " + dict(TYPES).get(s.override, "None"))
         layout.operator("max.snap_clear", text="Clear All")
     elif tab == "OPTIONS":
@@ -523,11 +494,9 @@ def draw_settings(layout, context, tab):
         box.enabled = False
         box.label(text="Shape Creation")
         box.prop(s, "shape_angle")
-        layout.label(text="Shape angle constraints require the Line tool integration", icon="INFO")
         box = layout.box()
         box.label(text="Spinner Snap")
         _field(box, s, "spinner_increment")
-        box.label(text="Primitive parameter fields only", icon="INFO")
     elif tab == "HOME":
         box = layout.box()
         box.label(text="Grid Dimensions")
@@ -546,8 +515,6 @@ def draw_settings(layout, context, tab):
             row.emboss = "NONE"
             row.prop_enum(s, "grid_update", value, text=label,
                           icon="RADIOBUT_ON" if s.grid_update == value else "RADIOBUT_OFF")
-        layout.label(text="Blender controls visible grid extent and subdivision", icon="INFO")
-        layout.label(text="Grid changes update all viewports immediately", icon="INFO")
     else:
         box = layout.box()
         box.enabled = False
@@ -560,7 +527,6 @@ def draw_settings(layout, context, tab):
             box.emboss = "NONE"
             box.prop_enum(s, "autogrid_space", value, text=label,
                           icon="RADIOBUT_ON" if s.autogrid_space == value else "RADIOBUT_OFF")
-        layout.label(text="User grid helpers and AutoGrid are not available", icon="INFO")
 
 
 class MAX_OT_snap_settings(bpy.types.Operator):
@@ -573,46 +539,20 @@ class MAX_OT_snap_settings(bpy.types.Operator):
         global _quad_open
         _quad_open = False
         settings(context).tab = self.tab
+        from . import snap_settings_ui
         live = {w.as_pointer() for w in context.window_manager.windows}
         _settings_windows.intersection_update(live)
-        if _settings_windows:
+        if context.window.as_pointer() in snap_settings_ui._dialogs:
             _redraw(context)
             return {"FINISHED"}
-        # Reuse the native floating preferences window for its usable initial
-        # size, then replace its contents with a dedicated editor sidebar.
-        existing = next(((w, a) for w in context.window_manager.windows for a in w.screen.areas
-                         if a.type == "PREFERENCES"), None)
-        if existing:
-            w, a = existing
-            with context.temp_override(window=w, area=a, region=next(r for r in a.regions if r.type == "WINDOW")):
-                bpy.ops.screen.area_dupli("INVOKE_DEFAULT")
-        else:
-            bpy.ops.screen.userpref_show("INVOKE_DEFAULT")
-        window = next((w for w in context.window_manager.windows if w.as_pointer() not in live), None)
-        if window is None:
+        area=context.area if context.area and context.area.type=="VIEW_3D" else next(
+            (a for a in context.window.screen.areas if a.type=="VIEW_3D"),None)
+        if area is None:
             return {"CANCELLED"}
-        _settings_windows.add(window.as_pointer())
-        area = window.screen.areas[0]
-        area.type = "NODE_EDITOR"
-        space = area.spaces.active
-        space.tree_type = "ShaderNodeTree"
-        space.pin = True
-        space.show_region_ui = True
-        space.show_region_toolbar = False
-        space.show_region_header = False
-
-        def activate():
-            try:
-                if window.as_pointer() not in _settings_windows or area.spaces.active is None:
-                    return
-                # The duplicated area finishes initializing on the next redraw.
-                area.spaces.active.show_region_ui = True
-                area.spaces.active.show_region_toolbar = False
-                area.spaces.active.show_region_header = False
-                area.tag_redraw()
-            except ReferenceError:
-                pass
-        bpy.app.timers.register(activate, first_interval=.1)
+        region=next(r for r in area.regions if r.type=="WINDOW")
+        _settings_windows.add(context.window.as_pointer())
+        with context.temp_override(area=area,region=region):
+            bpy.ops.max.snap_settings_events("INVOKE_DEFAULT")
         return {"FINISHED"}
 
     def execute(self, context):
@@ -646,10 +586,15 @@ class MAX_OT_snap_settings_close(bpy.types.Operator):
     bl_label = "Close Grid and Snap Settings"
 
     def execute(self, context):
+        from . import snap_settings_ui
+        dialog = snap_settings_ui._dialogs.get(context.window.as_pointer())
+        if dialog:
+            dialog.commit(context)
+            dialog.close()
         _settings_windows.discard(context.window.as_pointer())
         if context.preferences.use_preferences_save:
             bpy.ops.wm.save_userpref()
-        bpy.ops.wm.window_close()
+        _redraw(context)
         return {"FINISHED"}
 
 
@@ -711,6 +656,7 @@ class MAX_MT_snap_standard(bpy.types.Menu):
 
 
 from .snap_quad import MAX_OT_snap_quad
+from .snap_settings_ui import MAX_OT_snap_settings_events
 
 
 def override_event(operator, context, event, *, dragging=True):
@@ -740,9 +686,27 @@ class MAX_MT_snap_modes(bpy.types.Menu):
     bl_label = "Snaps Toggle"
 
     def draw(self, context):
-        self.layout.prop_enum(settings(context), "mode", "2D")
-        self.layout.prop_enum(settings(context), "mode", "2_5D")
-        self.layout.prop_enum(settings(context), "mode", "3D")
+        from . import max_icons
+        self.layout.ui_units_x=1.6
+        self.layout.scale_y=1.4
+        for mode,label,art in (("2D","2D","snap_2d"),("2_5D","2.5D","snap_25d"),("3D","3D","snap_3d")):
+            op = self.layout.operator("max.snap_mode",text="",**max_icons.ui(art,"SNAP_ON"))
+            op.mode=mode
+
+
+class MAX_OT_snap_mode(bpy.types.Operator):
+    bl_idname="max.snap_mode"
+    bl_label="Snaps Toggle Mode"
+    mode: EnumProperty(items=MODES)
+
+    @classmethod
+    def description(cls,context,properties):
+        return dict((key,label) for key,label,_ in MODES)[properties.mode]+" Snaps Toggle"
+
+    def execute(self,context):
+        settings(context).mode=self.mode
+        _redraw(context)
+        return {"FINISHED"}
 
 
 def _tool(context):
@@ -881,10 +845,14 @@ class MAX_OT_snap_toggle(bpy.types.Operator):
 
     @classmethod
     def description(cls, context, properties):
+        destination = "Preference Settings > General > Spinners" if properties.kind == "SPINNER_SNAP" else "Grid and Snap Settings"
         return dict(SNAP="Snaps Toggle (S)", ANGLE_SNAP="Angle Snap Toggle (A)",
                     PERCENT_SNAP="Percent Snap Toggle (Ctrl+Shift+P)",
                     SPINNER_SNAP="Spinner Snap Toggle",
-                    AXIS_CONSTRAINTS="Enable Axis Constraints in Snaps Toggle (Alt+F3)")[properties.kind] + ". Right-click for Grid and Snap Settings"
+                    AXIS_CONSTRAINTS="Enable Axis Constraints in Snaps Toggle (Alt+F3)")[properties.kind] + ". Right-click for " + destination
+
+    def invoke(self,context,event):
+        return self.execute(context)
 
     def execute(self, context):
         toggle(context, self.kind)
@@ -909,7 +877,13 @@ class MAX_OT_snap_button_listener(bpy.types.Operator):
     def modal(self, context, event):
         if self.generation != _guard_generation:
             return {"CANCELLED"}
-        if event.type != "RIGHTMOUSE" or event.value != "PRESS":
+        flyout = getattr(self, "_mode_flyout", None)
+        if flyout is not None:
+            result = flyout.modal(context, event)
+            if result != {"RUNNING_MODAL"}:
+                self._mode_flyout = None
+            return {"RUNNING_MODAL"}
+        if event.type not in {"LEFTMOUSE", "RIGHTMOUSE"} or event.value != "PRESS":
             return {"PASS_THROUGH"}
         for area in context.window.screen.areas:
             if area.type != "VIEW_3D":
@@ -931,10 +905,46 @@ class MAX_OT_snap_button_listener(bpy.types.Operator):
                     finally:
                         context.window_manager.clipboard = clipboard
                     if command.startswith("bpy.ops.max.snap_toggle("):
+                        if event.type == "LEFTMOUSE":
+                            if "'SNAP'" in command or '"SNAP"' in command:
+                                from .snap_flyout import Flyout
+                                self._mode_flyout = Flyout(context, event)
+                                return {"RUNNING_MODAL"}
+                            return {"PASS_THROUGH"}
+                        if "SPINNER_SNAP" in command:
+                            bpy.ops.max.spinner_snap_settings("INVOKE_DEFAULT")
+                            return {"RUNNING_MODAL"}
                         tab = "SNAPS" if "'SNAP'" in command or '"SNAP"' in command else "OPTIONS"
                         bpy.ops.max.snap_settings("INVOKE_DEFAULT", tab=tab)
                         return {"RUNNING_MODAL"}
         return {"PASS_THROUGH"}
+
+
+class MAX_OT_spinner_snap_settings(bpy.types.Operator):
+    """Set the alternate spinner increment in General > Spinners"""
+    bl_idname = "max.spinner_snap_settings"
+    bl_label = "Preference Settings"
+    increment: FloatProperty(name="Snap", min=.0001, default=1)
+    use_snap: BoolProperty(name="Use Snap", default=True,
+        description="Snap primitive parameter fields in the Command Panel")
+
+    def invoke(self, context, event):
+        s = settings(context)
+        self.increment, self.use_snap = s.spinner_increment, s.spinner_snap
+        return context.window_manager.invoke_props_dialog(self, width=290)
+
+    def draw(self, context):
+        self.layout.label(text="General")
+        box = self.layout.box()
+        box.label(text="Spinners")
+        box.prop(self, "increment")
+        box.prop(self, "use_snap")
+
+    def execute(self, context):
+        s = settings(context)
+        s.spinner_increment, s.spinner_snap = self.increment, self.use_snap
+        _redraw(context)
+        return {"FINISHED"}
 
 
 def _ensure_button_listeners():
@@ -951,10 +961,9 @@ def draw_toolbar(layout, context):
     from . import max_icons
     s, ts = settings(context), context.scene.tool_settings
     row = layout.row(align=True)
-    art = {"2D": "snap_2d", "2_5D": "snap_25d", "3D": "snap_3d"}[s.mode] if ts.use_snap else "snap_off"
-    row.operator("max.snap_toggle", text="",
-                 depress=ts.use_snap, **max_icons.ui(art, "SNAP_ON")).kind = "SNAP"
-    row.menu("MAX_MT_snap_modes", text="", icon="DOWNARROW_HLT")
+    art = {"2D": "snap_2d", "2_5D": "snap_25d", "3D": "snap_3d"}[s.mode]
+    row.operator_menu_hold("max.snap_toggle",text="",depress=ts.use_snap,menu="MAX_MT_snap_modes",
+                 **max_icons.ui(art,"SNAP_ON")).kind="SNAP"
     for kind, icon, value in (("ANGLE_SNAP", "DRIVER_ROTATIONAL_DIFFERENCE", s.angle_snap),
                               ("PERCENT_SNAP", "MOD_PHYSICS", s.percent_snap),
                               ("SPINNER_SNAP", "ARROW_LEFTRIGHT", s.spinner_snap)):
@@ -1375,9 +1384,9 @@ class MAX_GGT_snap_transform(bpy.types.GizmoGroup):
         props.from_gizmo = True
 
 
-classes = (MaxSnapSettings, MAX_OT_snap_settings, MAX_PT_snap_settings, MAX_OT_snap_settings_close,
-           MAX_OT_snap_button_listener, MAX_GGT_snap_transform, MAX_OT_snap_clear, MAX_OT_snap_override,
-           MAX_OT_snap_cycle, MAX_MT_snap_standard, MAX_OT_snap_quad, MAX_MT_snap_modes,
+classes = (MaxSnapSettings, MAX_OT_snap_settings_events, MAX_OT_snap_settings, MAX_PT_snap_settings, MAX_OT_snap_settings_close,
+           MAX_OT_snap_button_listener, MAX_OT_spinner_snap_settings, MAX_GGT_snap_transform, MAX_OT_snap_clear, MAX_OT_snap_override,
+           MAX_OT_snap_cycle, MAX_OT_snap_mode, MAX_MT_snap_standard, MAX_OT_snap_quad, MAX_MT_snap_modes,
            MAX_OT_select_transform, MAX_OT_snap_toggle, MAX_OT_snap_transform)
 
 
@@ -1395,13 +1404,12 @@ def unregister_props():
     global _handle, _guard_generation, _quad_open
     from . import snap_quad
     snap_quad.close_all()
+    from . import snap_settings_ui, snap_flyout
+    snap_settings_ui.close_all()
+    snap_flyout.close_all()
     _guard_generation += 1
     _quad_open = False
     _button_guards.clear()
-    for window in list(bpy.context.window_manager.windows):
-        if window.as_pointer() in _settings_windows:
-            with bpy.context.temp_override(window=window):
-                bpy.ops.wm.window_close()
     _settings_windows.clear()
     if bpy.app.timers.is_registered(_ensure_button_listeners):
         bpy.app.timers.unregister(_ensure_button_listeners)

@@ -29,6 +29,7 @@ CAT = []
 BASE = 'https://help.autodesk.com/cloudhelp/2026/ENU/'
 
 REFS = {
+    'snap_types': ('3DSMax-Basics', 'C18F1E36-4FFC-43CF-A811-0ED6D5545C40', 'Standard Snaps toolbar imagery, not viewport markers'),
     'toolbar': ('3DSMax-Basics', 'D60DB151-D25D-498D-AF02-410D4237A140', 'references/toolbar-*.png'),
     'tabs': ('3DSMax-Basics', 'E3CB809D-94ED-4C30-892B-1D12B8721EA5', 'references/command-panel-01.png through command-panel-06.png'),
     'categories': ('3DSMax-Basics', '6C4B9CF9-DCD6-42A6-A10C-F0E9C6A728AA', 'references/create-panel-03.png through create-panel-09.png'),
@@ -436,6 +437,27 @@ def caddies():
     ]:
         add('caddy_type_'+name,body,idea,'caddies','tessellate' if name in {'edge','face'} else 'extrude','icon-only','Caddy mode flyout',note='Choice name appears on hover, not printed beside this pictogram.')
 
+def snap_types():
+    # Original drawings in the icons v2 grid, for settings and toolbar only.
+    # These are not specifications for in-viewport snap markers.
+    items = [
+        ('grid_points',path('M3 3 H13 M3 8 H13 M3 13 H13 M3 3 V13 M8 3 V13 M13 3 V13',D)+dot(8,8),'Grid intersections'),
+        ('grid_lines',path('M2 3 H14 M2 8 H14 M2 13 H14 M3 2 V14 M8 2 V14 M13 2 V14',D)+path('M3 8 H13',C,2),'Highlighted grid line'),
+        ('pivot',path('M8 2 V9 L2 14 M8 9 14 14',G,2),'Object pivot tripod'),
+        ('bounding_box',mesh()+dot(2.5,5.5)+dot(13.5,11.5),'Bounding-box corners'),
+        ('perpendicular',path('M2 13 H14 M8 2 V13 M8 9 H12 V13',G),'Perpendicular foot'),
+        ('tangent',circle(7,9,4)+path('M2 3 H14',G)+path('M7 3 V5',C),'Circle with tangent'),
+        ('vertex',rect(3,3,10,10,'none',D)+dot(3,3)+dot(13,3)+dot(3,13)+dot(13,13),'Mesh corner vertices'),
+        ('endpoint',rect(3,3,10,10,'none',G)+dot(3,13),'Edge endpoint'),
+        ('edge',rect(3,3,10,10,'none',D)+path('M3 3 H13',C,2),'Highlighted edge segment'),
+        ('midpoint',rect(3,3,10,10,'none',G)+path('M3 13 13 3',G)+dot(8,8),'Edge midpoint'),
+        ('face',poly('2,13 8,2 14,13',F,G)+dot(8,9),'Face surface'),
+        ('center_face',poly('2,13 8,2 14,13','none',G)+path('M8 2 V10 M2 13 8 10 14 13',D)+dot(8,10),'Triangular face centre'),
+    ]
+    for name,body,idea in items:
+        add('snap_type_'+name,body,idea,'snaps','snap_types','icon plus text','Grid and Snap Settings')
+
+
 def navigation_and_features():
     def a(n,b,i,ref='viewport',mode='icon-only',spot=None,note=''):
         add(n,b,i,'navigation',ref,mode,spot,note)
@@ -484,6 +506,7 @@ def main():
     poly_tools()
     caddies()
     navigation_and_features()
+    snap_types()
     OUT.mkdir(parents=True, exist_ok=True)
     for row in CAT:
         n = row['name']
