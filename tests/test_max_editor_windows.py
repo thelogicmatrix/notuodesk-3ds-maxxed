@@ -26,7 +26,6 @@ class EditorTests(unittest.TestCase):
 
     def test_render_settings_apply_and_invalid_range_is_atomic(self):
         scene = bpy.context.scene
-        before = scene.frame_end
         result = bpy.ops.max.render_setup_dialog(width=800, height=600, percentage=75,
             start=1, end=10, output="//render/", engine=scene.render.engine, format="PNG")
         self.assertEqual(result, {"FINISHED"})
@@ -61,7 +60,9 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(editors.owned_windows(), [])
 
     def test_no_material_host_without_integrator(self):
-        self.assertFalse(editors.available("MATERIAL"))
+        from unittest.mock import patch
+        with patch.object(editors, '_material_adapter', None):
+            self.assertFalse(editors.available("MATERIAL"))
         self.assertIn("Python", editors.TITLES["SCRIPT_EDITOR"])
         self.assertIn("Python", editors.TITLES["LISTENER"])
 

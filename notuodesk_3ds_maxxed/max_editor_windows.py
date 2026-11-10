@@ -1,10 +1,11 @@
 """Owned auxiliary windows with curated chrome and supported scene controls."""
 from dataclasses import dataclass, field
+import os
 
 import bpy
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, IntProperty, StringProperty
-from . import scene_explorer, max_layers, max_dialogs
+from . import scene_explorer, max_dialogs
 
 TITLES = {
     "MATERIAL": "Compact Material Editor", "RENDER_SETUP": "Render Setup",
@@ -53,6 +54,55 @@ class EditorHost:
     hits: list = field(default_factory=list)
     original_type: str = ""
     ready: bool = False
+    native_handle: int = 0
+    area_pointer: int = 0
+
+    def __post_init__(self):
+        self.area_pointer = self.area.as_pointer()
+
+
+def _native_windows():
+    if os.name != 'nt':
+        return set()
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    found = set()
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def collect(hwnd, param):
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value == os.getpid():
+            found.add(hwnd)
+        return True
+    user32.EnumWindows(callback_type(collect), 0)
+    return found
+
+
+def _native_frame(host, handles):
+    if len(handles) != 1:
+        return
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    host.native_handle = next(iter(handles))
+    handle = wintypes.HWND(host.native_handle)
+    if host.kind == 'MATERIAL':
+        from . import mtl_editor
+        title = mtl_editor.window_title(bpy.context)
+    else:
+        title = TITLES[host.kind]
+    user32.SetWindowTextW(handle, title)
+    if host.kind == 'MATERIAL':
+        scale = bpy.context.preferences.view.ui_scale
+        # Compact is a portrait editor. This is its opening size, not a test override.
+        outer, client = wintypes.RECT(), wintypes.RECT()
+        user32.GetWindowRect(handle, ctypes.byref(outer))
+        user32.GetClientRect(handle, ctypes.byref(client))
+        frame_width = outer.right-outer.left-client.right+client.left
+        frame_height = outer.bottom-outer.top-client.bottom+client.top
+        user32.SetWindowPos(handle, None, 0, 0, round(477*scale)+frame_width,
+                           round(780*scale)+frame_height, 0x16)
 
 
 def register_material_adapter(open_callback=None):
@@ -91,8 +141,22 @@ def _live_hosts():
     windows = {w.as_pointer(): w for w in bpy.context.window_manager.windows}
     for pointer, host in list(_hosts.items()):
         if pointer not in windows:
+            _dispose_host(host)
             del _hosts[pointer]
     return list(_hosts.values())
+
+
+def is_host_area(area):
+    """Auxiliary canvases are never modeling viewports."""
+    pointer = area.as_pointer()
+    return pointer in _docked or any(h.area.as_pointer() == pointer for h in _live_hosts())
+
+
+def _dispose_host(host):
+    _cancel_setup(host)
+    if host.kind == "MATERIAL":
+        from . import mtl_editor
+        mtl_editor.close_host(host)
 
 
 def attach_explorer(context, area):
@@ -152,6 +216,13 @@ def open_editor(context, kind):
         return None
     if kind == "MATERIAL":
         return _material_adapter(context)
+    return open_host(context, kind)
+
+
+def open_host(context, kind):
+    """Create one full-area host. Material adapters use this without recursion."""
+    if kind not in TITLES or bpy.app.background or not _installed:
+        return None
     for host in _live_hosts():
         if host.kind == kind:
             return host.window
@@ -160,6 +231,7 @@ def open_editor(context, kind):
     if not source:
         return None
     before = {w.as_pointer() for w in context.window_manager.windows}
+    native_before = _native_windows()
     with context.temp_override(window=context.window, area=source, region=_region(source)):
         result = bpy.ops.screen.area_dupli("INVOKE_DEFAULT")
     if result != {"FINISHED"}:
@@ -173,6 +245,7 @@ def open_editor(context, kind):
     _hosts[window.as_pointer()] = host
     try:
         _prepare_host(host)
+        _native_frame(host, _native_windows() - native_before)
         area.tag_redraw()
     except Exception:
         close_editor(window)
@@ -186,7 +259,7 @@ def _start_interaction(context, host):
 
 
 def _cancel_setup(host):
-    callback = _setup_timers.pop(host.area.as_pointer(), None)
+    callback = _setup_timers.pop(host.area_pointer, None)
     if callback and bpy.app.timers.is_registered(callback):
         bpy.app.timers.unregister(callback)
 
@@ -197,6 +270,9 @@ def _prepare_host(host):
     # Use its owning context so area-type updates initialize the correct regions.
     with bpy.context.temp_override(window=host.window, area=host.area):
         _configure(host)
+        if host.kind == "MATERIAL":
+            from . import mtl_editor
+            mtl_editor.prepare_host(host, bpy.context)
         _start_interaction(bpy.context, host)
         host.ready = True
         host.area.tag_redraw()
@@ -207,7 +283,7 @@ def close_editor(window):
     host = _hosts.pop(pointer, None)
     if not host:
         return
-    _cancel_setup(host)
+    _dispose_host(host)
     windows = list(bpy.context.window_manager.windows)
     if pointer in {w.as_pointer() for w in windows}:
         fallback = next((w for w in windows if w != window and w.as_pointer() not in _hosts), None)
@@ -400,19 +476,24 @@ def _draw():
     try:
         if host.kind not in NATIVE:
             _rect(0, 0, width, height, (.18, .18, .18, 1))
-        _rect(0, height-38*scale, width, 38*scale, (.12, .12, .12, 1))
-        _text(14*scale, height-25*scale, TITLES[host.kind], round(15*scale))
-        close = (lambda c, e: detach_explorer(host.area)) if host.original_type else (lambda c, e: close_editor(host.window))
-        small = width < 300*scale
-        if host.kind == 'SCENE_EXPLORER':
-            x, y, size = width-25*scale, height-29*scale, 18*scale
-            _line((x+5*scale, y+5*scale), (x+13*scale, y+13*scale), (.8, .8, .8, 1))
-            _line((x+5*scale, y+13*scale), (x+13*scale, y+5*scale), (.8, .8, .8, 1))
-            host.hits.append(((x, y, x+size, y+size), close))
-        else:
-            _button(host, width-(35 if small else 90)*scale, height-32*scale, (25 if small else 78)*scale, "X" if small else "Close", close, scale=scale)
+        if host.kind != "MATERIAL" or not host.native_handle:
+            _rect(0, height-38*scale, width, 38*scale, (.12, .12, .12, 1))
+            caption = getattr(host, 'material_title', TITLES[host.kind]) if host.kind == 'MATERIAL' else TITLES[host.kind]
+            _text(14*scale, height-25*scale, caption, round(15*scale))
+            close = (lambda c, e: detach_explorer(host.area)) if host.original_type else (lambda c, e: close_editor(host.window))
+            small = width < 300*scale
+            if host.kind == 'SCENE_EXPLORER':
+                x, y, size = width-25*scale, height-29*scale, 18*scale
+                _line((x+5*scale, y+5*scale), (x+13*scale, y+13*scale), (.8, .8, .8, 1))
+                _line((x+5*scale, y+13*scale), (x+13*scale, y+5*scale), (.8, .8, .8, 1))
+                host.hits.append(((x, y, x+size, y+size), close))
+            else:
+                _button(host, width-(35 if small else 90)*scale, height-32*scale, (25 if small else 78)*scale, "X" if small else "Close", close, scale=scale)
         if host.kind == "SCENE_EXPLORER":
             _draw_explorer(host, context, width, height, scale)
+        elif host.kind == "MATERIAL":
+            from . import mtl_editor
+            mtl_editor.draw_host(host, context, width, height, scale)
         elif host.kind == "SCHEMATIC":
             _draw_schematic(host, context, width, height, scale)
         elif host.kind in {"RENDER_SETUP", "ENVIRONMENT", "SNAPS"}:
@@ -441,6 +522,12 @@ class MAX_OT_editor_interact(bpy.types.Operator):
         host = _docked.get(self._area_pointer) or _hosts.get(self._pointer)
         if not host:
             return {"FINISHED", "PASS_THROUGH"}
+        if not context.window or context.window.as_pointer() != self._pointer:
+            return {"PASS_THROUGH"}
+        if host.kind == "MATERIAL":
+            from . import mtl_editor
+            if mtl_editor.host_event(host, context, event):
+                return {"RUNNING_MODAL"}
         if host.original_type:
             region = _region(host.area)
             if not (region.x <= event.mouse_x < region.x+region.width and region.y <= event.mouse_y < region.y+region.height):

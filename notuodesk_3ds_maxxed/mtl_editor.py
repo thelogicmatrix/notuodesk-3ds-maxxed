@@ -1,1181 +1,2293 @@
-"""3ds Max Compact Material Editor.
-
-Lives in the sidebar ("Material Editor" tab) of a Shader Editor window that M
-opens; the node canvas next to it plays the role of the Slate editor. Every
-Max parameter reads and writes the material's Principled BSDF directly, so the
-material renders the same in EEVEE, Cycles and (via conversion) V-Ray.
-"""
-
-import os
+"""Compact samples and material controls over Blender's rendered materials."""
+import math
+from types import SimpleNamespace
 
 import bpy
-from . import max_icons
+from bpy.app.handlers import persistent
 from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, FloatProperty,
                        FloatVectorProperty, IntProperty, PointerProperty, StringProperty)
-from bpy.types import Menu, Operator, Panel, PropertyGroup
-from bpy_extras import view3d_utils
-from bpy_extras.io_utils import ImportHelper
+from bpy_extras.io_utils import ImportHelper, ExportHelper
+
+from . import max_icons
 
 NUM_SLOTS = 24
-MAX_DEFAULT_DIFFUSE = (150 / 255, 150 / 255, 150 / 255)   # 3ds Max default material grey
+MAX_DEFAULT_DIFFUSE = (150/255, 150/255, 150/255)
+MAP_PREFIX = 'MaxMap_'
+MAP_CHANNELS = (
+    ('AMBIENT', 'Ambient Color', None, True),
+    ('DIFFUSE', 'Diffuse Color', 'Base Color', True),
+    ('SPECULAR_COLOR', 'Specular Color', 'Specular Tint', True),
+    ('SPECULAR_LEVEL', 'Specular Level', 'Specular IOR Level', False),
+    ('GLOSSINESS', 'Glossiness', 'Roughness', False),
+    ('SELF_ILLUM', 'Self-Illumination', 'Emission Color', True),
+    ('OPACITY', 'Opacity', 'Alpha', False),
+    ('FILTER', 'Filter Color', 'Specular Tint', True),
+    ('BUMP', 'Bump', 'Normal', False),
+    ('REFLECTION', 'Reflection', 'Metallic', False),
+    ('REFRACTION', 'Refraction', 'Transmission Weight', False),
+    ('DISPLACEMENT', 'Displacement', None, False),
+)
+MAP_INFO = {key: (label, socket, color) for key, label, socket, color in MAP_CHANNELS}
+PHYSICAL_MAP_INFO = {
+    'PHYSICAL_ROUGHNESS': ('Roughness', 'Roughness', False),
+    'PHYSICAL_COATING': ('Coating', 'Coat Weight', False),
+    'PHYSICAL_COAT_ROUGHNESS': ('Coating Roughness', 'Coat Roughness', False),
+}
+_all_map_info = {**MAP_INFO, **PHYSICAL_MAP_INFO}
+SHADERS = [('BLINN', 'Blinn', ''), ('PHONG', 'Phong', ''), ('METAL', 'Metal', ''),
+           ('ANISOTROPIC', 'Anisotropic', ''), ('OREN_NAYAR', 'Oren-Nayar-Blinn', ''),
+           ('TRANSLUCENT', 'Translucent Shader', ''), ('MULTI_LAYER', 'Multi-Layer', '')]
+ICON_FALLBACKS = {'material_editor': 'MATERIAL', 'sphere': 'SPHERE', 'mtl_drag': 'FORWARD',
+    'mtl_select': 'RESTRICT_SELECT_OFF', 'settings': 'PREFERENCES', 'mtl_get': 'MATERIAL',
+    'mtl_assign': 'CHECKMARK', 'mtl_reset': 'TRASH', 'make_unique': 'DUPLICATE',
+    'mtl_library': 'FILE_TICK', 'mtl_viewport': 'SHADING_TEXTURE', 'create': 'ADD',
+    'mtl_pick': 'EYEDROPPER', 'close': 'X'}
+_catalogue = []
+_preview_textures = {}
+_preview_signatures = {}
+_preview_requests = set()
+_preview_requested = set()
+_preview_types = {}
+_preview_hosts = set()
+_pickers = []
+_generation = 0
+_props_installed = []
+_fonts = {}
 
 
-# ---------------------------------------------------------------------------
-# Principled helpers
-# ---------------------------------------------------------------------------
+def shader(material, create=False):
+    if material is None:
+        return None
+    if create and not material.use_nodes:
+        material.use_nodes = True
+    tree = material.node_tree
+    if tree is None:
+        return None
+    # Prefer the surface actually rendered, rather than an unused Principled node.
+    for output in tree.nodes:
+        if output.type == 'OUTPUT_MATERIAL' and output.is_active_output:
+            links = output.inputs['Surface'].links
+            if links:
+                node = links[0].from_node
+                return node if node.type == 'BSDF_PRINCIPLED' else None
+    return next((n for n in tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+
 
 def bsdf(mat):
-    if mat is None or not mat.use_nodes or mat.node_tree is None:
-        return None
-    for n in mat.node_tree.nodes:
-        if n.type == "BSDF_PRINCIPLED":
-            return n
-    return None
-
-
-def _sock(mat, name):
-    p = bsdf(mat)
-    return p.inputs.get(name) if p else None
-
-
-def _getf(mat, name, default=0.0):
-    s = _sock(mat, name)
-    return s.default_value if s is not None else default
-
-
-def _setf(mat, name, value):
-    s = _sock(mat, name)
-    if s is not None:
-        s.default_value = value
-
-
-def _getc(mat, name, default=(0.8, 0.8, 0.8)):
-    s = _sock(mat, name)
-    return tuple(s.default_value[:3]) if s is not None else default
-
-
-def _setc(mat, name, value):
-    s = _sock(mat, name)
-    if s is not None:
-        s.default_value = (*value[:3], 1.0)
-    if name == "Base Color":
-        mat.diffuse_color = (*value[:3], mat.diffuse_color[3])
+    return shader(mat)
 
 
 def ensure_nodes(mat):
-    if not mat.use_nodes:
-        mat.use_nodes = True
-    return bsdf(mat)
+    return shader(mat, create=True)
 
 
-# ---------------------------------------------------------------------------
-# Standard material parameters (computed properties over the Principled BSDF)
-# ---------------------------------------------------------------------------
-
-SHADERS = [
-    ("BLINN", "Blinn", "Classic plastic-like shading"),
-    ("PHONG", "Phong", "Smooth, slightly sharper highlights"),
-    ("METAL", "Metal", "Metallic surface"),
-    ("ANISOTROPIC", "Anisotropic", "Brushed / stretched highlights"),
-    ("OREN_NAYAR", "Oren-Nayar-Blinn", "Matte, rough surfaces like fabric or clay"),
-    ("TRANSLUCENT", "Translucent Shader", "Light passes through (subsurface)"),
-    ("MULTI_LAYER", "Multi-Layer", "Two highlight layers (coat)"),
-]
+def _socket_read(material, name, fallback):
+    node = shader(material)
+    return node.inputs[name].default_value if node and name in node.inputs else fallback
 
 
-def _shader_update(self, context):
-    mat = self.id_data
-    if bsdf(mat) is None:
+def _socket_write(material, name, value):
+    if material.library:
         return
-    s = self.shader
-    _setf(mat, "Metallic", 1.0 if s == "METAL" else 0.0)
-    _setf(mat, "Anisotropic", 0.6 if s == "ANISOTROPIC" else 0.0)
-    _setf(mat, "Diffuse Roughness", 0.6 if s == "OREN_NAYAR" else 0.0)
-    _setf(mat, "Subsurface Weight", 0.5 if s == "TRANSLUCENT" else 0.0)
-    _setf(mat, "Coat Weight", 1.0 if s == "MULTI_LAYER" else 0.0)
+    node = shader(material, create=True)
+    if node and name in node.inputs:
+        node.inputs[name].default_value = value
+        if name == 'Base Color':
+            adapter = material.node_tree.nodes.get('MaxPhysical_BaseWeight')
+            if adapter:
+                _set_base_fallback(adapter, value)
+                material.max_physical['base_color'] = tuple(value[:3])
+        material.update_tag()
+        invalidate_preview(material)
 
 
-def _users(mat):
-    return [o for o in bpy.data.objects if o.type == "MESH" and mat.name in [m.name for m in o.data.materials if m]]
+def _field_owner(material, path):
+    if path.startswith('std.'):
+        return material.max_std, path[4:]
+    if path.startswith('physical.'):
+        return material.max_physical, path[9:]
+    return material, path
 
 
-def _wire_update(self, context):
-    for ob in _users(self.id_data):
-        ob.show_wire = self.wire
+def _diffuse_get(material):
+    return tuple(_socket_read(material, 'Base Color', material.diffuse_color)[:3])
 
 
-def _faceted_update(self, context):
-    for ob in _users(self.id_data):
-        ob.data.polygons.foreach_set("use_smooth", [not self.faceted] * len(ob.data.polygons))
-        ob.data.update()
+def _diffuse_set(material, value):
+    material.diffuse_color = (*value, material.diffuse_color[3])
+    _socket_write(material, 'Base Color', (*value, 1))
 
 
-class MaxStdMaterial(PropertyGroup):
-    shader: EnumProperty(name="Shader", items=SHADERS, default="BLINN", update=_shader_update)
-    wire: BoolProperty(name="Wire", update=_wire_update)
-    faceted: BoolProperty(name="Faceted", update=_faceted_update)
-    soften: FloatProperty(name="Soften", default=0.1, min=0.0, max=1.0)
-    self_illum_color_on: BoolProperty(name="Color", default=False,
-                                      update=lambda s, c: _apply_self_illum(s.id_data))
-    self_illum_color: FloatVectorProperty(name="Self-Illumination Color", subtype="COLOR", size=3,
-                                          default=(1.0, 1.0, 1.0), min=0.0, max=1.0,
-                                          update=lambda s, c: _apply_self_illum(s.id_data))
-    self_illum_amount: FloatProperty(name="Self-Illumination", default=0.0, min=0.0, max=100.0,
-                                     update=lambda s, c: _apply_self_illum(s.id_data))
-    bump_amount: FloatProperty(name="Bump Amount", default=30.0, min=0.0, max=999.0,
-                               update=lambda s, c: _apply_bump_amount(s.id_data))
+def _specular_get(material):
+    value = _socket_read(material, 'Specular Tint', (1, 1, 1, 1))
+    return (value, value, value) if isinstance(value, (float, int)) else tuple(value[:3])
 
 
-def _apply_self_illum(mat):
-    m = mat.max_std
-    if m.self_illum_color_on:
-        _setc(mat, "Emission Color", m.self_illum_color)
-        _setf(mat, "Emission Strength", 1.0)
-    else:
-        _setc(mat, "Emission Color", _getc(mat, "Base Color"))
-        _setf(mat, "Emission Strength", m.self_illum_amount / 100.0)
+def _specular_set(material, value):
+    node = shader(material, create=True)
+    if node:
+        socket = node.inputs.get('Specular Tint')
+        _socket_write(material, 'Specular Tint', (*value, 1) if socket and socket.type == 'RGBA' else sum(value)/3)
 
 
-# Computed Material properties (get/set straight into the Principled BSDF)
-def _p_diffuse_get(mat): return _getc(mat, "Base Color", MAX_DEFAULT_DIFFUSE)
-def _p_diffuse_set(mat, v): _setc(mat, "Base Color", v)
-def _p_spec_get(mat): return _getc(mat, "Specular Tint", (1, 1, 1))
-def _p_spec_set(mat, v): _setc(mat, "Specular Tint", v)
-def _p_level_get(mat): return round(_getf(mat, "Specular IOR Level", 0.5) * 100.0)
-def _p_level_set(mat, v): _setf(mat, "Specular IOR Level", v / 100.0)
-def _p_gloss_get(mat): return round((1.0 - _getf(mat, "Roughness", 0.5)) * 100.0)
-def _p_gloss_set(mat, v): _setf(mat, "Roughness", 1.0 - v / 100.0)
-def _p_opacity_get(mat): return round(_getf(mat, "Alpha", 1.0) * 100.0)
-def _p_ior_get(mat): return _getf(mat, "IOR", 1.5)
-def _p_ior_set(mat, v): _setf(mat, "IOR", v)
+def _level_get(material):
+    return round(100 * _socket_read(material, 'Specular IOR Level', .5))
 
 
-def _p_opacity_set(mat, v):
-    _setf(mat, "Alpha", v / 100.0)
-    try:
-        mat.surface_render_method = "BLENDED" if v < 100 else "DITHERED"
-    except Exception:
-        pass
+def _level_set(material, value):
+    _socket_write(material, 'Specular IOR Level', value / 100)
 
 
-def _p_two_sided_get(mat): return not mat.use_backface_culling
-def _p_two_sided_set(mat, v): mat.use_backface_culling = not v
+def _gloss_get(material):
+    return round(100 * (1 - _socket_read(material, 'Roughness', .5)))
+
+
+def _gloss_set(material, value):
+    _socket_write(material, 'Roughness', 1 - value / 100)
+
+
+def _opacity_get(material):
+    return round(100 * _socket_read(material, 'Alpha', material.diffuse_color[3]))
+
+
+def _opacity_set(material, value):
+    _socket_write(material, 'Alpha', value / 100)
+    color = material.diffuse_color[:]
+    material.diffuse_color = (*color[:3], value / 100)
+
+
+def _ior_get(material):
+    return _socket_read(material, 'IOR', 1.5)
+
+
+def _ior_set(material, value):
+    _socket_write(material, 'IOR', value)
+
+
+def _two_sided_get(material):
+    return not material.use_backface_culling
+
+
+def _two_sided_set(material, value):
+    material.use_backface_culling = not value
 
 
 MATERIAL_PROPS = {
-    "max_diffuse": FloatVectorProperty(name="Diffuse", subtype="COLOR", size=3, min=0, max=1,
-                                       get=_p_diffuse_get, set=_p_diffuse_set),
-    "max_specular": FloatVectorProperty(name="Specular", subtype="COLOR", size=3, min=0, max=1,
-                                        get=_p_spec_get, set=_p_spec_set),
-    "max_spec_level": IntProperty(name="Specular Level", min=0, max=999, soft_max=100,
-                                  get=_p_level_get, set=_p_level_set),
-    "max_glossiness": IntProperty(name="Glossiness", min=0, max=100, get=_p_gloss_get, set=_p_gloss_set),
-    "max_opacity": IntProperty(name="Opacity", min=0, max=100, subtype="PERCENTAGE",
-                               get=_p_opacity_get, set=_p_opacity_set),
-    "max_ior": FloatProperty(name="Index of Refraction", min=1.0, max=10.0, get=_p_ior_get, set=_p_ior_set),
-    "max_two_sided": BoolProperty(name="2-Sided", get=_p_two_sided_get, set=_p_two_sided_set),
+    'max_diffuse': FloatVectorProperty(name='Diffuse', size=3, subtype='COLOR', min=0, max=1,
+        get=_diffuse_get, set=_diffuse_set),
+    'max_specular': FloatVectorProperty(name='Specular', size=3, subtype='COLOR', min=0, max=1,
+        get=_specular_get, set=_specular_set),
+    'max_spec_level': IntProperty(name='Specular Level', min=0, max=999, soft_max=100,
+        get=_level_get, set=_level_set),
+    'max_glossiness': IntProperty(name='Glossiness', min=0, max=100, get=_gloss_get, set=_gloss_set),
+    'max_opacity': IntProperty(name='Opacity', min=0, max=100, subtype='PERCENTAGE',
+        get=_opacity_get, set=_opacity_set),
+    'max_ior': FloatProperty(name='Index of Refraction', min=1, max=10, get=_ior_get, set=_ior_set),
+    'max_two_sided': BoolProperty(name='2-Sided', get=_two_sided_get, set=_two_sided_set),
 }
 
 
-# ---------------------------------------------------------------------------
-# Map channels
-# ---------------------------------------------------------------------------
-
-# key: (label, Principled socket, is color data)
-MAP_CHANNELS = [
-    ("AMBIENT", "Ambient Color", None, True),
-    ("DIFFUSE", "Diffuse Color", "Base Color", True),
-    ("SPECULAR_COLOR", "Specular Color", "Specular Tint", True),
-    ("SPECULAR_LEVEL", "Specular Level", "Specular IOR Level", False),
-    ("GLOSSINESS", "Glossiness", "Roughness", False),
-    ("SELF_ILLUM", "Self-Illumination", "Emission Color", True),
-    ("OPACITY", "Opacity", "Alpha", False),
-    ("FILTER", "Filter Color", "Specular Tint", True),
-    ("BUMP", "Bump", "Normal", False),
-    ("REFLECTION", "Reflection", "Metallic", False),
-    ("REFRACTION", "Refraction", "Transmission Weight", False),
-    ("DISPLACEMENT", "Displacement", None, False),
-]
-MAP_INFO = {k: (label, sock, color) for k, label, sock, color in MAP_CHANNELS}
-MAP_PREFIX = "MaxMap_"
+def _standard_update(self, context):
+    material = self.id_data
+    color = self.self_illum_color if self.self_illum_color_on else _diffuse_get(material)
+    _socket_write(material, 'Emission Color', (*color, 1))
+    _socket_write(material, 'Emission Strength', self.self_illum_amount / 100)
+    bump = material.node_tree.nodes.get(MAP_PREFIX + 'BUMP_Bump') if material.node_tree else None
+    if bump:
+        bump.inputs['Distance'].default_value = self.bump_amount / 100
 
 
-def map_node(mat, channel):
-    if mat is None or mat.node_tree is None:
-        return None
-    return mat.node_tree.nodes.get(MAP_PREFIX + channel)
+def _shader_update(self, context):
+    material = self.id_data
+    _socket_write(material, 'Metallic', 1 if self.shader == 'METAL' else 0)
+    _socket_write(material, 'Anisotropic IOR Level', .5 if self.shader == 'ANISOTROPIC' else 0)
+    _socket_write(material, 'Transmission Weight', .5 if self.shader == 'TRANSLUCENT' else 0)
 
 
-def clear_map(mat, channel):
-    nt = mat.node_tree
-    for n in list(nt.nodes):
-        if n.name.startswith(MAP_PREFIX + channel):
-            nt.nodes.remove(n)
+class MaxStdMaterial(bpy.types.PropertyGroup):
+    shader: EnumProperty(name='Shader', items=SHADERS, default='BLINN', update=_shader_update)
+    wire: BoolProperty(name='Wire')
+    faceted: BoolProperty(name='Faceted')
+    soften: FloatProperty(name='Soften', default=.1, min=0, max=1)
+    self_illum_color_on: BoolProperty(name='Color', update=_standard_update)
+    self_illum_color: FloatVectorProperty(name='Self-Illumination', subtype='COLOR', size=3,
+        default=(1, 1, 1), min=0, max=1, update=_standard_update)
+    self_illum_amount: FloatProperty(name='Self-Illumination', default=0, min=0, max=100, update=_standard_update)
+    bump_amount: FloatProperty(name='Bump', default=30, min=0, max=999, update=_standard_update)
 
 
-def set_map(mat, channel, image):
-    p = ensure_nodes(mat)
-    nt = mat.node_tree
-    label, sock, is_color = MAP_INFO[channel]
-    clear_map(mat, channel)
-    tex = nt.nodes.new("ShaderNodeTexImage")
-    tex.name = MAP_PREFIX + channel
-    tex.label = f"{label} Map"
-    tex.image = image
-    tex.location = (p.location.x - 600, p.location.y - 120 * [k for k, *_ in MAP_CHANNELS].index(channel))
-    if not is_color and image is not None:
-        try:
-            image.colorspace_settings.name = "Non-Color"
-        except TypeError:
-            pass
-    out = tex.outputs["Color"]
-    if channel == "GLOSSINESS":                    # glossiness map = inverted roughness
-        inv = nt.nodes.new("ShaderNodeInvert")
-        inv.name = MAP_PREFIX + channel + "_invert"
-        inv.location = (tex.location.x + 300, tex.location.y)
-        nt.links.new(out, inv.inputs["Color"])
-        out = inv.outputs["Color"]
-    if channel == "BUMP":
-        bump = nt.nodes.new("ShaderNodeBump")
-        bump.name = MAP_PREFIX + channel + "_bump"
-        bump.location = (tex.location.x + 300, tex.location.y)
-        bump.inputs["Strength"].default_value = mat.max_std.bump_amount / 100.0
-        nt.links.new(out, bump.inputs["Height"])
-        nt.links.new(bump.outputs["Normal"], p.inputs["Normal"])
-        return tex
-    if channel == "DISPLACEMENT":
-        outn = next((n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"), None)
-        disp = nt.nodes.new("ShaderNodeDisplacement")
-        disp.name = MAP_PREFIX + channel + "_disp"
-        disp.location = (tex.location.x + 300, tex.location.y)
-        nt.links.new(out, disp.inputs["Height"])
-        if outn:
-            nt.links.new(disp.outputs[0], outn.inputs["Displacement"])
-        return tex
-    if channel == "AMBIENT":                       # ambient is locked to diffuse in Max
-        sock = "Base Color"
-    if channel == "SELF_ILLUM":
-        _setf(mat, "Emission Strength", 1.0)
-    if channel == "OPACITY":
-        try:
-            mat.surface_render_method = "DITHERED"
-        except Exception:
-            pass
-    nt.links.new(out, p.inputs[sock])
-    return tex
-
-
-def _apply_bump_amount(mat):
-    n = mat.node_tree.nodes.get(MAP_PREFIX + "BUMP_bump") if mat.node_tree else None
-    if n:
-        n.inputs["Strength"].default_value = mat.max_std.bump_amount / 100.0
-
-
-# ---------------------------------------------------------------------------
-# Sample slots
-# ---------------------------------------------------------------------------
-
-class MaxMtlSlot(PropertyGroup):
+class MaxMtlSlot(bpy.types.PropertyGroup):
     material: PointerProperty(type=bpy.types.Material)
 
 
-class MaxMtlEditorState(PropertyGroup):
+def _physical_socket(name, fallback=0.):
+    def get(self):
+        return _socket_read(self.id_data, name, fallback)
+    def set(self, value):
+        _socket_write(self.id_data, name, value)
+    return get, set
+
+
+def _base_color_get(self):
+    return tuple(self.get('base_color', _diffuse_get(self.id_data)))
+
+
+def _base_color_set(self, value):
+    self['base_color'] = tuple(value)
+    _apply_base_weight(self)
+
+
+def _base_weight_set(self, value):
+    color = _base_color_get(self)
+    self['base_weight'] = value
+    self['base_color'] = color
+    _apply_base_weight(self)
+
+
+def _apply_base_weight(self):
+    material = self.id_data
+    node = shader(material, create=True)
+    if node is None or material.library:
+        return
+    tree = material.node_tree
+    destination = node.inputs['Base Color']
+    adapter = tree.nodes.get('MaxPhysical_BaseWeight')
+    if adapter is None:
+        adapter = tree.nodes.new('ShaderNodeMixRGB')
+        adapter.name = 'MaxPhysical_BaseWeight'
+        adapter.label = 'Physical Base Weight'
+        adapter.blend_type = 'MULTIPLY'
+        adapter.inputs[0].default_value = 1
+        if destination.is_linked:
+            tree.links.new(destination.links[0].from_socket, adapter.inputs[1])
+        tree.links.new(adapter.outputs[0], destination)
+    color = _base_color_get(self)
+    destination.default_value = (*color, 1)
+    _set_base_fallback(adapter, (*color, 1))
+    adapter.inputs[2].default_value = (self.base_weight, self.base_weight, self.base_weight, 1)
+    material.diffuse_color = (*(v*self.base_weight for v in color), material.diffuse_color[3])
+    invalidate_preview(material)
+
+
+def _set_base_fallback(adapter, color):
+    adapter.inputs[1].default_value = color
+    if adapter.inputs[1].is_linked:
+        source = adapter.inputs[1].links[0].from_node
+        if source.name == MAP_PREFIX+'DIFFUSE_Amount' and not source.inputs[1].is_linked:
+            source.inputs[1].default_value = color
+
+
+class MaxPhysicalMaterial(bpy.types.PropertyGroup):
+    base_weight: FloatProperty(name='Base Weight', min=0, max=1,
+        get=lambda self: self.get('base_weight', 1.), set=_base_weight_set)
+    base_color: FloatVectorProperty(name='Base Color', size=3, subtype='COLOR', min=0, max=1,
+        get=_base_color_get, set=_base_color_set)
+    roughness: FloatProperty(name='Roughness', min=0, max=1,
+        get=_physical_socket('Roughness')[0], set=_physical_socket('Roughness')[1])
+    glossiness: FloatProperty(name='Glossiness', min=0, max=1,
+        get=lambda self: 1-self.roughness, set=lambda self, value: setattr(self, 'roughness', 1-value))
+    use_glossiness: BoolProperty(name='Glossiness')
+    metalness: FloatProperty(name='Metalness', min=0, max=1,
+        get=_physical_socket('Metallic')[0], set=_physical_socket('Metallic')[1])
+    transparency: FloatProperty(name='Transparency', min=0, max=1,
+        get=_physical_socket('Transmission Weight')[0], set=_physical_socket('Transmission Weight')[1])
+    coating: FloatProperty(name='Coating Weight', min=0, max=1,
+        get=_physical_socket('Coat Weight')[0], set=_physical_socket('Coat Weight')[1])
+    coat_roughness: FloatProperty(name='Coating Roughness', min=0, max=1,
+        get=_physical_socket('Coat Roughness')[0], set=_physical_socket('Coat Roughness')[1])
+    coat_ior: FloatProperty(name='Coating IOR', min=1, max=10,
+        get=_physical_socket('Coat IOR', 1.5)[0], set=_physical_socket('Coat IOR', 1.5)[1])
+    coat_color: FloatVectorProperty(name='Coating Color', size=4, subtype='COLOR', min=0, max=1,
+        get=_physical_socket('Coat Tint', (1, 1, 1, 1))[0],
+        set=_physical_socket('Coat Tint', (1, 1, 1, 1))[1])
+
+
+class MaxMtlEditorState(bpy.types.PropertyGroup):
     slots: CollectionProperty(type=MaxMtlSlot)
     active: IntProperty(default=0, min=0)
-    visible: EnumProperty(name="Sample Slots", items=[("6", "3 x 2", ""), ("15", "5 x 3", ""), ("24", "6 x 4", ""),
-                                                      ("ALL", "All Slots", "Show every slot, including added ones")],
-                          default="6")
+    visible: EnumProperty(name='Sample Slots', items=[('6', '3 x 2', ''), ('15', '5 x 3', ''),
+        ('24', '6 x 4', ''), ('ALL', 'All (Extension)', '')], default='6')
 
 
-def new_default_material(index):
-    mat = bpy.data.materials.new(f"{index + 1:02d} - Default")
-    mat.use_nodes = True
-    mat.use_fake_user = True            # keep editor materials like Max does, even if unassigned
-    p = bsdf(mat)
-    _setc(mat, "Base Color", MAX_DEFAULT_DIFFUSE)
-    _setf(mat, "Specular IOR Level", 0.0)    # Max default: Specular Level 0, Glossiness 10
-    _setf(mat, "Roughness", 0.9)
-    return mat
+def new_default_material(index, kind='PHYSICAL'):
+    material = bpy.data.materials.new(f'{index+1:02d} - Default')
+    material.use_nodes = True
+    material['max_type'] = kind
+    material.max_diffuse = MAX_DEFAULT_DIFFUSE if kind == 'STANDARD' else (.5, .5, .5)
+    material.max_specular = (1, 1, 1)
+    material.max_spec_level = 0
+    material.max_glossiness = 10
+    material.max_opacity = 100
+    material.max_two_sided = False
+    material.max_std.shader = 'BLINN'
+    if kind == 'PHYSICAL':
+        material.max_physical.roughness = 0
+        material.max_physical.coating = 0
+        material.max_ior = 1.52
+        material.max_spec_level = 50
+    return material
+
+
+def ensure_slots(scene):
+    editor = scene.max_mtl_editor
+    while len(editor.slots) < NUM_SLOTS:
+        index = len(editor.slots)
+        editor.slots.add().material = new_default_material(index)
+    editor.active = min(editor.active, len(editor.slots)-1)
+    return editor
 
 
 def state(context):
     return context.scene.max_mtl_editor
 
 
-def ensure_slots(scene):
-    st = scene.max_mtl_editor
-    while len(st.slots) < NUM_SLOTS:
-        st.slots.add()
-
-
 def active_material(context):
-    st = state(context)
-    if st.active < len(st.slots):
-        return st.slots[st.active].material
+    editor = state(context)
+    if 0 <= editor.active < len(editor.slots):
+        return editor.slots[editor.active].material
     return None
 
 
-def _show_in_node_editor(context, mat):
-    sp = context.space_data
-    if sp is not None and sp.type == "NODE_EDITOR" and mat is not None and mat.node_tree is not None:
-        try:
-            sp.pin = True
-            sp.node_tree = mat.node_tree
-        except Exception:
-            pass
+def _capture_target(operator, context):
+    material = active_material(context)
+    operator._target_id = material.as_pointer() if material else 0
+    operator._source_scene = context.scene
+    operator._source_slot = state(context).active
 
 
-# ---------------------------------------------------------------------------
-# Operators
-# ---------------------------------------------------------------------------
+def _resolve_target(operator, context):
+    if not hasattr(operator, '_target_id'):
+        return active_material(context)
+    if operator._source_scene != context.scene:
+        return None
+    return next((m for m in bpy.data.materials if m.as_pointer() == operator._target_id), None)
 
-class MAX_OT_mtl_slot(Operator):
-    """Sample slot: click to make it active"""
-    bl_idname = "max.mtl_slot"
-    bl_label = "Sample Slot"
-    bl_options = {"INTERNAL", "UNDO"}
 
+def grid_shape(editor):
+    return {'6': (3, 2), '15': (5, 3), '24': (6, 4)}.get(editor.visible,
+        (6, max(1, math.ceil(len(editor.slots)/6))))
+
+
+def material_kind(material):
+    return material.get('max_type', 'VRAY' if material.get('max_vray') else 'STANDARD') if material else 'STANDARD'
+
+
+def map_node(mat, channel):
+    material = mat
+    if channel not in _all_map_info or not material or not material.node_tree:
+        return None
+    return material.node_tree.nodes.get(MAP_PREFIX + channel)
+
+
+def map_enabled(material, channel):
+    node = map_node(material, channel)
+    return bool(node and node.image and node.get('max_enabled', not node.mute))
+
+
+def map_badge(material, channel):
+    node = map_node(material, channel)
+    return ('M' if map_enabled(material, channel) else 'm') if node and node.image else ''
+
+
+def map_supported(material, channel):
+    node = shader(material)
+    socket = _all_map_info.get(channel, ('', None, False))[1]
+    return bool(node and socket and socket in node.inputs)
+
+
+def _map_mix(material, channel):
+    tree = material.node_tree
+    return tree.nodes.get(MAP_PREFIX + channel + '_Amount') if tree else None
+
+
+def set_map_enabled(material, channel, enabled):
+    texture = map_node(material, channel)
+    if texture is None or material.library:
+        return False
+    mix = _map_mix(material, channel)
+    if mix is None and texture.image and map_supported(material, channel):
+        # Upgrade direct saved MaxMap links only when the user edits map state.
+        set_map(material, channel, texture.image)
+        mix = _map_mix(material, channel)
+    texture['max_enabled'] = bool(enabled)
+    texture.mute = not enabled
+    if mix:
+        mix.inputs[0].default_value = float(texture.get('max_amount', 100)) / 100 if enabled else 0
+    invalidate_preview(material)
+    return True
+
+
+def set_map_amount(material, channel, amount):
+    if material.library:
+        return
+    texture = map_node(material, channel)
+    if texture:
+        if channel == 'BUMP':
+            material.max_std.bump_amount = amount
+        else:
+            texture['max_amount'] = max(0., min(100., amount))
+        set_map_enabled(material, channel, map_enabled(material, channel))
+
+
+def set_map(mat, channel, image):
+    material = mat
+    if channel not in _all_map_info:
+        raise ValueError('Unknown material map channel')
+    if material.library:
+        raise ValueError('Linked materials are read-only')
+    node = shader(material, create=True)
+    tree = material.node_tree
+    if tree is None:
+        raise ValueError('This material has no editable node tree')
+    texture = map_node(material, channel)
+    if texture is None:
+        texture = tree.nodes.new('ShaderNodeTexImage')
+        texture.name = MAP_PREFIX + channel
+        texture.label = _all_map_info[channel][0]
+    texture.image = image
+    socket_name = _all_map_info[channel][1]
+    if node and socket_name and socket_name in node.inputs:
+        destination = node.inputs[socket_name]
+        weight = tree.nodes.get('MaxPhysical_BaseWeight')
+        if channel == 'DIFFUSE' and weight:
+            destination = weight.inputs[1]
+        mix = _map_mix(material, channel)
+        if mix is None:
+            mix = tree.nodes.new('ShaderNodeMixRGB')
+            mix.name = MAP_PREFIX + channel + '_Amount'
+            original = destination.links[0].from_socket if destination.is_linked else None
+            if original and original.node == texture:
+                original = None
+            value = destination.default_value
+            if isinstance(value, (int, float)):
+                value = (value, value, value, 1)
+            elif len(value) == 3:
+                value = (*value, 1)
+            mix.inputs[1].default_value = value
+            if original:
+                tree.links.new(original, mix.inputs[1])
+            tree.links.new(mix.outputs[0], destination)
+        mapped = texture.outputs['Color']
+        if channel == 'GLOSSINESS':
+            invert = tree.nodes.get(MAP_PREFIX + channel + '_Invert')
+            if invert is None:
+                invert = tree.nodes.new('ShaderNodeInvert')
+                invert.name = MAP_PREFIX + channel + '_Invert'
+            tree.links.new(mapped, invert.inputs['Color'])
+            mapped = invert.outputs['Color']
+        elif channel == 'BUMP':
+            bump = tree.nodes.get(MAP_PREFIX + channel + '_Bump')
+            if bump is None:
+                bump = tree.nodes.new('ShaderNodeBump')
+                bump.name = MAP_PREFIX + channel + '_Bump'
+            bump.inputs['Distance'].default_value = material.max_std.bump_amount / 100
+            tree.links.new(mapped, bump.inputs['Height'])
+            mapped = bump.outputs['Normal']
+        tree.links.new(mapped, mix.inputs[2])
+    texture['max_amount'] = texture.get('max_amount', 100.)
+    set_map_enabled(material, channel, True)
+    return texture
+
+
+def clear_map(mat, channel):
+    material = mat
+    if material.library:
+        raise ValueError('Linked materials are read-only')
+    texture = map_node(material, channel)
+    if texture is None:
+        return
+    tree = material.node_tree
+    mix = _map_mix(material, channel)
+    if mix:
+        original = mix.inputs[1].links[0].from_socket if mix.inputs[1].is_linked else None
+        for link in list(mix.outputs[0].links):
+            if original:
+                tree.links.new(original, link.to_socket)
+        tree.nodes.remove(mix)
+    for suffix in ('', '_Bump', '_Invert'):
+        node = tree.nodes.get(MAP_PREFIX + channel + suffix)
+        if node:
+            tree.nodes.remove(node)
+    invalidate_preview(material)
+
+
+def assign_material(obj, material):
+    if obj is None or material is None or not hasattr(obj.data, 'materials') or obj.library or obj.data.library:
+        return False
+    if obj.material_slots:
+        obj.active_material = material
+    else:
+        obj.data.materials.append(material)
+    return True
+
+
+def invalidate_preview(material=None):
+    if material:
+        pointer = material.as_pointer()
+        _preview_textures.pop(pointer, None)
+        _preview_signatures.pop(pointer, None)
+        material.update_tag()
+        if _preview_hosts and not bpy.app.background:
+            _request_preview(material)
+    else:
+        _preview_textures.clear()
+        _preview_signatures.clear()
+        _preview_requested.clear()
+        _preview_types.clear()
+
+
+def _request_preview(material):
+    pointer = material.as_pointer()
+    _preview_types[pointer] = material.preview_render_type
+    _preview_requested.add(pointer)
+    _preview_requests.add(pointer)
+    if not bpy.app.timers.is_registered(_render_previews):
+        bpy.app.timers.register(_render_previews, first_interval=.2)
+
+
+def _render_previews():
+    pending = set(_preview_requests)
+    _preview_requests.clear()
+    if _preview_hosts:
+        for material in bpy.data.materials:
+            if material.as_pointer() in pending:
+                material.preview_ensure()
+                material.asset_generate_preview()
+    return None
+
+
+def _material_items(self, context):
+    items = [(m.name, m.name, 'Use this material in the active sample') for m in bpy.data.materials]
+    if not items:
+        items = [('__NONE__', 'No materials', '')]
+    if items != _catalogue:
+        _catalogue[:] = items
+    return _catalogue
+
+
+class MAX_OT_mtl_slot(bpy.types.Operator):
+    bl_idname = 'max.mtl_slot'
+    bl_label = 'Sample Slot'
     index: IntProperty()
 
     def execute(self, context):
-        ensure_slots(context.scene)
-        st = state(context)
-        st.active = self.index
-        slot = st.slots[self.index]
-        if slot.material is None:
-            slot.material = new_default_material(self.index)
-        _show_in_node_editor(context, slot.material)
-        return {"FINISHED"}
+        editor = ensure_slots(context.scene)
+        if not 0 <= self.index < len(editor.slots):
+            return {'CANCELLED'}
+        editor.active = self.index
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_get(Operator):
-    """Get Material: put an existing material into the active sample slot"""
-    bl_idname = "max.mtl_get"
-    bl_label = "Get Material"
-    bl_property = "material"
-    bl_options = {"UNDO"}
-
-    def _items(self, context):
-        items = [(m.name, m.name, "", m.preview.icon_id if m.preview else 0, i)
-                 for i, m in enumerate(sorted(bpy.data.materials, key=lambda m: m.name.lower()))
-                 if not m.is_grease_pencil]
-        MAX_OT_mtl_get._cache = items
-        return items
-
-    material: EnumProperty(items=_items)
+class MAX_OT_mtl_get(bpy.types.Operator):
+    bl_idname = 'max.mtl_get'
+    bl_label = 'Get Material'
+    bl_property = 'material'
+    bl_options = {'UNDO'}
+    material: EnumProperty(items=_material_items)
 
     def invoke(self, context, event):
+        self._source_scene = context.scene
+        self._source_slot = state(context).active
         context.window_manager.invoke_search_popup(self)
-        return {"RUNNING_MODAL"}
+        return {'FINISHED'}
 
     def execute(self, context):
-        ensure_slots(context.scene)
-        mat = bpy.data.materials.get(self.material)
-        if mat is None:
-            return {"CANCELLED"}
-        st = state(context)
-        st.slots[st.active].material = mat
-        _show_in_node_editor(context, mat)
-        return {"FINISHED"}
+        if getattr(self, '_source_scene', context.scene) != context.scene:
+            return {'CANCELLED'}
+        material = bpy.data.materials.get(self.material)
+        if material is None:
+            return {'CANCELLED'}
+        editor = ensure_slots(context.scene)
+        index = getattr(self, '_source_slot', editor.active)
+        if index >= len(editor.slots):
+            return {'CANCELLED'}
+        editor.slots[index].material = material
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_assign(Operator):
-    """Assign Material to Selection"""
-    bl_idname = "max.mtl_assign"
-    bl_label = "Assign Material to Selection"
-    bl_options = {"REGISTER", "UNDO"}
+class MAX_OT_mtl_assign(bpy.types.Operator):
+    bl_idname = 'max.mtl_assign'
+    bl_label = 'Assign Material to Selection'
+    bl_options = {'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        return active_material(context) is not None and any(
-            o.type in {"MESH", "CURVE", "FONT", "SURFACE", "META"} for o in context.selected_objects)
+        return bool(active_material(context) and context.selected_objects)
 
     def execute(self, context):
-        mat = active_material(context)
-        n = 0
-        for ob in context.selected_objects:
-            if ob.type not in {"MESH", "CURVE", "FONT", "SURFACE", "META"}:
-                continue
-            ob.data.materials.clear()          # Max replaces the object's material
-            ob.data.materials.append(mat)
-            n += 1
-        mat.use_fake_user = False if mat.users > 1 else mat.use_fake_user
-        self.report({"INFO"}, f"{mat.name} assigned to {n} object(s)")
-        return {"FINISHED"}
+        material = active_material(context)
+        count = sum(assign_material(obj, material) for obj in context.selected_objects)
+        return {'FINISHED'} if count else {'CANCELLED'}
 
 
-class MAX_OT_mtl_reset(Operator):
-    """Reset Map/Mtl to Default Settings"""
-    bl_idname = "max.mtl_reset"
-    bl_label = "Reset Map/Mtl to Default Settings"
-    bl_options = {"REGISTER", "UNDO"}
+class MAX_OT_mtl_reset(bpy.types.Operator):
+    bl_idname = 'max.mtl_reset'
+    bl_label = 'Reset Map/Mtl to Default Settings'
+    bl_description = 'Reset this material, including its assigned scene users'
+    bl_options = {'UNDO'}
+
+    def invoke(self, context, event):
+        _capture_target(self, context)
+        return context.window_manager.invoke_confirm(self, event, message='Reset the active material and its scene users?')
 
     def execute(self, context):
-        mat = active_material(context)
-        if mat is None:
-            return {"CANCELLED"}
-        for k, *_ in MAP_CHANNELS:
-            clear_map(mat, k)
-        mat.max_std.shader = "BLINN"
-        mat.max_diffuse = MAX_DEFAULT_DIFFUSE
-        mat.max_specular = (1, 1, 1)
-        mat.max_spec_level = 0
-        mat.max_glossiness = 10
-        mat.max_opacity = 100
-        mat.max_std.self_illum_amount = 0
-        mat.max_std.self_illum_color_on = False
-        return {"FINISHED"}
+        material = _resolve_target(self, context)
+        if material is None or material.library:
+            return {'CANCELLED'}
+        for key in _all_map_info:
+            clear_map(material, key)
+        material.max_diffuse = MAX_DEFAULT_DIFFUSE if material_kind(material) == 'STANDARD' else (.5, .5, .5)
+        material.max_specular = (1, 1, 1)
+        material.max_spec_level, material.max_glossiness, material.max_opacity = 0, 10, 100
+        material.max_ior, material.max_two_sided = 1.5, False
+        for field in material.max_std.bl_rna.properties:
+            if field.identifier != 'rna_type' and not field.is_readonly:
+                material.max_std.property_unset(field.identifier)
+        _standard_update(material.max_std, context)
+        _shader_update(material.max_std, context)
+        adapter = material.node_tree.nodes.get('MaxPhysical_BaseWeight') if material.node_tree else None
+        if adapter:
+            adapter.inputs[2].default_value = (1, 1, 1, 1)
+        if material_kind(material) == 'PHYSICAL':
+            material.max_physical.base_weight = 1
+            material.max_physical.base_color = (.5, .5, .5)
+            material.max_physical.roughness = 0
+            material.max_physical.coating = 0
+            material.max_physical.transparency = 0
+            material.max_ior = 1.52
+            material.max_spec_level = 50
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_make_unique(Operator):
-    """Make Material Copy / Make Unique"""
-    bl_idname = "max.mtl_make_unique"
-    bl_label = "Make Material Copy"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        st = state(context)
-        mat = active_material(context)
-        if mat is None:
-            return {"CANCELLED"}
-        new = mat.copy()
-        new.use_fake_user = True
-        st.slots[st.active].material = new
-        _show_in_node_editor(context, new)
-        return {"FINISHED"}
-
-
-class MAX_OT_mtl_put_library(Operator):
-    """Put to Library: mark the material as an asset so it appears in the Asset Browser"""
-    bl_idname = "max.mtl_put_library"
-    bl_label = "Put to Library"
+class MAX_OT_mtl_make_unique(bpy.types.Operator):
+    bl_idname = 'max.mtl_make_unique'
+    bl_label = 'Make Material Copy'
+    bl_options = {'UNDO'}
 
     def execute(self, context):
-        mat = active_material(context)
-        if mat is None:
-            return {"CANCELLED"}
-        mat.asset_mark()
-        mat.asset_generate_preview()
-        self.report({"INFO"}, f"{mat.name} added to the asset library (Asset Browser > Current File)")
-        return {"FINISHED"}
+        material = active_material(context)
+        if not material:
+            return {'CANCELLED'}
+        editor = state(context)
+        editor.slots[editor.active].material = material.copy()
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_select_by(Operator):
-    """Select by Material: select every object that uses this material"""
-    bl_idname = "max.mtl_select_by"
-    bl_label = "Select by Material"
-    bl_options = {"REGISTER", "UNDO"}
+class MAX_OT_mtl_put_library(bpy.types.Operator, ExportHelper):
+    bl_idname = 'max.mtl_put_library'
+    bl_label = 'Put to Library'
+    filename_ext = '.blend'
+    filter_glob: StringProperty(default='*.blend', options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        _capture_target(self, context)
+        return ExportHelper.invoke(self, context, event)
 
     def execute(self, context):
-        mat = active_material(context)
-        if mat is None:
-            return {"CANCELLED"}
-        users = [o for o in context.view_layer.objects
-                 if hasattr(o.data, "materials") and o.data and mat.name in [m.name for m in o.data.materials if m]]
-        for o in context.view_layer.objects:
-            o.select_set(o in users)
-        if users:
-            context.view_layer.objects.active = users[0]
-        self.report({"INFO"}, f"{len(users)} object(s) use {mat.name}")
-        return {"FINISHED"}
+        material = _resolve_target(self, context)
+        if material is None:
+            return {'CANCELLED'}
+        try:
+            bpy.data.libraries.write(self.filepath, {material}, fake_user=True)
+        except (OSError, RuntimeError) as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_show_in_viewport(Operator):
-    """Show Shaded Material in Viewport (textures in the 3D views)"""
-    bl_idname = "max.mtl_show_in_viewport"
-    bl_label = "Show Shaded Material in Viewport"
+class MAX_OT_mtl_select_by(bpy.types.Operator):
+    bl_idname = 'max.mtl_select_by'
+    bl_label = 'Select by Material'
+    bl_options = {'UNDO'}
+
+    def execute(self, context):
+        from . import scene_explorer
+        material = active_material(context)
+        if not material:
+            return {'CANCELLED'}
+        scene_explorer.select_objects(context, [obj for obj in context.scene.objects
+            if any(slot.material == material for slot in obj.material_slots)])
+        return {'FINISHED'}
+
+
+class MAX_OT_mtl_show_in_viewport(bpy.types.Operator):
+    bl_idname = 'max.mtl_show_in_viewport'
+    bl_label = 'Show Shaded Material in Viewport'
 
     def execute(self, context):
         for window in context.window_manager.windows:
             for area in window.screen.areas:
-                if area.type == "VIEW_3D":
-                    sh = area.spaces.active.shading
-                    sh.type = "SOLID"
-                    sh.color_type = "OBJECT" if sh.color_type == "TEXTURE" else "TEXTURE"
-        return {"FINISHED"}
+                if area.type == 'VIEW_3D':
+                    area.spaces.active.shading.color_type = 'MATERIAL'
+                    area.tag_redraw()
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_set_type(Operator):
-    """Material type"""
-    bl_idname = "max.mtl_set_type"
-    bl_label = "Material Type"
-    bl_options = {"REGISTER", "UNDO"}
+class MAX_OT_mtl_sample_options(bpy.types.Operator):
+    bl_idname = 'max.mtl_sample_options'
+    bl_label = 'Sample Type'
+    bl_options = {'UNDO', 'INTERNAL'}
 
-    kind: EnumProperty(items=[("STANDARD", "Standard", ""), ("VRAY", "VRayMtl", ""),
-                              ("PHYSICAL", "Physical Material", "")])
+    def invoke(self, context, event):
+        _capture_target(self, context)
+        return context.window_manager.invoke_popup(self, width=190)
 
-    def execute(self, context):
-        mat = active_material(context)
-        if mat is None:
-            return {"CANCELLED"}
-        if self.kind == "VRAY":
-            mat["max_vray"] = 1
-        else:
-            if "max_vray" in mat:
-                del mat["max_vray"]
-        mat["max_type"] = self.kind
-        return {"FINISHED"}
-
-
-class MAX_OT_mtl_load_map(Operator, ImportHelper):
-    """Load a Bitmap into this map channel"""
-    bl_idname = "max.mtl_load_map"
-    bl_label = "Bitmap"
-    bl_options = {"REGISTER", "UNDO"}
-
-    channel: StringProperty(options={"HIDDEN"})
-    filter_glob: StringProperty(default="*.png;*.jpg;*.jpeg;*.tga;*.tif;*.tiff;*.bmp;*.exr;*.hdr;*.psd;*.webp",
-                                options={"HIDDEN"})
-
-    @classmethod
-    def description(cls, context, props):
-        return f"{MAP_INFO.get(props.channel, ('Map',))[0]}: choose a bitmap"
+    def draw(self, context):
+        material = _resolve_target(self, context)
+        if material:
+            self.layout.prop(material, 'preview_render_type', text='')
 
     def execute(self, context):
-        mat = active_material(context)
-        if mat is None:
-            return {"CANCELLED"}
-        img = bpy.data.images.load(self.filepath, check_existing=True)
-        set_map(mat, self.channel, img)
-        return {"FINISHED"}
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_clear_map(Operator):
-    """Remove this map"""
-    bl_idname = "max.mtl_clear_map"
-    bl_label = "Clear Map"
-    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
+class MAX_OT_mtl_id_channel(bpy.types.Operator):
+    bl_idname = 'max.mtl_id_channel'
+    bl_label = 'Material ID Channel'
+    bl_options = {'UNDO', 'INTERNAL'}
+    channel: IntProperty(name='Material ID Channel', min=0, max=32767)
 
+    def invoke(self, context, event):
+        _capture_target(self, context)
+        material = _resolve_target(self, context)
+        if not material or material.library:
+            return {'CANCELLED'}
+        self.channel = material.pass_index
+        return context.window_manager.invoke_props_dialog(self, width=240)
+
+    def execute(self, context):
+        material = _resolve_target(self, context)
+        if not material or material.library:
+            return {'CANCELLED'}
+        material.pass_index = self.channel
+        return {'FINISHED'}
+
+
+class MAX_OT_mtl_refresh_sample(bpy.types.Operator):
+    bl_idname = 'max.mtl_refresh_sample'
+    bl_label = 'Make Preview'
+
+    def execute(self, context):
+        material = active_material(context)
+        if not material:
+            return {'CANCELLED'}
+        invalidate_preview(material)
+        _request_preview(material)
+        return {'FINISHED'}
+
+
+class MAX_OT_mtl_set_type(bpy.types.Operator):
+    bl_idname = 'max.mtl_set_type'
+    bl_label = 'Material Type'
+    bl_options = {'UNDO'}
+    kind: EnumProperty(items=[('STANDARD', 'Standard (Legacy)', ''), ('VRAY', 'VRayMtl (Principled equivalent)', ''),
+                             ('PHYSICAL', 'Physical Material (Principled equivalent)', '')], default='PHYSICAL')
+
+    def invoke(self, context, event):
+        _capture_target(self, context)
+        return context.window_manager.invoke_props_dialog(self, width=350)
+
+    def draw(self, context):
+        self.layout.prop(self, 'kind', text='')
+        self.layout.label(text='Rendered with Blender Principled shading.')
+
+    def execute(self, context):
+        if getattr(self, '_source_scene', context.scene) != context.scene:
+            return {'CANCELLED'}
+        material = _resolve_target(self, context)
+        if material is None:
+            if getattr(self, '_target_id', 0):
+                return {'CANCELLED'}
+            editor = ensure_slots(context.scene)
+            index = getattr(self, '_source_slot', editor.active)
+            if index >= len(editor.slots):
+                return {'CANCELLED'}
+            material = editor.slots[index].material = new_default_material(index, kind=self.kind)
+        if material.library or shader(material, create=True) is None:
+            return {'CANCELLED'}
+        material['max_type'] = self.kind
+        material['max_vray'] = self.kind == 'VRAY'
+        return {'FINISHED'}
+
+
+class MAX_OT_mtl_load_map(bpy.types.Operator, ImportHelper):
+    bl_idname = 'max.mtl_load_map'
+    bl_label = 'Bitmap'
+    bl_options = {'UNDO'}
+    channel: StringProperty()
+    filter_glob: StringProperty(default='*.png;*.jpg;*.jpeg;*.tga;*.tif;*.tiff;*.bmp;*.exr;*.hdr;*.psd;*.webp', options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        _capture_target(self, context)
+        if not self._target_id:
+            return {'CANCELLED'}
+        return ImportHelper.invoke(self, context, event)
+
+    def execute(self, context):
+        material = _resolve_target(self, context)
+        if material is None or self.channel not in _all_map_info:
+            return {'CANCELLED'}
+        try:
+            image = bpy.data.images.load(bpy.path.abspath(self.filepath), check_existing=True)
+            set_map(material, self.channel, image)
+        except (RuntimeError, ValueError, OSError) as exc:
+            self.report({'WARNING'}, 'Bitmap was not loaded: ' + str(exc))
+            return {'CANCELLED'}
+        return {'FINISHED'}
+
+
+class MAX_OT_mtl_clear_map(bpy.types.Operator):
+    bl_idname = 'max.mtl_clear_map'
+    bl_label = 'Clear Map'
+    bl_options = {'UNDO'}
     channel: StringProperty()
 
     def execute(self, context):
-        mat = active_material(context)
-        if mat is not None:
-            clear_map(mat, self.channel)
-        return {"FINISHED"}
+        material = active_material(context)
+        if material is None or material.library or self.channel not in _all_map_info:
+            return {'CANCELLED'}
+        clear_map(material, self.channel)
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_pick(Operator):
-    """Pick Material from Object: click an object in a viewport (eyedropper)"""
-    bl_idname = "max.mtl_pick"
-    bl_label = "Pick Material from Object"
-    bl_options = {"REGISTER", "UNDO"}
+class MAX_OT_mtl_map_actions(bpy.types.Operator):
+    bl_idname = 'max.mtl_map_actions'
+    bl_label = 'Map'
+    bl_options = {'INTERNAL'}
+    channel: StringProperty(options={'HIDDEN'})
 
     def invoke(self, context, event):
-        if not any(a.type == "VIEW_3D" for a in context.window.screen.areas):
-            # started from the Material Editor window: listen in the window with the viewports
-            target = next((w for w in context.window_manager.windows
-                           if any(a.type == "VIEW_3D" for a in w.screen.areas)), None)
-            if target is None:
-                return {"CANCELLED"}
-            with context.temp_override(window=target, screen=target.screen, area=None, region=None):
-                bpy.ops.max.mtl_pick("INVOKE_DEFAULT")
-            return {"FINISHED"}
-        context.window_manager.modal_handler_add(self)
-        context.window.cursor_modal_set("EYEDROPPER")
-        context.workspace.status_text_set("Pick Material: click an object.  Right-click / Esc: cancel")
-        return {"RUNNING_MODAL"}
+        return context.window_manager.invoke_popup(self, width=190)
 
-    def _finish(self, context):
-        context.window.cursor_modal_restore()
-        context.workspace.status_text_set(None)
-
-    def modal(self, context, event):
-        if event.type in {"RIGHTMOUSE", "ESC"}:
-            self._finish(context)
-            return {"CANCELLED"}
-        if event.type == "LEFTMOUSE" and event.value == "PRESS":
-            from .create import region_under_mouse
-            area, region = region_under_mouse(context, event.mouse_x, event.mouse_y)
-            if region is None:
-                return {"RUNNING_MODAL"}
-            co = (event.mouse_x - region.x, event.mouse_y - region.y)
-            rv3d = region.data
-            origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, co)
-            direction = view3d_utils.region_2d_to_vector_3d(region, rv3d, co)
-            dg = context.evaluated_depsgraph_get()
-            hit, _loc, _n, face, ob, _m = context.scene.ray_cast(dg, origin, direction)
-            self._finish(context)
-            if not hit or ob is None:
-                self.report({"WARNING"}, "No object under the cursor")
-                return {"CANCELLED"}
-            ob = ob.original
-            mat = None
-            if ob.type == "MESH" and ob.data.materials:
-                try:
-                    mi = ob.evaluated_get(dg).data.polygons[face].material_index
-                    mat = ob.material_slots[mi].material
-                except (IndexError, AttributeError):
-                    mat = ob.active_material
-            else:
-                mat = ob.active_material
-            if mat is None:
-                self.report({"WARNING"}, f"{ob.name} has no material")
-                return {"CANCELLED"}
-            ensure_slots(context.scene)
-            st = state(context)
-            st.slots[st.active].material = mat
-            self.report({"INFO"}, f"Picked {mat.name} from {ob.name}")
-            for area in context.window.screen.areas:
-                area.tag_redraw()
-            return {"FINISHED"}
-        return {"PASS_THROUGH"}
-
-
-class MAX_OT_mtl_reset_slots(Operator):
-    """Reset Material Editor Slots"""
-    bl_idname = "max.mtl_reset_slots"
-    bl_label = "Reset Material Editor Slots"
-    bl_options = {"REGISTER", "UNDO"}
+    def draw(self, context):
+        self.layout.operator('max.mtl_load_map', text='Bitmap...').channel = self.channel
+        self.layout.operator('max.mtl_clear_map', text='Clear Map').channel = self.channel
 
     def execute(self, context):
-        ensure_slots(context.scene)
-        for i, slot in enumerate(state(context).slots):
-            slot.material = None
-        state(context).active = 0
-        return {"FINISHED"}
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_add_slot(Operator):
-    """Add a sample slot with a new material (no 24-slot limit)"""
-    bl_idname = "max.mtl_add_slot"
-    bl_label = "New Sample Slot"
-    bl_options = {"REGISTER", "UNDO"}
+class MAX_OT_mtl_reset_slots(bpy.types.Operator):
+    bl_idname = 'max.mtl_reset_slots'
+    bl_label = 'Reset Material Editor Slots'
+    bl_description = 'Replace sample references. Materials assigned to objects stay unchanged'
+    bl_options = {'UNDO'}
 
-    def execute(self, context):
-        ensure_slots(context.scene)
-        st = state(context)
-        slot = st.slots.add()
-        slot.material = new_default_material(len(st.slots) - 1)
-        st.active = len(st.slots) - 1
-        if st.visible != "ALL" and st.active >= int(st.visible):
-            st.visible = "ALL"
-        _show_in_node_editor(context, slot.material)
-        return {"FINISHED"}
-
-
-class MAX_OT_mtl_get_scene(Operator):
-    """Get All Scene Materials: put every material used in the scene into sample slots"""
-    bl_idname = "max.mtl_get_scene"
-    bl_label = "Get All Scene Materials"
-    bl_options = {"REGISTER", "UNDO"}
+    def invoke(self, context, event):
+        self._source_scene = context.scene
+        return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
-        ensure_slots(context.scene)
-        st = state(context)
-        used = []
-        for ob in context.scene.objects:
-            for ms in getattr(ob, "material_slots", []):
-                if ms.material and ms.material not in used:
-                    used.append(ms.material)
-        have = {sl.material for sl in st.slots if sl.material}
-        added = 0
-        for mat in used:
-            if mat in have:
-                continue
-            empty = next((sl for sl in st.slots if sl.material is None), None) or st.slots.add()
-            empty.material = mat
-            added += 1
-        if len(st.slots) > 24 or any(i >= int(st.visible) for i, sl in enumerate(st.slots)
-                                     if sl.material in used and st.visible != "ALL"):
-            st.visible = "ALL"
-        self.report({"INFO"}, f"{added} scene material(s) added to the editor")
-        return {"FINISHED"}
+        if getattr(self, '_source_scene', context.scene) != context.scene:
+            return {'CANCELLED'}
+        editor = ensure_slots(context.scene)
+        for index, slot in enumerate(editor.slots):
+            slot.material = new_default_material(index)
+        invalidate_preview()
+        return {'FINISHED'}
 
 
-def _assign_drop(context, ob, face_index, mat, only_part, region=None, area=None):
-    """3ds Max drop rules. Returns a short description of what changed."""
-    if ob.type not in {"MESH", "CURVE", "FONT", "SURFACE", "META"}:
-        return None
-    if ob.type == "MESH" and ob.mode == "EDIT":
-        me = ob.data
-        idx = next((i for i, m in enumerate(me.materials) if m == mat), None)
-        if idx is None:
-            me.materials.append(mat)
-            idx = len(me.materials) - 1
-        ob.active_material_index = idx
-        import bmesh
-        bm = bmesh.from_edit_mesh(me)
-        sel = [f for f in bm.faces if f.select]
-        if not sel and face_index is not None and face_index < len(bm.faces):
-            bm.faces.ensure_lookup_table()
-            sel = [bm.faces[face_index]]
-        for f in sel:
-            f.material_index = idx
-        bmesh.update_edit_mesh(me)
-        return f"{len(sel)} face(s) of {ob.name}"
-    if only_part and ob.material_slots and face_index is not None and ob.type == "MESH":
-        try:
-            mi = ob.data.polygons[face_index].material_index
-        except IndexError:
-            mi = ob.active_material_index
-        ob.material_slots[mi].material = mat
-        return f"part of {ob.name}"
-    targets = [ob]
-    if ob.select_get():
-        targets = [o for o in context.selected_objects
-                   if o.type in {"MESH", "CURVE", "FONT", "SURFACE", "META"}] or [ob]
-    for t in targets:
-        t.data.materials.clear()          # Max replaces the object's material
-        t.data.materials.append(mat)
-    return ", ".join(t.name for t in targets)
+class MAX_OT_mtl_add_slot(bpy.types.Operator):
+    bl_idname = 'max.mtl_add_slot'
+    bl_label = 'New Sample Slot'
+    bl_options = {'UNDO'}
+
+    def execute(self, context):
+        editor = ensure_slots(context.scene)
+        editor.slots.add().material = new_default_material(len(editor.slots)-1)
+        editor.active = len(editor.slots)-1
+        editor.visible = 'ALL'
+        return {'FINISHED'}
 
 
-class MAX_OT_mtl_drop(Operator):
-    """Drop a material onto an object (runs in the window with the viewports)"""
-    bl_idname = "max.mtl_drop"
-    bl_label = "Drop Material"
-    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
+class MAX_OT_mtl_get_scene(bpy.types.Operator):
+    bl_idname = 'max.mtl_get_scene'
+    bl_label = 'Get All Scene Materials'
+    bl_options = {'UNDO'}
 
+    def execute(self, context):
+        editor = ensure_slots(context.scene)
+        materials = {}
+        for obj in context.scene.objects:
+            for slot in obj.material_slots:
+                if slot.material:
+                    materials[slot.material.as_pointer()] = slot.material
+        for index, material in enumerate(materials.values()):
+            if index == len(editor.slots):
+                editor.slots.add()
+            editor.slots[index].material = material
+        return {'FINISHED'}
+
+
+class MAX_OT_mtl_drop(bpy.types.Operator):
+    bl_idname = 'max.mtl_drop'
+    bl_label = 'Drop Material'
+    bl_options = {'UNDO'}
     material: StringProperty()
 
-    def invoke(self, context, event):
-        self.mat = bpy.data.materials.get(self.material)
-        if self.mat is None:
-            return {"CANCELLED"}
-        self.dropped = 0
+    def execute(self, context):
+        material = bpy.data.materials.get(self.material)
+        return {'FINISHED'} if assign_material(context.active_object, material) else {'CANCELLED'}
+
+
+def object_at_event(context, event):
+    from .create import region_under_mouse
+    from bpy_extras.view3d_utils import region_2d_to_origin_3d, region_2d_to_vector_3d
+    from . import max_editor_windows
+    area, region = region_under_mouse(context, event.mouse_x, event.mouse_y)
+    if area is None or max_editor_windows.is_host_area(area):
+        return None
+    rv = area.spaces.active.region_3d
+    point = (event.mouse_x-region.x, event.mouse_y-region.y)
+    origin = region_2d_to_origin_3d(region, rv, point)
+    direction = region_2d_to_vector_3d(region, rv, point)
+    hit, _, _, _, obj, _ = context.scene.ray_cast(context.evaluated_depsgraph_get(), origin, direction)
+    return obj.original if hit else None
+
+
+def _end_pointer(session):
+    if session._done:
+        return
+    session._done = True
+    for window in bpy.context.window_manager.windows:
+        if window.as_pointer() in session._windows:
+            window.cursor_modal_restore()
+            window.workspace.status_text_set(None)
+    if session in _pickers:
+        _pickers.remove(session)
+
+
+def _pointer_event(session, context, event):
+    if (session._done or session._generation != _generation or session._scene != context.scene
+            or session._owner not in {w.as_pointer() for w in context.window_manager.windows}):
+        _end_pointer(session)
+        return {'CANCELLED'}
+    if event.type in {'ESC', 'RIGHTMOUSE'}:
+        _end_pointer(session)
+        return {'CANCELLED'}
+    if event.type == 'LEFTMOUSE' and event.value == session.commit_event:
+        obj = object_at_event(context, event)
+        applied = False
+        if obj:
+            try:
+                if session.kind == 'DRAG':
+                    applied = assign_material(obj, session.material)
+                elif obj.active_material:
+                    editor = state(context)
+                    if session.slot < len(editor.slots):
+                        editor.slots[session.slot].material = obj.active_material
+                        applied = True
+            except ReferenceError:
+                pass
+        if applied:
+            _end_pointer(session)
+            bpy.ops.ed.undo_push(message=session.label)
+            return {'FINISHED'}
+        if session.commit_event == 'RELEASE':
+            _end_pointer(session)
+            return {'CANCELLED'}
+    return {'RUNNING_MODAL'}
+
+
+class _MaterialPointer:
+    def _begin(self, context):
+        # A relay can outlive the initiating operator's RNA. Keep its shared
+        # state in Python, with no reference back to that operator.
+        self._session = session = SimpleNamespace(_generation=_generation, _scene=context.scene,
+            _windows=tuple(w.as_pointer() for w in context.window_manager.windows),
+            _owner=context.window.as_pointer(), _token=str(id(self)), _done=False,
+            kind='DRAG' if self._commit_event == 'RELEASE' else 'PICK',
+            material=getattr(self, '_material', None), slot=state(context).active,
+            commit_event=self._commit_event, label=self.bl_label)
+        for window in context.window_manager.windows:
+            window.cursor_modal_set('EYEDROPPER')
+        _pickers.append(session)
+        for window in context.window_manager.windows:
+            if window != context.window:
+                area = next((a for a in window.screen.areas if a.type == 'VIEW_3D'), None)
+                if area:
+                    with context.temp_override(window=window, area=area):
+                        bpy.ops.max.mtl_pointer_relay('INVOKE_DEFAULT', token=session._token)
+        context.workspace.status_text_set('Pick an object. Right-click or Esc cancels.')
         context.window_manager.modal_handler_add(self)
-        for w in context.window_manager.windows:
-            w.cursor_modal_set("PAINT_BRUSH")
-        self._status(context, None)
-        return {"RUNNING_MODAL"}
-
-    def _status(self, context, target):
-        txt = f"Drag {self.mat.name}: click an object to drop it"
-        if target:
-            txt = f"Drop {self.mat.name} on {target}"
-        txt += "   (Ctrl: only that part · Shift: keep dropping · Right-click/Esc: done)"
-        try:
-            context.workspace.status_text_set(txt)
-        except Exception:
-            pass
-
-    def _finish(self, context):
-        for w in context.window_manager.windows:
-            w.cursor_modal_restore()
-        try:
-            context.workspace.status_text_set(None)
-        except Exception:
-            pass
-        for w in context.window_manager.windows:
-            for a in w.screen.areas:
-                a.tag_redraw()
-
-    def _hit(self, context, event):
-        from .create import region_under_mouse
-        area, region = region_under_mouse(context, event.mouse_x, event.mouse_y)
-        if region is None:
-            return None, None, None, None
-        co = (event.mouse_x - region.x, event.mouse_y - region.y)
-        rv3d = region.data
-        origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, co)
-        direction = view3d_utils.region_2d_to_vector_3d(region, rv3d, co)
-        dg = context.evaluated_depsgraph_get()
-        hit, _l, _n, face, ob, _m = context.scene.ray_cast(dg, origin, direction)
-        if not hit or ob is None:
-            return None, None, area, region
-        return ob.original, face, area, region
+        return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
-        if event.type in {"RIGHTMOUSE", "ESC"} and event.value == "PRESS":
-            self._finish(context)
-            return {"FINISHED"} if self.dropped else {"CANCELLED"}
-        if event.type == "MOUSEMOVE":
-            ob, _f, _a, _r = self._hit(context, event)
-            self._status(context, ob.name if ob else None)
-            return {"RUNNING_MODAL"}
-        if event.type == "LEFTMOUSE" and event.value == "PRESS":
-            ob, face, area, region = self._hit(context, event)
-            if region is None:
-                return {"PASS_THROUGH"}       # e.g. clicking UI: let it through
-            if ob is None:
-                if not event.shift:
-                    self._finish(context)
-                    return {"FINISHED"} if self.dropped else {"CANCELLED"}
-                return {"RUNNING_MODAL"}
-            what = _assign_drop(context, ob, face, self.mat, event.ctrl)
-            if what:
-                self.dropped += 1
-                self.report({"INFO"}, f"{self.mat.name} -> {what}")
-            if not event.shift:
-                self._finish(context)
-                return {"FINISHED"}
-            return {"RUNNING_MODAL"}
-        return {"PASS_THROUGH"}
+        return _pointer_event(self._session, context, event)
 
 
-class MAX_OT_mtl_drag(Operator):
-    """Drag this material to an object: click the hand, then click an object in a viewport.
-    Ctrl: only the clicked part · Shift: keep dropping · in Edit Mode: selected faces"""
-    bl_idname = "max.mtl_drag"
-    bl_label = "Drag Material to Object"
+class MAX_OT_mtl_pointer_relay(bpy.types.Operator):
+    """Carry one Compact drag or pick into another owned application window."""
+    bl_idname = 'max.mtl_pointer_relay'
+    bl_label = 'Material Pointer'
+    bl_options = {'INTERNAL'}
+    token: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
 
-    index: IntProperty()
+    def invoke(self, context, event):
+        self._picker = next((p for p in _pickers if p._token == self.token), None)
+        if self._picker is None:
+            return {'CANCELLED'}
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        if self._picker._done:
+            return {'FINISHED', 'PASS_THROUGH'}
+        return _pointer_event(self._picker, context, event)
+
+
+class MAX_OT_mtl_pick(_MaterialPointer, bpy.types.Operator):
+    bl_idname = 'max.mtl_pick'
+    bl_label = 'Pick Material from Object'
+    bl_options = {'INTERNAL'}
+    _commit_event = 'PRESS'
 
     def invoke(self, context, event):
         ensure_slots(context.scene)
-        st = state(context)
-        while self.index >= len(st.slots):
-            st.slots.add()
-        st.active = self.index
-        slot = st.slots[self.index]
-        if slot.material is None:
-            slot.material = new_default_material(self.index)
-        # run the drop in the window that has the viewports (modal handlers are per window)
-        wm = context.window_manager
-        target = next((w for w in wm.windows if any(a.type == "VIEW_3D" for a in w.screen.areas)), context.window)
-        with context.temp_override(window=target, screen=target.screen, area=None, region=None):
-            bpy.ops.max.mtl_drop("INVOKE_DEFAULT", material=slot.material.name)
-        return {"FINISHED"}
+        return self._begin(context)
+
+class MAX_OT_mtl_drag(_MaterialPointer, bpy.types.Operator):
+    bl_idname = 'max.mtl_drag'
+    bl_label = 'Drag Material to Object'
+    bl_options = {'INTERNAL'}
+    index: IntProperty()
+    _commit_event = 'RELEASE'
+
+    def invoke(self, context, event):
+        editor = ensure_slots(context.scene)
+        if not 0 <= self.index < len(editor.slots):
+            return {'CANCELLED'}
+        self._material = editor.slots[self.index].material
+        if self._material is None:
+            return {'CANCELLED'}
+        return self._begin(context)
+
+class MAX_OT_mtl_value(bpy.types.Operator):
+    bl_idname = 'max.mtl_value'
+    bl_label = 'Material Parameter'
+    bl_options = {'UNDO', 'INTERNAL'}
+    material: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+    field: StringProperty(options={'HIDDEN'})
+    color: FloatVectorProperty(name='Color', size=3, subtype='COLOR', min=0, max=1)
+    choice: EnumProperty(name='Shader', items=SHADERS)
+
+    def invoke(self, context, event):
+        material = bpy.data.materials.get(self.material) if self.material else active_material(context)
+        if material is None:
+            return {'CANCELLED'}
+        self._source_scene = context.scene
+        self._target_id = material.as_pointer()
+        data, key = _field_owner(material, self.field)
+        value = getattr(data, key)
+        if key == 'shader':
+            self.choice = value
+        else:
+            self.color = value[:3]
+        return context.window_manager.invoke_props_dialog(self, width=280)
+
+    def draw(self, context):
+        self.layout.prop(self, 'choice' if self.field == 'std.shader' else 'color', text='')
 
     def execute(self, context):
-        return {"CANCELLED"}
+        material = (_resolve_target(self, context) if hasattr(self, '_target_id') else
+                    bpy.data.materials.get(self.material) if self.material else active_material(context))
+        if material is None or material.library:
+            return {'CANCELLED'}
+        data, key = _field_owner(material, self.field)
+        value = self.choice if self.field == 'std.shader' else self.color
+        if key != 'shader' and len(getattr(data, key)) == 4:
+            value = (*value, 1)
+        setattr(data, key, value)
+        invalidate_preview(material)
+        return {'FINISHED'}
 
 
-# ---------------------------------------------------------------------------
-# UI
-# ---------------------------------------------------------------------------
-
-def _icon_value(name):
-    return bpy.types.UILayout.bl_rna.functions["prop"].parameters["icon"].enum_items[name].value
+def _icon_button(layout, op, key, fallback):
+    return layout.operator(op, text='', **max_icons.ui(key, fallback))
 
 
-class _MtlPanel:
-    bl_space_type = "NODE_EDITOR"
-    bl_region_type = "UI"
-    bl_category = "Material Editor"
+class MAX_MT_mtl_material(bpy.types.Menu):
+    bl_label = 'Material'
+
+    def draw(self, context):
+        for command in ('get', 'assign', 'make_unique', 'put_library', 'select_by', 'reset'):
+            self.layout.operator('max.mtl_' + command)
+
+
+class MAX_MT_mtl_modes(bpy.types.Menu):
+    bl_label = 'Modes'
+
+    def draw(self, context):
+        self.layout.label(text='Compact Material Editor', icon='CHECKMARK')
+        row = self.layout.row()
+        row.enabled = False
+        row.label(text='Slate Material Editor (unavailable)')
+
+
+class MAX_MT_mtl_navigation(bpy.types.Menu):
+    bl_label = 'Navigation'
+
+    def draw(self, context):
+        row = self.layout.row()
+        row.enabled = False
+        row.label(text='Go to Parent (no nested map editor)')
+        self.layout.operator('max.mtl_get')
+
+
+class MAX_MT_mtl_options(bpy.types.Menu):
+    bl_label = 'Options'
+
+    def draw(self, context):
+        self.layout.prop_enum(state(context), 'visible', '6', text='3 x 2 Sample Windows')
+        self.layout.prop_enum(state(context), 'visible', '15', text='5 x 3 Sample Windows')
+        self.layout.prop_enum(state(context), 'visible', '24', text='6 x 4 Sample Windows')
+        self.layout.operator('max.mtl_show_in_viewport')
+
+
+class MAX_MT_mtl_utilities(bpy.types.Menu):
+    bl_label = 'Utilities'
+
+    def draw(self, context):
+        self.layout.operator('max.mtl_reset_slots')
+        self.layout.operator('max.mtl_get_scene')
+        self.layout.separator()
+        self.layout.menu('MAX_MT_mtl_extensions')
+
+
+class MAX_MT_mtl_extensions(bpy.types.Menu):
+    bl_label = 'Extensions'
+
+    def draw(self, context):
+        self.layout.operator('max.mtl_add_slot', **max_icons.ui('create', ICON_FALLBACKS['create']))
+        self.layout.prop_enum(state(context), 'visible', 'ALL', text='Show All Saved Slots')
+        op = self.layout.operator('max.mtl_drag', **max_icons.ui('mtl_drag', ICON_FALLBACKS['mtl_drag']))
+        op.index = state(context).active
+
+
+class _MaterialPanel:
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = 'Material'
 
     @classmethod
     def poll(cls, context):
-        sp = context.space_data
-        return sp is not None and getattr(sp, "tree_type", "") == "ShaderNodeTree"
+        # Compatibility panels are available to Advanced Shader Editor users.
+        return context.area and context.area.type == 'NODE_EDITOR' and bool(active_material(context))
 
 
-class MAX_MT_mtl_material(Menu):
-    bl_label = "Material"
-    bl_idname = "MAX_MT_mtl_material"
-
-    def draw(self, context):
-        lay = self.layout
-        lay.operator_context = "INVOKE_DEFAULT"
-        lay.operator("max.mtl_get", text="Get Material...")
-        lay.operator("max.mtl_pick", text="Pick from Object")
-        lay.operator("max.mtl_assign", text="Assign to Selection")
-        lay.operator("max.mtl_reset", text="Reset Map/Mtl to Default Settings")
-        lay.operator("max.mtl_make_unique", text="Make Material Copy")
-        lay.operator("max.mtl_put_library", text="Put to Library")
-        lay.separator()
-        lay.operator("max.mtl_select_by", text="Select by Material")
-
-
-class MAX_MT_mtl_options(Menu):
-    bl_label = "Options"
-    bl_idname = "MAX_MT_mtl_options"
+class MAX_PT_mtl_editor(_MaterialPanel, bpy.types.Panel):
+    bl_label = 'Material Editor'
 
     def draw(self, context):
-        lay = self.layout
-        lay.props_enum(state(context), "visible")
-        mat = active_material(context)
-        if mat:
-            lay.separator()
-            lay.prop(mat, "use_preview_world", text="Background (World)")
+        row = self.layout.row(align=True)
+        for name in ('material', 'options', 'utilities'):
+            row.menu('MAX_MT_mtl_' + name)
+        row = self.layout.row(align=True)
+        for op, key, fallback in TOOLBAR:
+            _icon_button(row, op, key, fallback)
+        material = active_material(context)
+        if material:
+            self.layout.prop(material, 'name', text='')
+        self.layout.operator('max.open_editor', text='Compact Material Editor', **max_icons.ui('material_editor', 'MATERIAL')).editor = 'MATERIAL'
 
 
-class MAX_MT_mtl_utilities(Menu):
-    bl_label = "Utilities"
-    bl_idname = "MAX_MT_mtl_utilities"
-
-    def draw(self, context):
-        lay = self.layout
-        lay.operator("max.mtl_get_scene", text="Get All Scene Materials")
-        lay.operator("max.mtl_add_slot", text="Add Sample Slot")
-        lay.operator("max.mtl_reset_slots")
-        lay.operator("max.relink_textures", text="Relink Missing Bitmaps...")
-        lay.operator("outliner.orphans_purge", text="Clean Unused Materials").do_recursive = True
-
-
-class MAX_PT_mtl_editor(_MtlPanel, Panel):
-    bl_label = "Material Editor"
-    bl_options = {"HIDE_HEADER"}
+class MAX_PT_mtl_shader_basic(_MaterialPanel, bpy.types.Panel):
+    bl_label = 'Shader Basic Parameters'
+    bl_parent_id = 'MAX_PT_mtl_editor'
 
     def draw(self, context):
-        lay = self.layout
-        scene = context.scene
-        st = state(context)
-        # menu bar: Modes  Material  Navigation  Options  Utilities
-        row = lay.row(align=True)
-        row.emboss = "PULLDOWN_MENU"            # text menus like Max's menu bar
-        row.menu("MAX_MT_mtl_material", text="Material")
-        row.menu("MAX_MT_mtl_options", text="Options")
-        row.menu("MAX_MT_mtl_utilities", text="Utils")
+        material = active_material(context)
+        self.layout.prop(material.max_std, 'shader', text='')
+        self.layout.prop(material, 'max_two_sided', text='2-Sided')
+        row = self.layout.row()
+        row.enabled = False
+        row.prop(material.max_std, 'wire')
+        row.prop(material.max_std, 'faceted')
+        row.label(text='Face Map (unavailable)')
 
-        if len(st.slots) < NUM_SLOTS:
-            lay.operator("max.mtl_slot", text="Open Material Editor", **max_icons.ui("material_editor", "MATERIAL")).index = 0
-            return
 
-        if st.visible == "ALL":
-            count, cols = len(st.slots), 3
+class MAX_PT_mtl_blinn(_MaterialPanel, bpy.types.Panel):
+    bl_label = 'Blinn Basic Parameters'
+    bl_parent_id = 'MAX_PT_mtl_editor'
+
+    def draw(self, context):
+        material = active_material(context)
+        for key, label in (('max_diffuse', 'Diffuse'), ('max_specular', 'Specular'),
+                           ('max_spec_level', 'Specular Level'), ('max_glossiness', 'Glossiness'), ('max_opacity', 'Opacity')):
+            self.layout.prop(material, key, text=label)
+        self.layout.label(text='Principled shading equivalent')
+
+
+class MAX_PT_mtl_vray(_MaterialPanel, bpy.types.Panel):
+    bl_label = 'Basic Parameters (VRayMtl)'
+    bl_parent_id = 'MAX_PT_mtl_editor'
+
+    def draw(self, context):
+        MAX_PT_mtl_blinn.draw(self, context)
+
+    @classmethod
+    def poll(cls, context):
+        return super().poll(context) and material_kind(active_material(context)) == 'VRAY'
+
+
+class MAX_PT_mtl_extended(_MaterialPanel, bpy.types.Panel):
+    bl_label = 'Extended Parameters'
+    bl_parent_id = 'MAX_PT_mtl_editor'
+
+    def draw(self, context):
+        self.layout.prop(active_material(context), 'max_ior', text='Index of Refraction')
+
+
+class MAX_PT_mtl_maps(_MaterialPanel, bpy.types.Panel):
+    bl_label = 'Maps'
+    bl_parent_id = 'MAX_PT_mtl_editor'
+
+    def draw(self, context):
+        material = active_material(context)
+        for key, label, socket, color in MAP_CHANNELS:
+            row = self.layout.row(align=True)
+            row.label(text=label)
+            row.operator('max.mtl_load_map', text=map_badge(material, key) or 'None').channel = key
+            row.operator('max.mtl_clear_map', text='', icon='X').channel = key
+            if not map_supported(material, key):
+                row.label(text='Stored only')
+
+
+TOOLBAR = (
+    ('max.mtl_get', 'mtl_get', 'MATERIAL'),
+    ('max.mtl_assign', 'mtl_assign', 'CHECKMARK'),
+    ('max.mtl_reset', 'mtl_reset', 'TRASH'),
+    ('max.mtl_make_unique', 'make_unique', 'DUPLICATE'),
+    ('max.mtl_put_library', 'mtl_library', 'FILE_TICK'),
+    ('max.mtl_select_by', 'mtl_select', 'RESTRICT_SELECT_OFF'),
+    ('max.mtl_show_in_viewport', 'mtl_viewport', 'SHADING_TEXTURE'),
+)
+
+# The Compact rows follow the supplied 2026 screenshot. None means that the
+# corresponding Max operation has no implemented Blender equivalent.
+COMPACT_TOOLS = (
+    ('get', 'Get Material', 'max.mtl_get'),
+    ('put_scene', 'Put to Scene', None),
+    ('assign', 'Assign to Selection', 'max.mtl_assign'),
+    ('reset', 'Reset', 'max.mtl_reset'),
+    ('copy', 'Make Copy', 'max.mtl_make_unique'),
+    ('unique', 'Make Unique', 'max.mtl_make_unique'),
+    ('library', 'Put to Library', 'max.mtl_put_library'),
+    ('id', 'Material ID Channel', 'max.mtl_id_channel'),
+    ('viewport', 'Show Shaded Material in Viewport', 'max.mtl_show_in_viewport'),
+    ('end', 'Show End Result', None),
+    ('parent', 'Go to Parent', None),
+    ('sibling', 'Go Forward to Sibling', None),
+)
+SAMPLE_TOOLS = (
+    ('sample', 'Sample Type', 'max.mtl_sample_options'),
+    ('backlight', 'Backlight', None),
+    ('background', 'Background', None),
+    ('tiling', 'Sample UV Tiling', None),
+    ('video', 'Video Color Check', None),
+    ('preview', 'Make Preview', None),
+    ('options', 'Options', 'wm.call_menu'),
+    ('select', 'Select by Material', 'max.mtl_select_by'),
+    ('navigator', 'Material/Map Navigator', None),
+)
+
+
+def _invoke(idname, **properties):
+    def call(context, event):
+        category, name = idname.split('.')
+        return getattr(getattr(bpy.ops, category), name)('INVOKE_DEFAULT', **properties)
+    call.operator = idname
+    call.properties = properties
+    return call
+
+
+def _hit(host, bounds, action):
+    host.hits.append((bounds, action))
+
+
+def _label(x, y, text, size, color=(.89, .89, .89, 1)):
+    import blf
+    import os
+    if 'normal' not in _fonts:
+        for key, filename in [('normal', 'tahoma.ttf'), ('bold', 'tahomabd.ttf'), ('tile', 'timesbd.ttf')]:
+            path = os.path.join(os.environ.get('WINDIR', ''), 'Fonts', filename)
+            _fonts[key] = blf.load(path) if os.path.isfile(path) else 0
+    font = _fonts['normal']
+    blf.size(font, size)
+    blf.color(font, *color)
+    blf.position(font, x, y, 0)
+    blf.draw(font, str(text))
+
+
+def _bold(x, y, text, size):
+    import blf
+    _label(x, y, '', size)
+    font = _fonts['bold']
+    blf.size(font, size)
+    blf.color(font, .94, .94, .94, 1)
+    blf.position(font, x, y, 0)
+    blf.draw(font, text)
+
+
+def _preset_title(x, y, s):
+    import blf
+    _label(0, 0, '', round(13*s))
+    font = _fonts['tile']
+    for text, dx, dy, size in [('Physical', 12, 30, 42), ('material', 32, 4, 35)]:
+        blf.size(font, round(size*s))
+        for ox, oy, color in [(3, -3, (.12, .16, .12, 1)), (2, -2, (.24, .29, .22, 1)),
+                              (-1, 1, (.74, .81, .69, 1)), (0, 0, (.52, .64, .49, 1))]:
+            blf.color(font, *color)
+            blf.position(font, x+(dx+ox)*s, y+(dy+oy)*s, 0)
+            blf.draw(font, text)
+
+
+def _box(x, y, width, height, color=(.27, .27, .27, 1)):
+    from .max_editor_windows import _rect
+    _rect(x, y, width, height, color)
+
+
+def _polygon(points, color):
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+    program = gpu.shader.from_builtin('UNIFORM_COLOR')
+    program.bind()
+    program.uniform_float('color', color)
+    positions = [p for i in range(1, len(points)-1) for p in (points[0], points[i], points[i+1])]
+    batch_for_shader(program, 'TRIS', {'pos': positions}).draw(program)
+
+
+def _triangle(x, y, scale, direction='DOWN', color=(.8, .8, .8, 1)):
+    points = {'DOWN': [(0, 5), (8, 5), (4, 0)], 'UP': [(0, 0), (8, 0), (4, 5)],
+              'RIGHT': [(0, 0), (0, 8), (5, 4)], 'LEFT': [(5, 0), (5, 8), (0, 4)]}[direction]
+    _polygon([(x+a*scale, y+b*scale) for a, b in points], color)
+
+
+def _scroll_arrow(x, y, scale, direction):
+    arms = [[(0, 0), (4, 4), (4, 6), (0, 2)], [(4, 4), (8, 0), (8, 2), (4, 6)]]
+    for arm in arms:
+        if direction == 'DOWN':
+            arm = [(a, 6-b) for a, b in arm]
+        elif direction == 'LEFT':
+            arm = [(6-b, a) for a, b in arm]
+        elif direction == 'RIGHT':
+            arm = [(b, a) for a, b in arm]
+        _polygon([(x+a*scale, y+b*scale) for a, b in arm], (.36, .36, .36, 1))
+
+
+def _tool_icon(key, x, y, s, enabled=True):
+    """Independent strokes measured against the Compact toolbar reference."""
+    from .max_editor_windows import _line
+    ink = (.76, .78, .78, 1) if enabled else (.20, .21, .21, 1)
+    dark = (.12, .16, .16, 1)
+    aqua = (.49, .83, .84, 1) if enabled else (.24, .27, .27, 1)
+    def line(a, b, color=ink):
+        _line((x+a[0]*s, y+a[1]*s), (x+b[0]*s, y+b[1]*s), color)
+    def box(a, b, w, h, color=ink):
+        _box(x+a*s, y+b*s, w*s, h*s, color)
+    def circle(cx, cy, radius, color=ink, filled=False):
+        points = [(x+(cx+radius*math.cos(i*math.tau/24))*s,
+                   y+(cy+radius*math.sin(i*math.tau/24))*s) for i in range(24)]
+        if filled:
+            _polygon(points, color)
         else:
-            count = min(int(st.visible), len(st.slots))
-            cols = {6: 3, 15: 5, 24: 6}[int(st.visible)]
-        if st.active >= count:          # keep the active slot visible
-            count = len(st.slots)
-            cols = 3
-        width = context.region.width / max(context.preferences.system.ui_scale, 0.5)
-        icon_scale = max(2.0, min(5.0, (width - 60) / cols / 22))
+            for i, point in enumerate(points):
+                _line(point, points[(i+1) % len(points)], color)
+    def arrow(cx, cy, direction='DOWN', color=aqua):
+        _triangle(x+cx*s, y+cy*s, .6*s, direction, color)
+    def checker(cx, cy, radius=6, light=None, shade=None):
+        circle(cx, cy, radius, light or ((.75, .75, .75, 1) if enabled else (.25, .25, .25, 1)), True)
+        cell = radius/2.4
+        for row in range(-2, 3):
+            for col in range(-2, 3):
+                if (row+col) % 2 and col*col+row*row < 6:
+                    box(cx+(col-.5)*cell, cy+(row-.5)*cell, cell, cell,
+                        shade or ((.28, .28, .28, 1) if enabled else dark))
+        circle(cx, cy, radius, dark)
+    if key in {'sample', 'viewport', 'background'}:
+        if key != 'sample':
+            box(2, 2, 18, 18, dark)
+            box(3, 3, 16, 16, aqua if key == 'background' else ink)
+        if key in {'viewport', 'background'}:
+            checker(11, 11, 7, (.8, .94, .94, 1) if key == 'viewport' else None,
+                    aqua if key == 'viewport' else None)
+        else:
+            circle(11, 11, 8, ink, True)
+            for i in range(8):
+                box(1+i*3, 1, 1, 1)
+                box(1+i*3, 23, 1, 1)
+                box(1, 1+i*3, 1, 1)
+                box(23, 1+i*3, 1, 1)
+            arrow(18, 0, color=ink)
+    elif key == 'backlight':
+        circle(15, 15, 6, aqua, True)
+        circle(15, 15, 6, dark)
+        box(12, 6, 6, 5, aqua)
+        line((12, 6), (18, 6), dark)
+        line((12, 8), (18, 8), dark)
+        circle(8, 8, 6, aqua, True)
+        circle(8, 8, 6, ink)
+    elif key == 'tiling':
+        box(3, 3, 17, 17)
+        arrow(17, 0, color=ink)
+    elif key == 'video':
+        for i, color in enumerate([(.26, .76, .27, 1), (.94, .72, .27, 1), (.12, .72, .88, 1), (.87, .25, .22, 1)]):
+            box(3+i*4, 6, 3, 14, color if enabled else ink)
+        for i in range(16):
+            value = .15+i*.045 if enabled else .2+i*.004
+            box(3+i, 1, 1, 4, (value, value, value, 1))
+    elif key == 'preview':
+        box(2, 2, 19, 19, ink)
+        box(3, 3, 17, 17, dark)
+        for i in range(5):
+            box(4+i*3, 18, 1, 1)
+            box(4+i*3, 4, 1, 1)
+        box(5, 6, 6, 10, ink)
+        box(12, 6, 6, 10, ink)
+        gold = (.95, .72, .26, 1) if enabled else ink
+        box(15, 1, 3, 12, dark)
+        box(10, 5, 13, 3, dark)
+        box(16, 1, 2, 12, gold)
+        box(10, 6, 13, 2, gold)
+    elif key == 'options':
+        checker(8, 14, 6)
+        cx, cy, radius = 16, 6, 4
+        circle(cx, cy, radius, (.88, .67, .18, 1))
+        for i in range(8):
+            angle = i*math.tau/8
+            line((cx+(radius-1)*math.cos(angle), cy+(radius-1)*math.sin(angle)),
+                 (cx+(radius+2)*math.cos(angle), cy+(radius+2)*math.sin(angle)), (.88, .67, .18, 1))
+    elif key == 'navigator':
+        for row in range(2):
+            cy = 6+row*9
+            checker(6, cy, 3)
+            line((12, cy), (20, cy))
+    elif key == 'select':
+        checker(9, 14, 7)
+        _polygon([(x+15*s, y+2*s), (x+12*s, y+13*s), (x+21*s, y+7*s)], dark)
+        for a, b in [((15, 2), (12, 13)), ((12, 13), (21, 7)), ((21, 7), (17, 6)), ((17, 6), (15, 2))]:
+            line(a, b)
+    elif key == 'get':
+        outline = [(2, 3), (2, 21), (8, 21), (8, 18), (20, 18), (20, 3)]
+        _polygon([(x+a*s, y+b*s) for a, b in outline], aqua)
+        for a, b in zip(outline, outline[1:]+outline[:1]):
+            line(a, b, dark)
+        checker(15, 8, 7)
+    elif key in {'put_scene', 'assign'}:
+        line((3, 4), (20, 4))
+        line((3, 4), (6, 11))
+        line((20, 4), (18, 10))
+        box(4, 12, 5, 4)
+        box(11, 14, 5, 4)
+        if key == 'assign':
+            box(3, 4, 17, 15, (.263, .263, .263, 1))
+            checker(5, 17, 4)
+            box(12, 2, 8, 8, ink)
+            box(13, 3, 6, 6, (.55, .55, .55, 1))
+            box(14, 12, 5, 8, aqua)
+            _polygon([(x+11*s, y+13*s), (x+22*s, y+13*s), (x+16.5*s, y+7*s)], aqua)
+        else:
+            arrow(11, 7, 'UP')
+    elif key == 'reset':
+        line((5, 16), (18, 16))
+        line((8, 19), (15, 19))
+        for a, b in [((7, 15), (7, 3)), ((17, 15), (17, 3)), ((7, 3), (17, 3)),
+                     ((10, 13), (10, 5)), ((14, 13), (14, 5))]:
+            line(a, b)
+    elif key == 'copy':
+        checker(7, 6, 6)
+        checker(18, 18, 4)
+        for a, b in [((13, 18), (4, 18)), ((4, 18), (4, 12))]:
+            line(a, b)
+        arrow(1, 10, 'DOWN', ink)
+    elif key == 'unique':
+        for cx, cy in [(5, 18), (18, 18), (18, 5)]:
+            checker(cx, cy, 4)
+        line((5, 13), (5, 5))
+        line((5, 5), (12, 5))
+        arrow(11, 2, 'RIGHT', ink)
+    elif key in {'parent', 'sibling'}:
+        checker(7, 16, 6)
+        for a, b in [((11, 12), (17, 12)), ((17, 12), (17, 5)), ((17, 5), (11, 5))]:
+            line(a, b)
+        arrow(14, 12, 'UP' if key == 'parent' else 'RIGHT', ink)
+    elif key == 'library':
+        box(3, 3, 17, 17, dark)
+        box(4, 4, 15, 15)
+        box(6, 11, 11, 7, dark)
+        box(7, 12, 9, 5)
+        box(6, 5, 5, 4, dark)
+        box(7, 5, 3, 3)
+        for row in range(3):
+            for col in range(3):
+                box(15+col*2, 1+row*2, 2, 2, aqua if (row+col) % 2 else dark)
+    elif key == 'id':
+        box(2, 2, 18, 18)
+        _label(x+6*s, y+3*s, '0', round(18*s), dark)
+        arrow(18, 0, color=ink)
+    elif key == 'end':
+        for a, b in [((4, 3), (4, 18)), ((4, 18), (12, 18)), ((12, 18), (12, 3)),
+                     ((12, 3), (8, 3)), ((8, 3), (8, 15)), ((8, 15), (4, 15))]:
+            line(a, b)
+        line((17, 3), (17, 17))
+        arrow(14, 17, 'UP', ink)
+    elif key == 'pick':
+        line((4, 3), (17, 16))
+        line((6, 2), (19, 15))
+        line((4, 3), (6, 2))
+        line((11, 15), (15, 11))
+        line((13, 17), (17, 13))
+        circle(18, 18, 3, ink, True)
 
-        split = lay.split(factor=0.86)
-        grid = split.grid_flow(row_major=True, columns=cols, even_columns=True, align=True)
-        for i in range(count):
-            mat = st.slots[i].material
-            cell = grid.box() if i == st.active else grid.column()
-            if mat is not None:
-                cell.template_icon(icon_value=mat.preview.icon_id if mat.preview else 0, scale=icon_scale)
-            else:
-                cell.template_icon(icon_value=max_icons.icon("sphere") or _icon_value("SHADING_SOLID"), scale=icon_scale)
-            # "hot" material (Max's white corner triangles): used by something besides
-            # the editor itself (its slot references and the fake user)
-            refs = sum(1 for sl in st.slots if sl.material == mat) if mat is not None else 0
-            hot = mat is not None and mat.users - refs - (1 if mat.use_fake_user else 0) > 0
-            btn = cell.row(align=True)
-            btn.scale_y = 0.7
-            btn.operator("max.mtl_slot", text=str(i + 1) + ("•" if hot else ""),
-                         depress=(i == st.active), emboss=(i == st.active)).index = i
-            btn.operator("max.mtl_drag", text="", **max_icons.ui("mtl_drag", "VIEW_PAN"), emboss=False).index = i
 
-        # right-hand toolbar
-        tools = split.column(align=True)
-        mat = active_material(context)
-        if mat is not None:
-            tools.prop(mat, "preview_render_type", text="", expand=True, icon_only=True)
-        tools.separator()
-        tools.operator("max.mtl_select_by", text="", **max_icons.ui("mtl_select", "RESTRICT_SELECT_OFF"))
-        tools.menu("MAX_MT_mtl_options", text="", **max_icons.ui("settings", "PREFERENCES"))
-
-        # bottom toolbar
-        row = lay.row(align=True)
-        row.operator("max.mtl_get", text="", **max_icons.ui("mtl_get", "FILEBROWSER"))
-        row.operator("max.mtl_assign", text="", **max_icons.ui("mtl_assign", "MATERIAL"))
-        row.operator("max.mtl_reset", text="", **max_icons.ui("mtl_reset", "X"))
-        row.operator("max.mtl_make_unique", text="", **max_icons.ui("make_unique", "DUPLICATE"))
-        row.operator("max.mtl_put_library", text="", **max_icons.ui("mtl_library", "ASSET_MANAGER"))
-        if mat is not None:
-            row.prop(mat, "pass_index", text="ID")
-        row.operator("max.mtl_show_in_viewport", text="", **max_icons.ui("mtl_viewport", "TEXTURE"))
-        row = lay.row(align=True)
-        row.operator("max.mtl_add_slot", text="New Slot", **max_icons.ui("create", "ADD"))
-        row.operator("max.mtl_drag", text="Drag", **max_icons.ui("mtl_drag", "VIEW_PAN")).index = st.active
-
-        # name / type row
-        if mat is None:
-            lay.label(text="Empty slot: click it to create a material")
-            return
-        row = lay.row(align=True)
-        row.operator("max.mtl_pick", text="", **max_icons.ui("mtl_pick", "EYEDROPPER"))
-        row.prop(mat, "name", text="")
-        kind = "VRayMtl" if mat.get("max_vray") else {"PHYSICAL": "Physical"}.get(
-            mat.get("max_type", "STANDARD"), "Standard")
-        sub = row.row(align=True)
-        sub.ui_units_x = 4.2
-        sub.operator_menu_enum("max.mtl_set_type", "kind", text=kind)
+def _toolbar_button(host, key, label, x, y, s, action=None, selected=False):
+    bounds = (x, y, x+27*s, y+27*s)
+    if selected:
+        _rounded(x, y, 27*s, 27*s, 3*s, (.28, .45, .62, 1))
+        _rounded(x+s, y+s, 25*s, 25*s, 2*s, (.36, .48, .60, 1))
+    _tool_icon(key, x+2*s, y+2*s, s, action is not None)
+    host.material_tools.append(dict(key=key, label=label, bounds=bounds, enabled=action is not None))
+    if action:
+        _hit(host, bounds, action)
 
 
-def _mat_poll(context, need_standard=False):
-    if not _MtlPanel.poll(context):
-        return False
-    st = state(context)
-    if len(st.slots) < NUM_SLOTS:
-        return False
-    mat = active_material(context)
-    if mat is None:
-        return False
-    if need_standard and mat.get("max_vray"):
-        return False
-    return True
+def _number(host, material, path, x, y, width, s, enabled=True):
+    enabled = enabled and shader(material) is not None
+    data, key = _field_owner(material, path)
+    value = getattr(data, key)
+    edit = getattr(host, 'material_edit', None)
+    text = edit['text']+'|' if edit and edit['path'] == path else str(round(value, 3))
+    action = ('FIELD', material, path, 'number') if enabled and not material.library else None
+    _box(x, y, width, 25*s, (73/255, 73/255, 73/255, 1))
+    _box(x+s, y+s, width-2*s, 23*s, (.392, .392, .392, 1) if enabled else (.31, .31, .31, 1))
+    _label(x+7*s, y+9*s, text, round(13*s), (.9, .9, .9, 1) if enabled else (.51, .51, .51, 1))
+    if action:
+        _hit(host, (x, y, x+width, y+25*s), action)
+    _spinner_arrows(x+width-10*s, y, s, enabled)
+    if action:
+        for sign in (-1, 1):
+            def step(context, event, sign=sign):
+                increment = 1 if isinstance(value, int) else .01
+                setattr(data, key, getattr(data, key)+sign*increment)
+                invalidate_preview(material)
+            bottom = y if sign == -1 else y+12.5*s
+            _hit(host, (x+width-12*s, bottom, x+width, bottom+12.5*s), step)
 
 
-class MAX_PT_mtl_shader_basic(_MtlPanel, Panel):
-    bl_label = "Shader Basic Parameters"
-    bl_parent_id = "MAX_PT_mtl_editor"
-
-    @classmethod
-    def poll(cls, context):
-        return _mat_poll(context, need_standard=True)
-
-    def draw(self, context):
-        mat = active_material(context)
-        lay = self.layout
-        lay.prop(mat.max_std, "shader", text="")
-        row = lay.row(align=True)
-        row.prop(mat.max_std, "wire", toggle=True)
-        row.prop(mat, "max_two_sided", toggle=True)
-        row.prop(mat.max_std, "faceted", toggle=True)
+def _spinner_arrows(x, y, s, enabled):
+    tip = (.87, .87, .87, 1) if enabled else (.51, .51, .51, 1)
+    base = (.74, .74, .74, 1) if enabled else (.43, .43, .43, 1)
+    _polygon([(x, y+15*s), (x+5*s, y+15*s), (x+2.5*s, y+18*s)], tip)
+    _box(x, y+14*s, 5*s, s, base)
+    _polygon([(x, y+11*s), (x+5*s, y+11*s), (x+2.5*s, y+8*s)], tip)
+    _box(x, y+11*s, 5*s, s, base)
 
 
-def _map_button(layout, mat, channel):
-    """Small square map button (like Max's): M = has a map, blank = none."""
-    n = map_node(mat, channel)
-    row = layout.row(align=True)
-    row.ui_units_x = 1.2 if (n is None or n.image is None) else 2.2
-    if n is not None and n.image is not None:
-        row.operator("max.mtl_load_map", text="M").channel = channel
-        row.operator("max.mtl_clear_map", text="", **max_icons.ui("close", "X")).channel = channel
+def _color(host, material, path, x, y, width, s, enabled=True):
+    enabled = enabled and shader(material) is not None
+    data, key = _field_owner(material, path)
+    value = getattr(data, key)
+    display = tuple(round(255*(12.92*v if v <= .0031308 else 1.055*v**(1/2.4)-.055))/255
+                    for v in value[:3])
+    _box(x, y, width, 25*s, (0, 0, 0, 1))
+    _box(x+s, y+2*s, width-2*s, 22*s, (*display, 1))
+    if enabled and not material.library:
+        _hit(host, (x, y, x+width, y+25*s), _invoke('max.mtl_value', material=material.name, field=path))
+    from .max_editor_windows import _line
+    _line((x+s, y+s), (x+width-s, y+s), (.7, .7, .7, 1))
+
+
+def _physical_map(host, material, channel, x, y, s):
+    enabled = channel is not None and map_supported(material, channel) and not material.library
+    _control(host, x, y, 26*s, 25*s, map_badge(material, channel) if channel else '',
+        _invoke('max.mtl_load_map', channel=channel) if enabled else None, s,
+        color=(.392, .392, .392, 1), radius=5)
+
+
+def _combo(host, x, y, width, text, s, action=None):
+    _control(host, x, y, width, 25*s, text, action, s,
+        text_color=(.89, .89, .89, 1) if action else (.57, .57, .57, 1), radius=0)
+    _triangle(x+width-17*s, y+10*s, s, color=(.8, .8, .8, 1) if action else (.51, .51, .51, 1))
+
+
+def _draw_physical(host, context, material, width, top, s):
+    # Coordinate measurements use the 477px reference client. Only the right
+    # column grows when the user resizes the window.
+    unit = min(s, width/477)
+    u = unit
+    right = width-22*u
+    opened, y = _rollout(host, 'Presets', 2*u, top, width-18*u, u)
+    if opened:
+        y -= 2*u
+        _box(2*u, y-142*u, width-18*u, 148*u, (.314, .314, .314, 1))
+        _combo(host, 13*u, y-27*u, 236*u, '{Finishes}', u)
+        # The reference's title tile is independent artwork, not a texture
+        # copied out of an Autodesk screenshot.
+        tx, ty = 13*u, y-99*u
+        _box(tx, ty, 186*u, 66*u, (.15, .19, .16, 1))
+        for band in range(33):
+            tint = .12+.08*math.sin(band/32*math.pi)
+            _box(tx, ty+band*2*u, 186*u, 2*u, (tint, tint+.04, tint+.01, 1))
+        _preset_title(tx, ty, u)
+        _box(253*u, y-100*u, max(20*u, right-257*u), 98*u, (.392, .392, .392, 1))
+        _label(163*u, y-123*u, 'Material Mode:', round(13*u))
+        _combo(host, 253*u, y-132*u, max(30*u, right-257*u), 'Simple', u)
+        y -= 146*u
+    opened, y = _rollout(host, 'Coating Parameters', 2*u, y, width-18*u, u)
+    if opened:
+        _box(2*u, y-97*u, width-18*u, 103*u, (.314, .314, .314, 1))
+        _frame_group(9*u, y-7*u, width-32*u, 87*u, 'Coating', u)
+        _number(host, material, 'physical.coating', 17*u, y-43*u, 79*u, u)
+        _physical_map(host, material, 'PHYSICAL_COATING', 98*u, y-43*u, u)
+        _color(host, material, 'physical.coat_color', 127*u, y-43*u, 76*u, u)
+        _physical_map(host, material, None, 205*u, y-43*u, u)
+        _label(237*u, y-34*u, 'Roughness:', round(13*u))
+        _number(host, material, 'physical.coat_roughness', 343*u, y-43*u, 78*u, u)
+        _physical_map(host, material, 'PHYSICAL_COAT_ROUGHNESS', 423*u, y-43*u, u)
+        _label(290*u, y-69*u, 'IOR:', round(13*u))
+        _number(host, material, 'physical.coat_ior', 343*u, y-78*u, 78*u, u)
+        y -= 103*u
     else:
-        row.operator("max.mtl_load_map", text="").channel = channel
+        y += 2*u
+    opened, y = _rollout(host, 'Basic Parameters', 2*u, y, width-18*u, u)
+    if opened:
+        _box(2*u, y-176*u, width-18*u, 182*u, (.314, .314, .314, 1))
+        _frame_group(9*u, y-6*u, width-32*u, 74*u, 'Base Color and Reflections', u)
+        row = y-44*u
+        _number(host, material, 'physical.base_weight', 17*u, row, 79*u, u)
+        _physical_map(host, material, None, 98*u, row, u)
+        _color(host, material, 'physical.base_color', 127*u, row, 76*u, u)
+        _physical_map(host, material, 'DIFFUSE', 205*u, row, u)
+        def gloss_mode(context, event):
+            material.max_physical.use_glossiness = not material.max_physical.use_glossiness
+        mode = material.max_physical.use_glossiness
+        _combo(host, 234*u, row, 105*u, 'Glossiness' if mode else 'Roughness', u, gloss_mode)
+        _number(host, material, 'physical.glossiness' if mode else 'physical.roughness', 343*u, row, 78*u, u)
+        _physical_map(host, material, 'GLOSSINESS' if mode else 'PHYSICAL_ROUGHNESS', 423*u, row, u)
+        row -= 29*u
+        _label(61*u, row+9*u, 'Metalness:', round(13*u))
+        _number(host, material, 'physical.metalness', 127*u, row, 76*u, u)
+        _physical_map(host, material, 'REFLECTION', 205*u, row, u)
+        _label(313*u, row+8*u, 'IOR:', round(13*u))
+        _number(host, material, 'max_ior', 343*u, row, 78*u, u)
+        _physical_map(host, material, None, 423*u, row, u)
+        y -= 92*u
+        _frame_group(9*u, y-1*u, width-32*u, 74*u, 'Transparency', u)
+        row = y-37*u
+        _number(host, material, 'physical.transparency', 17*u, row, 79*u, u)
+        _physical_map(host, material, 'REFRACTION', 98*u, row, u)
+        _box(127*u, row, 76*u, 25*u, (0, 0, 0, 1))
+        _box(128*u, row+2*u, 74*u, 22*u, (1, 1, 1, 1))
+        _physical_map(host, material, None, 205*u, row, u)
+        _combo(host, 234*u, row, 105*u, 'Roughness', u)
+        _number(host, material, 'physical.roughness', 343*u, row, 78*u, u, enabled=False)
+        _physical_map(host, material, None, 423*u, row, u)
+        row -= 29*u
+        _label(84*u, row+8*u, 'Depth:', round(13*u))
+        _control(host, 127*u, row, 104*u, 25*u, '0.0', None, u)
+        _triangle(219*u, row+14*u, .5*u, 'UP', (.4, .4, .4, 1))
+        _triangle(219*u, row+6*u, .5*u, 'DOWN', (.4, .4, .4, 1))
+        _toggle(host, 236*u, row+6*u, 'Thin-walled', False, None, u, False)
+        _rounded(423*u, row, 26*u, 25*u, 3*u, (.32, .48, .64, 1))
+        _lock(431*u, row+5*u, u)
+        y -= 91*u
+    return y
 
 
-class MAX_PT_mtl_blinn(_MtlPanel, Panel):
-    bl_label = " "
-    bl_parent_id = "MAX_PT_mtl_editor"
+def _lock(x, y, s):
+    from .max_editor_windows import _line
+    color = (.85, .85, .85, 1)
+    _rounded(x, y, 10*s, 11*s, 2*s, color)
+    for i in range(12):
+        a, b = math.pi*i/12, math.pi*(i+1)/12
+        _line((x+(5+4*math.cos(a))*s, y+(11+4*math.sin(a))*s),
+              (x+(5+4*math.cos(b))*s, y+(11+4*math.sin(b))*s), color)
+    _box(x+4*s, y+3*s, 2*s, 5*s, (.2, .2, .2, 1))
 
-    @classmethod
-    def poll(cls, context):
-        return _mat_poll(context, need_standard=True)
 
-    def draw_header(self, context):
-        mat = active_material(context)
-        name = dict((k, n) for k, n, _ in SHADERS).get(mat.max_std.shader, "Blinn") if mat else "Blinn"
-        self.layout.label(text=f"{name} Basic Parameters")
+def _rounded(x, y, width, height, radius, color):
+    points = []
+    for cx, cy, angle in [(x+radius, y+radius, 180), (x+width-radius, y+radius, 270),
+                          (x+width-radius, y+height-radius, 0), (x+radius, y+height-radius, 90)]:
+        for step in range(5):
+            theta = math.radians(angle+step*22.5)
+            points.append((cx+radius*math.cos(theta), cy+radius*math.sin(theta)))
+    _polygon(points, color)
 
-    def draw(self, context):
-        mat = active_material(context)
-        lay = self.layout
 
-        def row_with_label(col, text, icon="NONE"):
-            sp = col.split(factor=0.42, align=True)
-            sp.label(text=text, icon=icon)
-            return sp.row(align=True)
+def _control(host, x, y, width, height, text, action, scale, selected=False, color=None, text_color=None, centered=False, radius=3):
+    _rounded(x, y, width, height, radius*scale, (.65, .65, .65, 1) if selected else (.255, .255, .255, 1))
+    _rounded(x+scale, y+scale, width-2*scale, height-2*scale, max(0, radius-1)*scale, color or (.392, .392, .392, 1))
+    if text:
+        import blf
+        _label(0, 0, '', round(13*scale))
+        font = _fonts['normal']
+        blf.size(font, round(13*scale))
+        clipped = str(text)
+        while clipped and blf.dimensions(font, clipped)[0] > width-8*scale:
+            clipped = clipped[:-1]
+        text_x = x+(width-blf.dimensions(font, clipped)[0])/2 if centered else x+6*scale
+        _label(text_x, y+height*.3, clipped, round(13*scale), text_color or (.89, .89, .89, 1))
+    if action:
+        _hit(host, (x, y, x+width, y+height), action)
 
-        col = lay.column(align=True)
-        r = row_with_label(col, "Ambient")
-        r.prop(mat, "max_diffuse", text="")
-        r.label(text="", icon="BLANK1")
-        r = row_with_label(col, "Diffuse")
-        r.prop(mat, "max_diffuse", text="")
-        _map_button(r, mat, "DIFFUSE")
-        r = row_with_label(col, "Specular")
-        r.prop(mat, "max_specular", text="")
-        _map_button(r, mat, "SPECULAR_COLOR")
-        col.separator()
-        sp = col.split(factor=0.42, align=True)
-        sp.prop(mat.max_std, "self_illum_color_on", text="Self-Illum")
-        r = sp.row(align=True)
-        if mat.max_std.self_illum_color_on:
-            r.prop(mat.max_std, "self_illum_color", text="")
+
+def _field(host, context, material, path, x, y, width, label, scale, kind='number', enabled=True):
+    data, key = _field_owner(material, path)
+    value = getattr(data, key)
+    _label(x, y+6*scale, label, round(12*scale), (.89, .89, .89, 1) if enabled else (.55, .55, .55, 1))
+    start = x + width*.54
+    edit = getattr(host, 'material_edit', None)
+    text = edit['text'] + '|' if edit and edit['path'] == path else str(round(value, 3)) if isinstance(value, float) else str(value)
+    action = ('FIELD', material, path, kind) if enabled and not material.library else None
+    if kind in {'color', 'shader'}:
+        action = _invoke('max.mtl_value', material=material.name, field=path) if enabled and not material.library else None
+        if kind == 'color':
+            text = ''
+    _control(host, start, y, width*.46, 22*scale, text, action, scale,
+             color=(*value[:3], 1) if kind == 'color' else None)
+
+
+def _toggle(host, x, y, text, value, callback, scale, enabled=True):
+    _control(host, x, y, 14*scale, 14*scale, '', callback if enabled else None, scale)
+    if value:
+        from .max_editor_windows import _line
+        color = (.86, .86, .86, 1) if enabled else (.5, .5, .5, 1)
+        _line((x+3*scale, y+7*scale), (x+6*scale, y+4*scale), color)
+        _line((x+6*scale, y+4*scale), (x+11*scale, y+11*scale), color)
+    _label(x+17*scale, y, text, round(12*scale), (.89, .89, .89, 1) if enabled else (.55, .55, .55, 1))
+    if enabled:
+        _hit(host, (x, y-3*scale, x+(18+len(text)*7)*scale, y+16*scale), callback)
+
+
+def _rollout(host, title, x, y, width, scale):
+    closed = getattr(host, 'material_closed', None)
+    if closed is None:
+        closed = host.material_closed = {'Extended Parameters', 'Maps', 'Coating Parameters'}
+    def toggle(context, event):
+        if title in closed:
+            closed.remove(title)
         else:
-            r.prop(mat.max_std, "self_illum_amount", text="")
-        _map_button(r, mat, "SELF_ILLUM")
-        r = row_with_label(col, "Opacity")
-        r.prop(mat, "max_opacity", text="")
-        _map_button(r, mat, "OPACITY")
-
-        lay.label(text="Specular Highlights")
-        col = lay.column(align=True)
-        r = row_with_label(col, "Level")
-        r.prop(mat, "max_spec_level", text="")
-        _map_button(r, mat, "SPECULAR_LEVEL")
-        r = row_with_label(col, "Gloss")
-        r.prop(mat, "max_glossiness", text="")
-        _map_button(r, mat, "GLOSSINESS")
-        r = row_with_label(col, "Soften")
-        r.prop(mat.max_std, "soften", text="")
-        r.label(text="", icon="BLANK1")
+            closed.add(title)
+    toggle.rollout = title
+    height = {'Presets': 25, 'Coating Parameters': 24, 'Basic Parameters': 26}.get(title, 23)*scale
+    _rounded(x, y-height, width, height, 3*scale, (.314, .314, .314, 1))
+    _triangle(x+7*scale, y-14*scale, scale, 'RIGHT' if title in closed else 'DOWN')
+    _bold(x+22*scale, y-16*scale, title, round(13*scale))
+    for row in range(4):
+        for column in range(3):
+            _box(x+width-(10-column*2)*scale, y-(8+row*2)*scale, scale, scale, (.55, .55, .55, 1))
+    _hit(host, (x, y-height, x+width, y), toggle)
+    return title not in closed, y-29*scale
 
 
-class MAX_PT_mtl_vray(_MtlPanel, Panel):
-    bl_label = "Basic Parameters (VRayMtl)"
-    bl_parent_id = "MAX_PT_mtl_editor"
+def _sample(host, material, index, bounds, active, context, scale):
+    x, y, right, top = bounds
+    _box(x, y, right-x, top-y, (.95, .95, .95, 1) if active else (.12, .12, .12, 1))
+    if not active:
+        _box(x+scale, y+scale, right-x-2*scale, top-y-2*scale, (.75, .75, .75, 1))
+    _box(x+2*scale, y+2*scale, right-x-4*scale, top-y-4*scale, (.48, .48, .48, 1))
+    if material:
+        if (material.as_pointer() not in _preview_requested or
+                _preview_types.get(material.as_pointer()) != material.preview_render_type) and not bpy.app.background:
+            _request_preview(material)
+        preview = material.preview
+        if preview and preview.image_size[0] and preview.image_size[1]:
+            import gpu
+            from gpu_extras.presets import draw_texture_2d
+            pointer = material.as_pointer()
+            pixels = preview.image_pixels_float
+            # Native preview jobs finish asynchronously. Retire a copied GPU image
+            # when their pixels change, including an update after a property edit.
+            pw, ph = preview.image_size
+            signature = ((pw, ph), tuple(pixels[4*((ph*y//8)*pw+pw*x//8)+channel]
+                         for y in range(1, 8) for x in range(1, 8) for channel in range(3)))
+            texture = _preview_textures.get(pointer)
+            if texture is None or _preview_signatures.get(pointer) != signature:
+                size = tuple(preview.image_size)
+                texture = gpu.types.GPUTexture(size, format='RGBA16F',
+                    data=gpu.types.Buffer('FLOAT', len(preview.image_pixels_float), preview.image_pixels_float[:]))
+                _preview_textures[pointer] = texture
+                _preview_signatures[pointer] = signature
+            gpu.state.blend_set('ALPHA')
+            draw_texture_2d(texture, (x+2*scale, y+2*scale), right-x-4*scale, top-y-4*scale)
+        else:
+            _label(x+8*scale, y+(top-y)/2, 'Preview...', round(11*scale))
+        users = [obj for obj in context.scene.objects if any(s.material == material for s in obj.material_slots)]
+        first_slot = next(i for i, slot in enumerate(state(context).slots) if slot.material == material)
+        if users and index == first_slot:
+            _sample_corners(bounds, any(o.select_get() for o in users), scale)
+    _hit(host, bounds, ('SLOT', index))
 
-    @classmethod
-    def poll(cls, context):
-        mat = active_material(context) if _MtlPanel.poll(context) and len(state(context).slots) >= NUM_SLOTS else None
-        return mat is not None and bool(mat.get("max_vray"))
 
-    def draw(self, context):
-        from . import vray
-        vray.draw_vraymtl(self.layout, active_material(context))
+def _sample_corners(bounds, filled, scale):
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+    x, y, right, top = bounds
+    inset, length = 2*scale, 7*scale
+    positions = []
+    for cx, cy, dx, dy in [(x+inset, y+inset, 1, 1), (x+inset, top-inset, 1, -1),
+                           (right-inset, y+inset, -1, 1), (right-inset, top-inset, -1, -1)]:
+        a, b, c = (cx, cy), (cx+dx*length, cy), (cx, cy+dy*length)
+        positions.extend((a, b, c) if filled else (a, b, b, c, c, a))
+    program = gpu.shader.from_builtin('UNIFORM_COLOR')
+    program.bind()
+    program.uniform_float('color', (1, 1, 1, 1))
+    batch_for_shader(program, 'TRIS' if filled else 'LINES', {'pos': positions}).draw(program)
 
 
-class MAX_PT_mtl_extended(_MtlPanel, Panel):
-    bl_label = "Extended Parameters"
-    bl_parent_id = "MAX_PT_mtl_editor"
-    bl_options = {"DEFAULT_CLOSED"}
+def _map_shortcut(host, material, channel, x, y, scale):
+    _control(host, x, y, 19*scale, 20*scale, map_badge(material, channel),
+             _invoke('max.mtl_load_map', channel=channel), scale)
 
-    @classmethod
-    def poll(cls, context):
-        return _mat_poll(context)
 
-    def draw(self, context):
-        mat = active_material(context)
-        col = self.layout.column(align=True)
-        col.use_property_split = True
-        col.use_property_decorate = False
-        col.prop(mat, "max_ior")
-        col.prop(mat, "use_backface_culling", text="Backface Cull")
+def _frame_group(x, top, width, height, title, scale):
+    _rounded(x, top-height, width, height, 3*scale, (53/255, 53/255, 53/255, 1))
+    _rounded(x+scale, top-height+scale, width-2*scale, height-2*scale, 2*scale,
+             (74/255, 74/255, 74/255, 1))
+    _rounded(x+2*scale, top-height+2*scale, width-4*scale, height-4*scale, scale,
+             (.314, .314, .314, 1))
+    if title:
+        import blf
+        _label(0, 0, '', round(13*scale))
+        span = blf.dimensions(_fonts['normal'], title)[0]
+        _box(x+5*scale, top-8*scale, span+7*scale, 16*scale, (.314, .314, .314, 1))
+        _label(x+8*scale, top-5*scale, title, round(13*scale))
+
+
+def _highlight_plot(material, x, y, width, height):
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+    _box(x, y, width, height, (.12, .12, .12, 1))
+    _box(x+1, y+1, width-2, height-2, (.43, .43, .43, 1))
+    # A profile of the chosen equivalent, not a second stored highlight setting.
+    exponent = 2 ** (material.max_glossiness/10)
+    level = material.max_spec_level/100
+    points = []
+    for i in range(80):
+        left, right = i/80, (i+1)/80
+        a = y+2 + (height-4)*level*math.cos(math.pi*(left-.5))**exponent
+        b = y+2 + (height-4)*level*math.cos(math.pi*(right-.5))**exponent
+        points.extend([(x+left*width, y+1), (x+left*width, a), (x+right*width, b),
+                       (x+left*width, y+1), (x+right*width, b), (x+right*width, y+1)])
+    program = gpu.shader.from_builtin('UNIFORM_COLOR')
+    program.bind()
+    program.uniform_float('color', (.85, .85, .85, 1))
+    batch_for_shader(program, 'TRIS', {'pos': points}).draw(program)
+
+
+def _draw_basic(host, context, material, width, top, scale):
+    s = scale
+    left, right = 10*s, width*.53
+    half = width*.48
+    _frame_group(left, top-4*s, half, 91*s, '', s)
+    for index, (path, label, channel) in enumerate([('max_diffuse', 'Ambient:', 'AMBIENT'),
+            ('max_diffuse', 'Diffuse:', 'DIFFUSE'), ('max_specular', 'Specular:', 'SPECULAR_COLOR')]):
+        y = top-(30+26*index)*s
+        _field(host, context, material, path, left+6*s, y, half-36*s, label, s, 'color',
+               enabled=channel != 'AMBIENT' and shader(material) is not None)
+        _map_shortcut(host, material, channel, left+half-24*s, y, s)
+    _frame_group(right, top-4*s, width-right-10*s, 48*s, 'Self-Illumination', s)
+    def color_mode(context, event):
+        material.max_std.self_illum_color_on = not material.max_std.self_illum_color_on
+    _toggle(host, right+6*s, top-33*s, 'Color', material.max_std.self_illum_color_on, color_mode, s,
+            enabled=not material.library and shader(material) is not None)
+    key = 'std.self_illum_color' if material.max_std.self_illum_color_on else 'std.self_illum_amount'
+    _field(host, context, material, key, right+5*s, top-35*s, width-right-38*s, '', s,
+           'color' if material.max_std.self_illum_color_on else 'number')
+    _map_shortcut(host, material, 'SELF_ILLUM', width-33*s, top-35*s, s)
+    _frame_group(right, top-64*s, width-right-10*s, 31*s, '', s)
+    _field(host, context, material, 'max_opacity', right+5*s, top-90*s, width-right-38*s, 'Opacity:', s)
+    _map_shortcut(host, material, 'OPACITY', width-33*s, top-90*s, s)
+    _frame_group(left, top-111*s, width-20*s, 91*s, 'Specular Highlights', s)
+    for index, (path, label, channel) in enumerate([('max_spec_level', 'Specular Level:', 'SPECULAR_LEVEL'),
+            ('max_glossiness', 'Glossiness:', 'GLOSSINESS'), ('std.soften', 'Soften:', None)]):
+        y = top-(140+25*index)*s
+        _field(host, context, material, path, left+5*s, y, width*.56-20*s, label, s,
+               enabled=path != 'std.soften' and shader(material) is not None)
+        if channel:
+            _map_shortcut(host, material, channel, width*.56-10*s, y, s)
+    _highlight_plot(material, width*.69, top-192*s, width*.26, 73*s)
+    _label(12*s, top-220*s, 'Principled shading equivalent', round(10*s), (.65, .65, .65, 1))
+    return top-232*s
+
+
+def draw_host(host, context, width, height, scale):
+    """Draw the full Compact window. Hit regions share the same coordinates."""
+    s = scale
+    editor = state(context)
+    if not editor.slots:
+        return
+    material = active_material(context)
+    columns, rows = grid_shape(editor)
+    update_window_title(host, context)
+    host.material_tools = []
+    host.material_elements = {}
+    _box(0, 0, width, height-(0 if host.native_handle else 38*s), (.263, .263, .263, 1))
+    y = height-(31 if host.native_handle else 69)*s
+    _box(0, y, width, 31*s, (1, 1, 1, 1))
+    x = 6*s
+    for name in ('Modes', 'Material', 'Navigation', 'Options', 'Utilities'):
+        button_width = {'Modes': 58, 'Material': 69, 'Navigation': 86, 'Options': 67, 'Utilities': 66}[name]*s
+        _label(x, y+8*s, name, round(15*s), (.02, .02, .02, 1))
+        _hit(host, (x, y, x+button_width, y+31*s), _invoke('wm.call_menu', name='MAX_MT_mtl_'+name.lower()))
+        x += button_width
+    # Keep samples full-width at every grid size. Extra saved slots stay reachable.
+    available_width = max(100*s, (round(width/s)-65)*s)
+    cell_width = available_width/columns
+    cell_height = cell_width*(249/412*3/2)
+    start = min(getattr(host, 'sample_start', 0), max(0, len(editor.slots)-columns*rows))
+    host.sample_bounds = []
+    top = y-3*s
+    host.material_elements['samples'] = (4*s, top-rows*cell_height, 4*s+available_width, top)
+    for cell in range(min(columns*rows, len(editor.slots)-start)):
+        row, col = divmod(cell, columns)
+        bounds = (4*s+col*cell_width, top-(row+1)*cell_height,
+                  4*s+(col+1)*cell_width-s, top-row*cell_height-s)
+        index = start+cell
+        host.sample_bounds.append((index, bounds))
+        _sample(host, editor.slots[index].material, index, bounds, index == editor.active, context, s)
+    def scroll_samples(delta):
+        def call(context, event):
+            host.sample_start = max(0, min(len(editor.slots)-columns*rows, start+delta*columns))
+        return call
+    sample_bottom = top-rows*cell_height
+    sx = width-60*s
+    _box(sx, sample_bottom, 22*s, rows*cell_height, (.263, .263, .263, 1))
+    for bottom, direction, delta in [(top-21*s, 'UP', -1), (sample_bottom, 'DOWN', 1)]:
+        _box(sx, bottom, 22*s, 21*s, (.95, .95, .95, 1))
+        _scroll_arrow(sx+7*s, bottom+8*s, s, direction)
+        _hit(host, (sx, bottom, sx+22*s, bottom+21*s), scroll_samples(delta))
+    track = max(0, rows*cell_height-44*s)
+    thumb = min(track, 21*s)
+    fraction = start/max(1, len(editor.slots)-columns*rows)
+    _box(sx, top-22*s-thumb-fraction*(track-thumb), 22*s, thumb, (.78, .78, .78, 1))
+    hy = sample_bottom-23*s
+    _box(5*s, hy, available_width, 22*s, (.263, .263, .263, 1))
+    for hx, direction, delta in [(5*s, 'LEFT', -1), (width-81*s, 'RIGHT', 1)]:
+        _box(hx, hy, 21*s, 22*s, (.95, .95, .95, 1))
+        _scroll_arrow(hx+8*s, hy+6*s, s, direction)
+        _hit(host, (hx, hy, hx+21*s, hy+22*s), scroll_samples(delta))
+    _box(26*s, hy, 21*s, 22*s, (.78, .78, .78, 1))
+    for index, (key, label, operator) in enumerate(SAMPLE_TOOLS):
+        action = _invoke(operator, name='MAX_MT_mtl_options') if key == 'options' else _invoke(operator) if operator else None
+        if key == 'select' and not any(slot.material == material for obj in context.scene.objects for slot in obj.material_slots):
+            action = None
+        _toolbar_button(host, key, label, width-34*s, top-(27+30*index)*s, s, action)
+    y = hy-37*s
+    positions = (7, 35, 75, 111, 148, 185, 225, 265, 302, 341, 370, 398)
+    for position, (key, label, operator) in zip(positions, COMPACT_TOOLS):
+        action = _invoke(operator) if operator else None
+        if key in {'copy', 'unique'} and (not material or material.users < 2):
+            action = None
+        if key == 'assign' and not context.selected_objects:
+            action = None
+        _toolbar_button(host, key, label, position*s, y, s, action, selected=key == 'viewport')
+    from .max_editor_windows import _line
+    for position in (69, 140, 218, 294, 333):
+        _line((position*s, y+3*s), (position*s, y+23*s), (.20, .20, .20, 1))
+    host.material_elements['horizontal-toolbar'] = (5*s, y, width-37*s, y+27*s)
+    host.material_elements['vertical-toolbar'] = (width-34*s, top-267*s, width-7*s, top)
+    y -= 31*s
+    _toolbar_button(host, 'pick', 'Pick Material from Object', 104*s, y, s, _invoke('max.mtl_pick'))
+    if material:
+        _control(host, 137*s, y, max(30*s, width-276*s), 26*s, material.name,
+                 ('FIELD', material, 'name', 'text'), s, radius=0)
+        _triangle(width-156*s, y+10*s, s)
+        _hit(host, (width-164*s, y, width-139*s, y+26*s), _invoke('max.mtl_get'))
+    _control(host, max(70*s, width-134*s), y, 118*s, 26*s,
+             {'STANDARD': 'Standard (Legacy)', 'VRAY': 'VRayMtl', 'PHYSICAL': 'Physical Material'}.get(material_kind(material), 'Material'),
+             _invoke('max.mtl_set_type'), s, centered=True, radius=5)
+    host.material_elements['name-type'] = (104*s, y, width-17*s, y+25*s)
+    y -= 7*s
+    if material is None:
+        _label(10*s, y-35*s, 'Get Material or choose a material type.', round(13*s))
+        return
+    # Only the rollout area scrolls. Menus, samples and the name stay in place.
+    import gpu
+    fixed_hits = len(host.hits)
+    rollout_clip = y
+    gpu.state.scissor_test_set(True)
+    gpu.state.scissor_set(0, 0, int(width), max(0, int(y)))
+    try:
+        y += host.scroll*26*s
+        if material_kind(material) == 'PHYSICAL':
+            host.material_elements['physical'] = (2*s, 0, width-16*s, y)
+            y = _draw_physical(host, context, material, width, y, s)
+        else:
+            opened, y = _rollout(host, 'Shader Basic Parameters', 5*s, y, width-10*s, s)
+            if opened:
+                shader_label = dict((key, label) for key, label, description in SHADERS)[material.max_std.shader]
+                _combo(host, 14*s, y-30*s, width*.43, shader_label, s,
+                    _invoke('max.mtl_value', material=material.name, field='std.shader'))
+                def sided(context, event):
+                    material.max_two_sided = not material.max_two_sided
+                _toggle(host, width*.51, y-13*s, 'Wire', material.max_std.wire, None, s, False)
+                _toggle(host, width*.76, y-13*s, '2-Sided', material.max_two_sided, sided, s, enabled=not material.library)
+                _toggle(host, width*.51, y-37*s, 'Face Map', False, None, s, False)
+                _toggle(host, width*.76, y-37*s, 'Faceted', material.max_std.faceted, None, s, False)
+                y -= 53*s
+            title = 'Blinn Basic Parameters' if material_kind(material) == 'STANDARD' else 'Basic Parameters'
+            opened, y = _rollout(host, title, 5*s, y, width-10*s, s)
+            if opened:
+                y = _draw_basic(host, context, material, width, y, s)
+            opened, y = _rollout(host, 'Extended Parameters', 5*s, y, width-10*s, s)
+            if opened:
+                _field(host, context, material, 'max_ior', 14*s, y-23*s, width-28*s, 'Index of Refraction:', s)
+                y -= 54*s
+        opened, y = _rollout(host, 'Maps', 5*s, y, width-10*s, s)
+        if opened:
+            _label(width*.39, y-13*s, 'Amount', round(11*s))
+            _label(width*.72, y-13*s, 'Map', round(11*s))
+            y -= 18*s
+            for channel, label, socket, color in MAP_CHANNELS:
+                y -= 25*s
+                texture = map_node(material, channel)
+                def toggle(context, event, channel=channel):
+                    set_map_enabled(material, channel, not map_enabled(material, channel))
+                _toggle(host, 12*s, y+5*s, '', map_enabled(material, channel), toggle, s, bool(texture and texture.image))
+                _label(32*s, y+6*s, label, round(11*s))
+                amount = (material.max_std.bump_amount if channel == 'BUMP' else
+                          texture.get('max_amount', 100.) if texture else 100.)
+                _control(host, width*.39, y, width*.14, 22*s, str(round(amount, 2)),
+                         ('AMOUNT', material, channel) if texture and map_supported(material, channel) else None, s)
+                text = texture.image.name if texture and texture.image else 'None'
+                if not map_supported(material, channel):
+                    text = 'Stored only: ' + text
+                _control(host, width*.55, y, width*.45-12*s, 22*s, text,
+                         _invoke('max.mtl_load_map', channel=channel), s)
+            y -= 12*s
+        host.material_scroll_max = max(0, math.ceil((host.scroll*26*s-y)/max(1, 26*s)))
+        _box(width-11*s, 0, 10*s, rollout_clip, (53/255, 53/255, 53/255, 1))
+        thumb = min(125*s, max(24*s, rollout_clip/(host.material_scroll_max+1)))
+        _rounded(width-9*s, max(0, rollout_clip-thumb-s-host.scroll*6*s), 7*s, thumb, 2*s, (.32, .32, .32, 1))
+    finally:
+        gpu.state.scissor_test_set(False)
+    # Discard invisible hit regions so a scrolled rollout cannot cover the toolbar.
+    host.hits[fixed_hits:] = [(bounds, action) for bounds, action in host.hits[fixed_hits:]
+                            if bounds[1] >= 0 and bounds[3] <= rollout_clip]
+    hover = getattr(host, 'material_hover', None)
+    if hover:
+        key, label, enabled, mx, my = hover
+        reason = {'put_scene': 'Scene materials update immediately.',
+                  'end': 'No nested map result is available.',
+                  'parent': 'No nested map editor is open.',
+                  'sibling': 'No nested map editor is open.',
+                  'preview': 'Animated material preview generation is not implemented.',
+                  'select': 'This material has no scene users.',
+                  'navigator': 'Material/Map Navigator is not implemented.',
+                  'unique': 'This sample has no shared instance to separate.'}.get(key,
+                      'Blender native material previews do not expose this setting.')
+        text = label if enabled else label+' (disabled). '+reason
+        tw = min(width-10*s, (len(text)*6+12)*s)
+        tx, ty = max(5*s, min(mx, width-tw-5*s)), max(5*s, my-30*s)
+        _box(tx, ty, tw, 24*s, (.09, .09, .09, 1))
+        _label(tx+5*s, ty+7*s, text, round(11*s))
+
+
+def window_title(context):
+    material = active_material(context)
+    return 'Material Editor - '+(material.name if material else 'None')
+
+
+def update_window_title(host, context):
+    title = window_title(context)
+    if getattr(host, 'material_title', None) == title:
+        return
+    host.material_title = title
+    if host.native_handle:
+        import ctypes
+        from ctypes import wintypes
+        ctypes.windll.user32.SetWindowTextW(wintypes.HWND(host.native_handle), title)
+
+
+def _write_edit(edit, value):
+    material = edit['material']
+    if edit['kind'] == 'amount':
+        set_map_amount(material, edit['path'], float(value))
+    else:
+        data, key = _field_owner(material, edit['path'])
+        setattr(data, key, str(value) if edit['kind'] == 'text' else int(round(float(value)))
+                if isinstance(edit['original'], int) else float(value))
+    invalidate_preview(material)
+
+
+def host_event(host, context, event):
+    """Handle slot drag origins and inline fields before the host's generic buttons."""
+    if getattr(host, 'material_scene', None) != context.scene:
+        close_host(host)
+        host.sample_press = None
+        host.scroll = 0
+        prepare_host(host, context)
+    if event.type == 'MOUSEMOVE':
+        hover = None
+        for tool in getattr(host, 'material_tools', ()):
+            x1, y1, x2, y2 = tool['bounds']
+            if x1 <= event.mouse_region_x <= x2 and y1 <= event.mouse_region_y <= y2:
+                hover = (tool['key'], tool['label'], tool['enabled'], event.mouse_region_x, event.mouse_region_y)
+                break
+        if hover != getattr(host, 'material_hover', None):
+            host.material_hover = hover
+            host.area.tag_redraw()
+    edit = getattr(host, 'material_edit', None)
+    if edit:
         try:
-            col.prop(mat, "surface_render_method", text="Transparency")
-        except Exception:
+            edit['material'].name
+        except ReferenceError:
+            host.material_edit = None
+            edit = None
+    if edit:
+        if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
+            _write_edit(edit, edit['original'])
+            host.material_edit = None
+        elif event.type in {'RET', 'NUMPAD_ENTER'} and event.value == 'PRESS':
+            try:
+                _write_edit(edit, edit['text'])
+                host.material_edit = None
+                bpy.ops.ed.undo_push(message='Material Parameter')
+            except ValueError:
+                pass
+        elif event.type == 'BACK_SPACE' and event.value == 'PRESS':
+            edit['text'] = '' if edit['replace'] else edit['text'][:-1]
+            edit['replace'] = False
+        elif event.type == 'A' and event.ctrl and event.value == 'PRESS':
+            edit['replace'] = True
+        elif event.type == 'LEFTMOUSE' and event.value == 'RELEASE' and edit.get('dragged'):
+            host.material_edit = None
+            bpy.ops.ed.undo_push(message='Material Parameter')
+        elif event.type == 'MOUSEMOVE' and edit.get('dragging') and edit['kind'] != 'text':
+            delta = event.mouse_y-edit['start_y']
+            if abs(delta) > 3:
+                value = float(edit['original']) + delta*(.01 if event.shift else 1)
+                _write_edit(edit, value)
+                edit['text'], edit['dragged'] = str(value), True
+        elif event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
+            edit['dragging'] = False
+        elif event.value == 'PRESS' and event.unicode and event.unicode.isprintable():
+            edit['text'] = event.unicode if edit['replace'] else edit['text']+event.unicode
+            edit['replace'] = False
+        host.area.tag_redraw()
+        return True
+    press = getattr(host, 'sample_press', None)
+    if press and event.type == 'MOUSEMOVE':
+        if math.hypot(event.mouse_x-press[1], event.mouse_y-press[2]) > 5:
+            host.sample_press = None
+            bpy.ops.max.mtl_drag('INVOKE_DEFAULT', index=press[0])
+        return True
+    if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
+        host.sample_press = None
+    if event.type == 'RIGHTMOUSE' and event.value == 'PRESS':
+        for bounds, action in reversed(host.hits):
+            x1, y1, x2, y2 = bounds
+            if (x1 <= event.mouse_region_x <= x2 and y1 <= event.mouse_region_y <= y2
+                    and getattr(action, 'operator', '') == 'max.mtl_load_map'):
+                bpy.ops.max.mtl_map_actions('INVOKE_DEFAULT', channel=action.properties['channel'])
+                return True
+    if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+        for bounds, action in reversed(host.hits):
+            x1, y1, x2, y2 = bounds
+            if x1 <= event.mouse_region_x <= x2 and y1 <= event.mouse_region_y <= y2:
+                if not isinstance(action, tuple):
+                    return False
+                if action[0] == 'SLOT':
+                    state(context).active = action[1]
+                    host.sample_press = (action[1], event.mouse_x, event.mouse_y)
+                elif action[0] in {'FIELD', 'AMOUNT'}:
+                    material, path = action[1:3]
+                    kind = 'amount' if action[0] == 'AMOUNT' else action[3]
+                    data, key = _field_owner(material, path)
+                    value = (material.max_std.bump_amount if kind == 'amount' and path == 'BUMP' else
+                             map_node(material, path).get('max_amount', 100.) if kind == 'amount' else
+                             getattr(data, key))
+                    host.material_edit = dict(material=material, path=path, kind=kind, original=value,
+                        text=str(value), replace=True, start_y=event.mouse_y, dragging=True)
+                host.area.tag_redraw()
+                return True
+    if event.type in {'WHEELUPMOUSE', 'WHEELDOWNMOUSE'}:
+        host.scroll = max(0, min(getattr(host, 'material_scroll_max', 100),
+            host.scroll + (-1 if event.type == 'WHEELUPMOUSE' else 1)))
+        host.area.tag_redraw()
+        return True
+    return False
+
+
+def prepare_host(host, context):
+    host.material_scene = context.scene
+    ensure_slots(context.scene)
+    _preview_hosts.add(host.area_pointer)
+
+
+def close_host(host):
+    _preview_hosts.discard(host.area_pointer)
+    for session in list(_pickers):
+        _end_pointer(session)
+    edit = getattr(host, 'material_edit', None)
+    if edit:
+        try:
+            _write_edit(edit, edit['original'])
+        except (ReferenceError, RuntimeError):
             pass
-        col.prop(mat, "pass_index", text="Material ID")
+        host.material_edit = None
+    invalidate_preview()
+    if not _preview_hosts:
+        _preview_requests.clear()
+        if bpy.app.timers.is_registered(_render_previews):
+            bpy.app.timers.unregister(_render_previews)
 
 
-class MAX_PT_mtl_maps(_MtlPanel, Panel):
-    bl_label = "Maps"
-    bl_parent_id = "MAX_PT_mtl_editor"
-
-    @classmethod
-    def poll(cls, context):
-        return _mat_poll(context)
-
-    def draw(self, context):
-        mat = active_material(context)
-        lay = self.layout
-        col = lay.column(align=True)
-        short = {"AMBIENT": "Ambient", "DIFFUSE": "Diffuse", "SPECULAR_COLOR": "Spec Color",
-                 "SPECULAR_LEVEL": "Spec Level", "GLOSSINESS": "Glossiness", "SELF_ILLUM": "Self-Illum",
-                 "OPACITY": "Opacity", "FILTER": "Filter", "BUMP": "Bump", "REFLECTION": "Reflection",
-                 "REFRACTION": "Refraction", "DISPLACEMENT": "Displace"}
-        for key, label, _sock, _c in MAP_CHANNELS:
-            n = map_node(mat, key)
-            r = col.row(align=True)
-            sp = r.split(factor=0.52, align=True)
-            left = sp.row(align=True)
-            if n is not None:
-                left.prop(n, "mute", text="", invert_checkbox=True)
-            else:
-                left.label(text="", icon="CHECKBOX_DEHLT")
-            left.label(text=short[key])
-            right = sp.row(align=True)
-            if key == "BUMP":
-                amt = right.row(align=True)
-                amt.ui_units_x = 2.5
-                amt.prop(mat.max_std, "bump_amount", text="")
-            name = n.image.name if (n is not None and n.image) else "None"
-            right.operator("max.mtl_load_map", text=name).channel = key
-            if n is not None:
-                right.operator("max.mtl_clear_map", text="", **max_icons.ui("close", "X")).channel = key
+@persistent
+def clear_runtime(*_):
+    global _generation
+    _generation += 1
+    for picker in list(_pickers):
+        _end_pointer(picker)
+    _preview_hosts.clear()
+    _preview_types.clear()
+    _preview_requests.clear()
+    if bpy.app.timers.is_registered(_render_previews):
+        bpy.app.timers.unregister(_render_previews)
+    invalidate_preview()
 
 
-classes = (MaxStdMaterial, MaxMtlSlot, MaxMtlEditorState,
-           MAX_OT_mtl_slot, MAX_OT_mtl_get, MAX_OT_mtl_assign, MAX_OT_mtl_reset, MAX_OT_mtl_make_unique,
-           MAX_OT_mtl_put_library, MAX_OT_mtl_select_by, MAX_OT_mtl_show_in_viewport, MAX_OT_mtl_set_type,
-           MAX_OT_mtl_load_map, MAX_OT_mtl_clear_map, MAX_OT_mtl_pick, MAX_OT_mtl_reset_slots,
-           MAX_OT_mtl_add_slot, MAX_OT_mtl_get_scene, MAX_OT_mtl_drop, MAX_OT_mtl_drag,
-           MAX_MT_mtl_material, MAX_MT_mtl_options, MAX_MT_mtl_utilities,
-           MAX_PT_mtl_editor, MAX_PT_mtl_shader_basic, MAX_PT_mtl_blinn, MAX_PT_mtl_vray,
-           MAX_PT_mtl_extended, MAX_PT_mtl_maps)
+def open_editor(context):
+    from . import max_editor_windows
+    return max_editor_windows.open_host(context, 'MATERIAL')
 
 
 def register_props():
-    bpy.types.Material.max_std = PointerProperty(type=MaxStdMaterial)
-    bpy.types.Scene.max_mtl_editor = PointerProperty(type=MaxMtlEditorState)
-    for name, prop in MATERIAL_PROPS.items():
-        setattr(bpy.types.Material, name, prop)
+    definitions = [(bpy.types.Material, 'max_std', PointerProperty(type=MaxStdMaterial)),
+        (bpy.types.Material, 'max_physical', PointerProperty(type=MaxPhysicalMaterial)),
+        (bpy.types.Scene, 'max_mtl_editor', PointerProperty(type=MaxMtlEditorState))]
+    definitions.extend((bpy.types.Material, key, definition) for key, definition in MATERIAL_PROPS.items())
+    for owner, key, definition in definitions:
+        if not hasattr(owner, key):
+            setattr(owner, key, definition)
+            _props_installed.append((owner, key))
+    if clear_runtime not in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.append(clear_runtime)
+    from . import max_editor_windows
+    max_editor_windows.register_material_adapter(open_editor)
 
 
 def unregister_props():
-    for name in MATERIAL_PROPS:
-        if hasattr(bpy.types.Material, name):
-            delattr(bpy.types.Material, name)
-    del bpy.types.Scene.max_mtl_editor
-    del bpy.types.Material.max_std
+    clear_runtime()
+    from . import max_editor_windows
+    if max_editor_windows._material_adapter == open_editor:
+        max_editor_windows.register_material_adapter(None)
+    if clear_runtime in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.remove(clear_runtime)
+    for owner, key in reversed(_props_installed):
+        if hasattr(owner, key):
+            delattr(owner, key)
+    _props_installed.clear()
+
+
+classes = (MaxStdMaterial, MaxPhysicalMaterial, MaxMtlSlot, MaxMtlEditorState,
+    MAX_OT_mtl_slot, MAX_OT_mtl_get, MAX_OT_mtl_assign, MAX_OT_mtl_reset, MAX_OT_mtl_make_unique,
+    MAX_OT_mtl_put_library, MAX_OT_mtl_select_by, MAX_OT_mtl_show_in_viewport, MAX_OT_mtl_set_type,
+    MAX_OT_mtl_sample_options, MAX_OT_mtl_id_channel, MAX_OT_mtl_refresh_sample,
+    MAX_OT_mtl_load_map, MAX_OT_mtl_clear_map, MAX_OT_mtl_map_actions, MAX_OT_mtl_pick, MAX_OT_mtl_reset_slots,
+    MAX_OT_mtl_add_slot, MAX_OT_mtl_get_scene, MAX_OT_mtl_drop, MAX_OT_mtl_drag, MAX_OT_mtl_pointer_relay, MAX_OT_mtl_value,
+    MAX_MT_mtl_material, MAX_MT_mtl_modes, MAX_MT_mtl_navigation, MAX_MT_mtl_options, MAX_MT_mtl_utilities, MAX_MT_mtl_extensions,
+    MAX_PT_mtl_editor, MAX_PT_mtl_shader_basic, MAX_PT_mtl_blinn, MAX_PT_mtl_vray,
+    MAX_PT_mtl_extended, MAX_PT_mtl_maps)
