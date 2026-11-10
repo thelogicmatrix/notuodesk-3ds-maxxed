@@ -101,6 +101,8 @@ With Move (W), Rotate (E) or Scale (R) active, hold Shift and drag a gizmo handl
 
 In Editable Poly, Shift-drag extends open **Edges** and **Borders** without a dialog. **Vertex**, **Polygon** and **Element** selections open **Clone Part of Mesh**. Choose **Clone To Object**, with a name, or **Clone To Element**. Right-click or Esc cancels a drag. Cancel in either dialog removes the preview. Undo removes the whole clone operation. Ctrl+V still clones in place.
 
+An edge shared by two polygons stays unchanged during Shift-drag. Delete a polygon to expose an open edge first. This follows Autodesk's [open-edge extrusion rule](https://help.autodesk.com/cloudhelp/2026/ENU/MAXDEV-CPP-API-REF/class_m_n_mesh_utilities.html), which excludes non-open edges. The separate Editable Poly Extrude command also supports interior edges.
+
 Only meshes with selected geometry contribute clones in multi-object Edit Mode. Undo, leaving Edit Mode, deleting a source or preview, and disabling the add-on cancel interrupted clones safely. The release dialogs open after the drag operator has finished.
 
 ## Editable Poly
