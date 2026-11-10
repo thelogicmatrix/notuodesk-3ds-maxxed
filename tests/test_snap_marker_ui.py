@@ -14,7 +14,8 @@ assert snap_markers.ACTIVE == (0, 1, 0, 1)
 assert snap_markers.SNAPPED == (1, 1, 0, 1)
 cross = snap_markers.segments('vertex', (100, 100), 20)
 assert set(cross) == {((90, 100), (110, 100)), ((100, 90), (100, 110))}
-assert len(snap_markers.segments('grid_points', (100, 100), 20)) == 6
+assert snap_markers.segments('grid_points', (100, 100), 20)[-1] == ((100, 100), (110, 110))
+assert len(snap_markers.segments('grid_points', (100, 100), 20)) == 5
 assert len(snap_markers.segments('source', (100, 100), 20)) == 4
 for key, _ in snaps.TYPES:
     lines = snap_markers.segments(key, (100, 100), 20)
