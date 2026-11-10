@@ -1285,7 +1285,7 @@ SAMPLE_TOOLS = (
     ('background', 'Background', None),
     ('tiling', 'Sample UV Tiling', None),
     ('video', 'Video Color Check', None),
-    ('preview', 'Make Preview', 'max.mtl_refresh_sample'),
+    ('preview', 'Make Preview', None),
     ('options', 'Options', 'wm.call_menu'),
     ('select', 'Select by Material', 'max.mtl_select_by'),
     ('navigator', 'Material/Map Navigator', None),
@@ -1333,7 +1333,7 @@ def _preset_title(x, y, s):
     import blf
     _label(0, 0, '', round(13*s))
     font = _fonts['tile']
-    for text, dx, dy, size in [('Physical', 12, 30, 42), ('Material', 32, 4, 35)]:
+    for text, dx, dy, size in [('Physical', 12, 30, 42), ('material', 32, 4, 35)]:
         blf.size(font, round(size*s))
         for ox, oy, color in [(3, -3, (.12, .16, .12, 1)), (2, -2, (.24, .29, .22, 1)),
                               (-1, 1, (.74, .81, .69, 1)), (0, 0, (.52, .64, .49, 1))]:
@@ -1558,13 +1558,12 @@ def _number(host, material, path, x, y, width, s, enabled=True):
     edit = getattr(host, 'material_edit', None)
     text = edit['text']+'|' if edit and edit['path'] == path else str(round(value, 3))
     action = ('FIELD', material, path, 'number') if enabled and not material.library else None
-    _box(x, y, width, 25*s, (.26, .26, .26, 1))
+    _box(x, y, width, 25*s, (73/255, 73/255, 73/255, 1))
     _box(x+s, y+s, width-2*s, 23*s, (.392, .392, .392, 1) if enabled else (.31, .31, .31, 1))
-    _label(x+6*s, y+7*s, text, round(13*s), (.9, .9, .9, 1) if enabled else (.51, .51, .51, 1))
+    _label(x+7*s, y+9*s, text, round(13*s), (.9, .9, .9, 1) if enabled else (.51, .51, .51, 1))
     if action:
         _hit(host, (x, y, x+width, y+25*s), action)
-    _triangle(x+width-11*s, y+14*s, .8*s, 'UP', (.72, .72, .72, 1) if enabled else (.4, .4, .4, 1))
-    _triangle(x+width-11*s, y+6*s, .8*s, 'DOWN', (.72, .72, .72, 1) if enabled else (.4, .4, .4, 1))
+    _spinner_arrows(x+width-10*s, y, s, enabled)
     if action:
         for sign in (-1, 1):
             def step(context, event, sign=sign):
@@ -1573,6 +1572,15 @@ def _number(host, material, path, x, y, width, s, enabled=True):
                 invalidate_preview(material)
             bottom = y if sign == -1 else y+12.5*s
             _hit(host, (x+width-12*s, bottom, x+width, bottom+12.5*s), step)
+
+
+def _spinner_arrows(x, y, s, enabled):
+    tip = (.87, .87, .87, 1) if enabled else (.51, .51, .51, 1)
+    base = (.74, .74, .74, 1) if enabled else (.43, .43, .43, 1)
+    _polygon([(x, y+15*s), (x+5*s, y+15*s), (x+2.5*s, y+18*s)], tip)
+    _box(x, y+14*s, 5*s, s, base)
+    _polygon([(x, y+11*s), (x+5*s, y+11*s), (x+2.5*s, y+8*s)], tip)
+    _box(x, y+11*s, 5*s, s, base)
 
 
 def _color(host, material, path, x, y, width, s, enabled=True):
@@ -1592,12 +1600,13 @@ def _color(host, material, path, x, y, width, s, enabled=True):
 def _physical_map(host, material, channel, x, y, s):
     enabled = channel is not None and map_supported(material, channel) and not material.library
     _control(host, x, y, 26*s, 25*s, map_badge(material, channel) if channel else '',
-        _invoke('max.mtl_load_map', channel=channel) if enabled else None, s, color=(.392, .392, .392, 1))
+        _invoke('max.mtl_load_map', channel=channel) if enabled else None, s,
+        color=(.392, .392, .392, 1), radius=5)
 
 
 def _combo(host, x, y, width, text, s, action=None):
     _control(host, x, y, width, 25*s, text, action, s,
-        text_color=(.89, .89, .89, 1) if action else (.57, .57, .57, 1))
+        text_color=(.89, .89, .89, 1) if action else (.57, .57, .57, 1), radius=0)
     _triangle(x+width-17*s, y+10*s, s, color=(.8, .8, .8, 1) if action else (.51, .51, .51, 1))
 
 
@@ -1609,6 +1618,7 @@ def _draw_physical(host, context, material, width, top, s):
     right = width-22*u
     opened, y = _rollout(host, 'Presets', 2*u, top, width-18*u, u)
     if opened:
+        y -= 2*u
         _box(2*u, y-142*u, width-18*u, 148*u, (.314, .314, .314, 1))
         _combo(host, 13*u, y-27*u, 236*u, '{Finishes}', u)
         # The reference's title tile is independent artwork, not a texture
@@ -1619,10 +1629,10 @@ def _draw_physical(host, context, material, width, top, s):
             tint = .12+.08*math.sin(band/32*math.pi)
             _box(tx, ty+band*2*u, 186*u, 2*u, (tint, tint+.04, tint+.01, 1))
         _preset_title(tx, ty, u)
-        _box(253*u, y-101*u, max(20*u, right-257*u), 98*u, (.392, .392, .392, 1))
+        _box(253*u, y-100*u, max(20*u, right-257*u), 98*u, (.392, .392, .392, 1))
         _label(163*u, y-123*u, 'Material Mode:', round(13*u))
         _combo(host, 253*u, y-132*u, max(30*u, right-257*u), 'Simple', u)
-        y -= 147*u
+        y -= 146*u
     opened, y = _rollout(host, 'Coating Parameters', 2*u, y, width-18*u, u)
     if opened:
         _box(2*u, y-97*u, width-18*u, 103*u, (.314, .314, .314, 1))
@@ -1655,7 +1665,7 @@ def _draw_physical(host, context, material, width, top, s):
         _number(host, material, 'physical.glossiness' if mode else 'physical.roughness', 343*u, row, 78*u, u)
         _physical_map(host, material, 'GLOSSINESS' if mode else 'PHYSICAL_ROUGHNESS', 423*u, row, u)
         row -= 29*u
-        _label(59*u, row+8*u, 'Metalness:', round(13*u))
+        _label(61*u, row+9*u, 'Metalness:', round(13*u))
         _number(host, material, 'physical.metalness', 127*u, row, 76*u, u)
         _physical_map(host, material, 'REFLECTION', 205*u, row, u)
         _label(313*u, row+8*u, 'IOR:', round(13*u))
@@ -1705,9 +1715,9 @@ def _rounded(x, y, width, height, radius, color):
     _polygon(points, color)
 
 
-def _control(host, x, y, width, height, text, action, scale, selected=False, color=None, text_color=None, centered=False):
-    _rounded(x, y, width, height, 3*scale, (.65, .65, .65, 1) if selected else (.255, .255, .255, 1))
-    _rounded(x+scale, y+scale, width-2*scale, height-2*scale, 2*scale, color or (.392, .392, .392, 1))
+def _control(host, x, y, width, height, text, action, scale, selected=False, color=None, text_color=None, centered=False, radius=3):
+    _rounded(x, y, width, height, radius*scale, (.65, .65, .65, 1) if selected else (.255, .255, .255, 1))
+    _rounded(x+scale, y+scale, width-2*scale, height-2*scale, max(0, radius-1)*scale, color or (.392, .392, .392, 1))
     if text:
         import blf
         _label(0, 0, '', round(13*scale))
@@ -1760,13 +1770,14 @@ def _rollout(host, title, x, y, width, scale):
         else:
             closed.add(title)
     toggle.rollout = title
-    _rounded(x, y-23*scale, width, 23*scale, 3*scale, (.314, .314, .314, 1))
+    height = {'Presets': 25, 'Coating Parameters': 24, 'Basic Parameters': 26}.get(title, 23)*scale
+    _rounded(x, y-height, width, height, 3*scale, (.314, .314, .314, 1))
     _triangle(x+7*scale, y-14*scale, scale, 'RIGHT' if title in closed else 'DOWN')
     _bold(x+22*scale, y-16*scale, title, round(13*scale))
     for row in range(4):
         for column in range(3):
             _box(x+width-(10-column*2)*scale, y-(8+row*2)*scale, scale, scale, (.55, .55, .55, 1))
-    _hit(host, (x, y-23*scale, x+width, y), toggle)
+    _hit(host, (x, y-height, x+width, y), toggle)
     return title not in closed, y-29*scale
 
 
@@ -1831,17 +1842,17 @@ def _map_shortcut(host, material, channel, x, y, scale):
 
 
 def _frame_group(x, top, width, height, title, scale):
-    from .max_editor_windows import _line
-    color = (.43, .43, .43, 1)
-    for a, b in [((x, top-height), (x+width, top-height)), ((x, top-height), (x, top)),
-                 ((x+width, top-height), (x+width, top)), ((x, top), (x+width, top))]:
-        _line(a, b, color)
+    _rounded(x, top-height, width, height, 3*scale, (53/255, 53/255, 53/255, 1))
+    _rounded(x+scale, top-height+scale, width-2*scale, height-2*scale, 2*scale,
+             (74/255, 74/255, 74/255, 1))
+    _rounded(x+2*scale, top-height+2*scale, width-4*scale, height-4*scale, scale,
+             (.314, .314, .314, 1))
     if title:
         import blf
-        _label(0, 0, '', round(12*scale))
+        _label(0, 0, '', round(13*scale))
         span = blf.dimensions(_fonts['normal'], title)[0]
-        _box(x+5*scale, top-7*scale, span+7*scale, 15*scale, (.314, .314, .314, 1))
-        _label(x+8*scale, top-3*scale, title, round(12*scale))
+        _box(x+5*scale, top-8*scale, span+7*scale, 16*scale, (.314, .314, .314, 1))
+        _label(x+8*scale, top-5*scale, title, round(13*scale))
 
 
 def _highlight_plot(material, x, y, width, height):
@@ -1922,17 +1933,17 @@ def draw_host(host, context, width, height, scale):
         _hit(host, (x, y, x+button_width, y+31*s), _invoke('wm.call_menu', name='MAX_MT_mtl_'+name.lower()))
         x += button_width
     # Keep samples full-width at every grid size. Extra saved slots stay reachable.
-    available_width = max(100*s, width-65*s)
+    available_width = max(100*s, (round(width/s)-65)*s)
     cell_width = available_width/columns
-    cell_height = cell_width*.905
+    cell_height = cell_width*(249/412*3/2)
     start = min(getattr(host, 'sample_start', 0), max(0, len(editor.slots)-columns*rows))
     host.sample_bounds = []
-    top = y-4*s
-    host.material_elements['samples'] = (5*s, top-rows*cell_height, 5*s+available_width, top)
+    top = y-3*s
+    host.material_elements['samples'] = (4*s, top-rows*cell_height, 4*s+available_width, top)
     for cell in range(min(columns*rows, len(editor.slots)-start)):
         row, col = divmod(cell, columns)
-        bounds = (5*s+col*cell_width, top-(row+1)*cell_height,
-                  5*s+(col+1)*cell_width-s, top-row*cell_height-s)
+        bounds = (4*s+col*cell_width, top-(row+1)*cell_height,
+                  4*s+(col+1)*cell_width-s, top-row*cell_height-s)
         index = start+cell
         host.sample_bounds.append((index, bounds))
         _sample(host, editor.slots[index].material, index, bounds, index == editor.active, context, s)
@@ -1951,17 +1962,19 @@ def draw_host(host, context, width, height, scale):
     thumb = min(track, 21*s)
     fraction = start/max(1, len(editor.slots)-columns*rows)
     _box(sx, top-22*s-thumb-fraction*(track-thumb), 22*s, thumb, (.78, .78, .78, 1))
-    hy = sample_bottom-22*s
-    _box(5*s, hy, available_width, 20*s, (.263, .263, .263, 1))
+    hy = sample_bottom-23*s
+    _box(5*s, hy, available_width, 22*s, (.263, .263, .263, 1))
     for hx, direction, delta in [(5*s, 'LEFT', -1), (width-81*s, 'RIGHT', 1)]:
-        _box(hx, hy, 21*s, 20*s, (.95, .95, .95, 1))
+        _box(hx, hy, 21*s, 22*s, (.95, .95, .95, 1))
         _scroll_arrow(hx+8*s, hy+6*s, s, direction)
-        _hit(host, (hx, hy, hx+21*s, hy+20*s), scroll_samples(delta))
-    _box(26*s, hy, 21*s, 20*s, (.78, .78, .78, 1))
+        _hit(host, (hx, hy, hx+21*s, hy+22*s), scroll_samples(delta))
+    _box(26*s, hy, 21*s, 22*s, (.78, .78, .78, 1))
     for index, (key, label, operator) in enumerate(SAMPLE_TOOLS):
         action = _invoke(operator, name='MAX_MT_mtl_options') if key == 'options' else _invoke(operator) if operator else None
+        if key == 'select' and not any(slot.material == material for obj in context.scene.objects for slot in obj.material_slots):
+            action = None
         _toolbar_button(host, key, label, width-34*s, top-(27+30*index)*s, s, action)
-    y = hy-38*s
+    y = hy-37*s
     positions = (7, 35, 75, 111, 148, 185, 225, 265, 302, 341, 370, 398)
     for position, (key, label, operator) in zip(positions, COMPACT_TOOLS):
         action = _invoke(operator) if operator else None
@@ -1976,17 +1989,17 @@ def draw_host(host, context, width, height, scale):
     host.material_elements['horizontal-toolbar'] = (5*s, y, width-37*s, y+27*s)
     host.material_elements['vertical-toolbar'] = (width-34*s, top-267*s, width-7*s, top)
     y -= 31*s
-    _toolbar_button(host, 'pick', 'Pick Material from Object', 104*s, y-2*s, s, _invoke('max.mtl_pick'))
+    _toolbar_button(host, 'pick', 'Pick Material from Object', 104*s, y, s, _invoke('max.mtl_pick'))
     if material:
-        _control(host, 137*s, y, max(30*s, width-276*s), 24*s, material.name,
-                 ('FIELD', material, 'name', 'text'), s)
+        _control(host, 137*s, y, max(30*s, width-276*s), 26*s, material.name,
+                 ('FIELD', material, 'name', 'text'), s, radius=0)
         _triangle(width-156*s, y+10*s, s)
-        _hit(host, (width-164*s, y, width-139*s, y+24*s), _invoke('max.mtl_get'))
-    _control(host, max(70*s, width-134*s), y, 117*s, 24*s,
+        _hit(host, (width-164*s, y, width-139*s, y+26*s), _invoke('max.mtl_get'))
+    _control(host, max(70*s, width-134*s), y, 118*s, 26*s,
              {'STANDARD': 'Standard (Legacy)', 'VRAY': 'VRayMtl', 'PHYSICAL': 'Physical Material'}.get(material_kind(material), 'Material'),
-             _invoke('max.mtl_set_type'), s, centered=True)
+             _invoke('max.mtl_set_type'), s, centered=True, radius=5)
     host.material_elements['name-type'] = (104*s, y, width-17*s, y+25*s)
-    y -= 8*s
+    y -= 7*s
     if material is None:
         _label(10*s, y-35*s, 'Get Material or choose a material type.', round(13*s))
         return
@@ -2045,7 +2058,7 @@ def draw_host(host, context, width, height, scale):
                          _invoke('max.mtl_load_map', channel=channel), s)
             y -= 12*s
         host.material_scroll_max = max(0, math.ceil((host.scroll*26*s-y)/max(1, 26*s)))
-        _box(width-11*s, 0, 10*s, rollout_clip, (.205, .205, .205, 1))
+        _box(width-11*s, 0, 10*s, rollout_clip, (53/255, 53/255, 53/255, 1))
         thumb = min(125*s, max(24*s, rollout_clip/(host.material_scroll_max+1)))
         _rounded(width-9*s, max(0, rollout_clip-thumb-s-host.scroll*6*s), 7*s, thumb, 2*s, (.32, .32, .32, 1))
     finally:
@@ -2060,6 +2073,8 @@ def draw_host(host, context, width, height, scale):
                   'end': 'No nested map result is available.',
                   'parent': 'No nested map editor is open.',
                   'sibling': 'No nested map editor is open.',
+                  'preview': 'Animated material preview generation is not implemented.',
+                  'select': 'This material has no scene users.',
                   'navigator': 'Material/Map Navigator is not implemented.',
                   'unique': 'This sample has no shared instance to separate.'}.get(key,
                       'Blender native material previews do not expose this setting.')

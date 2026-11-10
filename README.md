@@ -244,7 +244,7 @@ The material type button also offers Standard (Legacy) and a V-Ray-labelled Prin
 
 Map shortcuts show M for an enabled bitmap and m for a disabled bitmap. Disabling a bitmap keeps its image. Right-click a shortcut for Bitmap and Clear Map. Ambient and Displacement retain their image data without a rendered connection.
 
-The two toolbars follow Compact's control order. Supported commands include Get Material, Assign to Selection, Reset, material copies, Put to Library, Material ID Channel and viewport material display. Put to Library writes a Blender material library. Material ID Channel edits Material.pass_index. Controls with no implemented backend remain disabled. Slate is unavailable.
+The two toolbars follow Compact's control order. Supported commands include Get Material, Assign to Selection, Reset, material copies, Put to Library, Material ID Channel and viewport material display. Put to Library writes a Blender material library. Material ID Channel edits Material.pass_index. Select by Material is available when the active sample has scene users. Controls with no implemented backend remain disabled, including animated Make Preview. Slate is unavailable.
 
 On Windows the native window title follows the active material, such as Material Editor - 01 - Default. Windows may shorten the visible caption at the narrow opening width. Other platforms use the active material name in the drawn title.
 
