@@ -851,17 +851,18 @@ class MAX_OT_mtl_value(bpy.types.Operator):
     bl_idname = 'max.mtl_value'
     bl_label = 'Material Parameter'
     bl_options = {'UNDO', 'INTERNAL'}
-    material: PointerProperty(type=bpy.types.Material, options={'HIDDEN', 'SKIP_SAVE'})
+    material: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
     field: StringProperty(options={'HIDDEN'})
     color: FloatVectorProperty(name='Color', size=3, subtype='COLOR', min=0, max=1)
     choice: EnumProperty(name='Shader', items=SHADERS)
 
     def invoke(self, context, event):
-        self.material = self.material or active_material(context)
-        if not self.material:
+        material = bpy.data.materials.get(self.material) if self.material else active_material(context)
+        if material is None:
             return {'CANCELLED'}
-        self._scene = context.scene
-        data = self.material.max_std if self.field.startswith('std.') else self.material
+        self._source_scene = context.scene
+        self._target_id = material.as_pointer()
+        data = material.max_std if self.field.startswith('std.') else material
         key = self.field.removeprefix('std.')
         value = getattr(data, key)
         if key == 'shader':
@@ -874,11 +875,13 @@ class MAX_OT_mtl_value(bpy.types.Operator):
         self.layout.prop(self, 'choice' if self.field == 'std.shader' else 'color', text='')
 
     def execute(self, context):
-        if self.material is None or self.material.library or getattr(self, '_scene', context.scene) != context.scene:
+        material = (_resolve_target(self, context) if hasattr(self, '_target_id') else
+                    bpy.data.materials.get(self.material) if self.material else active_material(context))
+        if material is None or material.library:
             return {'CANCELLED'}
-        data = self.material.max_std if self.field.startswith('std.') else self.material
+        data = material.max_std if self.field.startswith('std.') else material
         setattr(data, self.field.removeprefix('std.'), self.choice if self.field == 'std.shader' else self.color)
-        invalidate_preview(self.material)
+        invalidate_preview(material)
         return {'FINISHED'}
 
 
@@ -1086,7 +1089,7 @@ def _field(host, context, material, path, x, y, width, label, scale, kind='numbe
     text = edit['text'] + '|' if edit and edit['path'] == path else str(round(value, 3)) if isinstance(value, float) else str(value)
     action = ('FIELD', material, path, kind) if enabled and not material.library else None
     if kind in {'color', 'shader'}:
-        action = _invoke('max.mtl_value', material=material, field=path) if enabled and not material.library else None
+        action = _invoke('max.mtl_value', material=material.name, field=path) if enabled and not material.library else None
         if kind == 'color':
             text = ''
     _control(host, start, y, width*.46, 22*scale, text, action, scale,
@@ -1307,7 +1310,7 @@ def draw_host(host, context, width, height, scale):
         if opened:
             shader_label = dict((key, label) for key, label, description in SHADERS)[material.max_std.shader]
             _control(host, 14*s, y-30*s, width*.43, 22*s, shader_label+' v',
-                     _invoke('max.mtl_value', material=material, field='std.shader'), s)
+                     _invoke('max.mtl_value', material=material.name, field='std.shader'), s)
             def sided(context, event):
                 material.max_two_sided = not material.max_two_sided
             _toggle(host, width*.51, y-13*s, 'Wire', material.max_std.wire, None, s, False)
