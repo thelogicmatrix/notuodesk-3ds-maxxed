@@ -671,7 +671,7 @@ class MAX_OT_viewcube_context(bpy.types.Operator):
             if hit(context, event.mouse_x - context.region.x, event.mouse_y - context.region.y) is not None:
                 _open_menu(context)
                 return {'FINISHED'}
-        bpy.ops.wm.call_menu(name='MAX_MT_quad')
+        bpy.ops.max.quad_menu('INVOKE_DEFAULT')
         return {'FINISHED'}
 
 

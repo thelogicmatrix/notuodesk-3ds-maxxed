@@ -185,37 +185,16 @@ class MAX_MT_quad(bpy.types.Menu):
     bl_label = 'Quad Menu'
 
     def draw(self, context):
-        # W2.D replaces this compatibility menu with the four-quadrant host.
-        col = self.layout.column()
-        col.label(text='Display')
-        for token, label in [('HIDE_SEL', 'Hide Selection'), ('HIDE_UNSEL', 'Hide Unselected'),
-                             ('UNHIDE', 'Unhide All'), ('FREEZE', 'Freeze Selection'),
-                             ('UNFREEZE', 'Unfreeze All')]:
-            _object(col, token, label)
-        _item(col, 'max.scene_selection_dialog', 'Hide by Name...', hide=True)
-        _item(col, 'max.unfreeze_by_name', 'Unfreeze by Name...')
-        col.separator()
-        col.label(text='Transform')
-        for token, label in [('MOVE', 'Move'), ('ROTATE', 'Rotate'), ('SCALE', 'Scale')]:
-            _item(col, 'max.select_transform', label, kind=token,
-                  pressed=mode_feedback.tool_pressed(context, token))
-        _item(col, 'max.transform_typein', 'Transform Type-In...')
-        col.menu('MAX_MT_convert')
-        _item(col, 'max.object_properties', 'Object Properties...')
+        from . import max_quad
+        max_quad.compatibility(self.layout)
 
 
 class MAX_MT_quad_modeling(bpy.types.Menu):
     bl_label = 'Modeling'
 
     def draw(self, context):
-        mode_feedback.draw_sublevel_menu(self.layout, context, order=(1, 2, 3, 4, 5, 0))
-        self.layout.separator()
-        for token, label in [('EXTRUDE', 'Extrude'), ('CHAMFER', 'Chamfer'),
-                             ('CONNECT', 'Connect'), ('BRIDGE', 'Bridge'), ('RELAX', 'Relax'),
-                             ('LOOP', 'Loop'), ('RING', 'Ring'), ('TARGET_WELD', 'Target Weld')]:
-            _edit(self.layout, token, label)
-        _item(self.layout, 'max.quad_cap', 'Quad Cap')
-        _item(self.layout, 'max.loop_regularize', 'Loop Regularizer')
+        from . import max_quad
+        max_quad.compatibility(self.layout, 'MODELING')
 
 
 class MAX_MT_create(bpy.types.Menu):
@@ -630,6 +609,8 @@ def register_draw():
     _adapt(mode_feedback, 'PASSIVE_MODALS', mode_feedback.PASSIVE_MODALS | {'MAX_OT_editor_interact'})
     _adapt(mode_feedback, '_draw_view_border', _workspace_border)
     _adapt(viewcube, 'visible', _workspace_cube)
+    from . import max_quad
+    max_quad.install()
     max_chrome.install(feedback=mode_feedback, draw_menus=_menus,
                        apply_explorer=operators._explorer_layout,
                        read_transform=operators.read_transform, write_transform=operators.write_transform,
@@ -651,6 +632,8 @@ def unregister_draw():
     if not _installed:
         return
     from . import operators
+    from . import max_quad
+    max_quad.uninstall()
     max_chrome.uninstall()
     operators.close_material_compat()
     operators.restore_layout(bpy.context)
