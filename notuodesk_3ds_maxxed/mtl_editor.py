@@ -36,6 +36,9 @@ ICON_FALLBACKS = {'material_editor': 'MATERIAL', 'sphere': 'SPHERE', 'mtl_drag':
     'mtl_pick': 'EYEDROPPER', 'close': 'X'}
 _catalogue = []
 _preview_textures = {}
+_preview_signatures = {}
+_preview_requests = set()
+_preview_hosts = set()
 _pickers = []
 _generation = 0
 _props_installed = []
@@ -210,6 +213,21 @@ def active_material(context):
     return None
 
 
+def _capture_target(operator, context):
+    material = active_material(context)
+    operator._target_id = material.as_pointer() if material else 0
+    operator._source_scene = context.scene
+    operator._source_slot = state(context).active
+
+
+def _resolve_target(operator, context):
+    if not hasattr(operator, '_target_id'):
+        return active_material(context)
+    if operator._source_scene != context.scene:
+        return None
+    return next((m for m in bpy.data.materials if m.as_pointer() == operator._target_id), None)
+
+
 def grid_shape(editor):
     return {'6': (3, 2), '15': (5, 3), '24': (6, 4)}.get(editor.visible,
         (6, max(1, math.ceil(len(editor.slots)/6))))
@@ -264,9 +282,14 @@ def set_map_enabled(material, channel, enabled):
 
 
 def set_map_amount(material, channel, amount):
+    if material.library:
+        return
     texture = map_node(material, channel)
     if texture:
-        texture['max_amount'] = max(0., min(100., amount))
+        if channel == 'BUMP':
+            material.max_std.bump_amount = amount
+        else:
+            texture['max_amount'] = max(0., min(100., amount))
         set_map_enabled(material, channel, map_enabled(material, channel))
 
 
@@ -359,10 +382,28 @@ def assign_material(obj, material):
 
 def invalidate_preview(material=None):
     if material:
-        _preview_textures.pop(material.as_pointer(), None)
+        pointer = material.as_pointer()
+        _preview_textures.pop(pointer, None)
+        _preview_signatures.pop(pointer, None)
         material.update_tag()
+        if _preview_hosts and not bpy.app.background:
+            _preview_requests.add(pointer)
+            if not bpy.app.timers.is_registered(_render_previews):
+                bpy.app.timers.register(_render_previews, first_interval=.2)
     else:
         _preview_textures.clear()
+        _preview_signatures.clear()
+
+
+def _render_previews():
+    pending = set(_preview_requests)
+    _preview_requests.clear()
+    if _preview_hosts:
+        for material in bpy.data.materials:
+            if material.as_pointer() in pending:
+                material.preview_ensure()
+                material.asset_generate_preview()
+    return None
 
 
 def _material_items(self, context):
@@ -395,15 +436,22 @@ class MAX_OT_mtl_get(bpy.types.Operator):
     material: EnumProperty(items=_material_items)
 
     def invoke(self, context, event):
+        self._source_scene = context.scene
+        self._source_slot = state(context).active
         context.window_manager.invoke_search_popup(self)
         return {'FINISHED'}
 
     def execute(self, context):
+        if getattr(self, '_source_scene', context.scene) != context.scene:
+            return {'CANCELLED'}
         material = bpy.data.materials.get(self.material)
         if material is None:
             return {'CANCELLED'}
         editor = ensure_slots(context.scene)
-        editor.slots[editor.active].material = material
+        index = getattr(self, '_source_slot', editor.active)
+        if index >= len(editor.slots):
+            return {'CANCELLED'}
+        editor.slots[index].material = material
         return {'FINISHED'}
 
 
@@ -429,10 +477,11 @@ class MAX_OT_mtl_reset(bpy.types.Operator):
     bl_options = {'UNDO'}
 
     def invoke(self, context, event):
+        _capture_target(self, context)
         return context.window_manager.invoke_confirm(self, event, message='Reset the active material and its scene users?')
 
     def execute(self, context):
-        material = active_material(context)
+        material = _resolve_target(self, context)
         if material is None or material.library:
             return {'CANCELLED'}
         for key in MAP_INFO:
@@ -469,8 +518,12 @@ class MAX_OT_mtl_put_library(bpy.types.Operator, ExportHelper):
     filename_ext = '.blend'
     filter_glob: StringProperty(default='*.blend', options={'HIDDEN'})
 
+    def invoke(self, context, event):
+        _capture_target(self, context)
+        return ExportHelper.invoke(self, context, event)
+
     def execute(self, context):
-        material = active_material(context)
+        material = _resolve_target(self, context)
         if material is None:
             return {'CANCELLED'}
         try:
@@ -517,6 +570,7 @@ class MAX_OT_mtl_set_type(bpy.types.Operator):
                              ('PHYSICAL', 'Physical Material (Principled equivalent)', '')])
 
     def invoke(self, context, event):
+        _capture_target(self, context)
         return context.window_manager.invoke_props_dialog(self, width=350)
 
     def draw(self, context):
@@ -524,10 +578,17 @@ class MAX_OT_mtl_set_type(bpy.types.Operator):
         self.layout.label(text='Rendered with Blender Principled shading.')
 
     def execute(self, context):
-        material = active_material(context)
+        if getattr(self, '_source_scene', context.scene) != context.scene:
+            return {'CANCELLED'}
+        material = _resolve_target(self, context)
         if material is None:
+            if getattr(self, '_target_id', 0):
+                return {'CANCELLED'}
             editor = ensure_slots(context.scene)
-            material = editor.slots[editor.active].material = new_default_material(editor.active)
+            index = getattr(self, '_source_slot', editor.active)
+            if index >= len(editor.slots):
+                return {'CANCELLED'}
+            material = editor.slots[index].material = new_default_material(index)
         if material.library or shader(material, create=True) is None:
             return {'CANCELLED'}
         material['max_type'] = self.kind
@@ -542,8 +603,14 @@ class MAX_OT_mtl_load_map(bpy.types.Operator, ImportHelper):
     channel: StringProperty()
     filter_glob: StringProperty(default='*.png;*.jpg;*.jpeg;*.tga;*.tif;*.tiff;*.bmp;*.exr;*.hdr;*.psd;*.webp', options={'HIDDEN'})
 
+    def invoke(self, context, event):
+        _capture_target(self, context)
+        if not self._target_id:
+            return {'CANCELLED'}
+        return ImportHelper.invoke(self, context, event)
+
     def execute(self, context):
-        material = active_material(context)
+        material = _resolve_target(self, context)
         if material is None or self.channel not in MAP_INFO:
             return {'CANCELLED'}
         try:
@@ -563,9 +630,26 @@ class MAX_OT_mtl_clear_map(bpy.types.Operator):
 
     def execute(self, context):
         material = active_material(context)
-        if material is None or self.channel not in MAP_INFO:
+        if material is None or material.library or self.channel not in MAP_INFO:
             return {'CANCELLED'}
         clear_map(material, self.channel)
+        return {'FINISHED'}
+
+
+class MAX_OT_mtl_map_actions(bpy.types.Operator):
+    bl_idname = 'max.mtl_map_actions'
+    bl_label = 'Map'
+    bl_options = {'INTERNAL'}
+    channel: StringProperty(options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_popup(self, width=190)
+
+    def draw(self, context):
+        self.layout.operator('max.mtl_load_map', text='Bitmap...').channel = self.channel
+        self.layout.operator('max.mtl_clear_map', text='Clear Map').channel = self.channel
+
+    def execute(self, context):
         return {'FINISHED'}
 
 
@@ -576,9 +660,12 @@ class MAX_OT_mtl_reset_slots(bpy.types.Operator):
     bl_options = {'UNDO'}
 
     def invoke(self, context, event):
+        self._source_scene = context.scene
         return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
+        if getattr(self, '_source_scene', context.scene) != context.scene:
+            return {'CANCELLED'}
         editor = ensure_slots(context.scene)
         for index, slot in enumerate(editor.slots):
             slot.material = new_default_material(index)
@@ -1040,12 +1127,19 @@ def _sample(host, material, index, bounds, active, context, scale):
             import gpu
             from gpu_extras.presets import draw_texture_2d
             pointer = material.as_pointer()
+            pixels = preview.image_pixels_float
+            # Native preview jobs finish asynchronously. Retire a copied GPU image
+            # when their pixels change, including an update after a property edit.
+            pw, ph = preview.image_size
+            signature = ((pw, ph), tuple(pixels[4*((ph*y//8)*pw+pw*x//8)+channel]
+                         for y in range(1, 8) for x in range(1, 8) for channel in range(3)))
             texture = _preview_textures.get(pointer)
-            if texture is None:
+            if texture is None or _preview_signatures.get(pointer) != signature:
                 size = tuple(preview.image_size)
                 texture = gpu.types.GPUTexture(size, format='RGBA16F',
                     data=gpu.types.Buffer('FLOAT', len(preview.image_pixels_float), preview.image_pixels_float[:]))
                 _preview_textures[pointer] = texture
+                _preview_signatures[pointer] = signature
             draw_texture_2d(texture, (x+2*scale, y+2*scale), right-x-4*scale, top-y-4*scale)
         else:
             _label(x+8*scale, y+(top-y)/2, 'Preview...', round(11*scale))
@@ -1231,6 +1325,9 @@ def draw_host(host, context, width, height, scale):
             y -= 54*s
         opened, y = _rollout(host, 'Maps', 5*s, y, width-10*s, s)
         if opened:
+            _label(width*.39, y-13*s, 'Amount', round(11*s))
+            _label(width*.72, y-13*s, 'Map', round(11*s))
+            y -= 18*s
             for channel, label, socket, color in MAP_CHANNELS:
                 y -= 25*s
                 texture = map_node(material, channel)
@@ -1238,17 +1335,15 @@ def draw_host(host, context, width, height, scale):
                     set_map_enabled(material, channel, not map_enabled(material, channel))
                 _toggle(host, 12*s, y+5*s, '', map_enabled(material, channel), toggle, s, bool(texture and texture.image))
                 _label(32*s, y+6*s, label, round(11*s))
+                amount = (material.max_std.bump_amount if channel == 'BUMP' else
+                          texture.get('max_amount', 100.) if texture else 100.)
+                _control(host, width*.39, y, width*.14, 22*s, str(round(amount, 2)),
+                         ('AMOUNT', material, channel) if texture and map_supported(material, channel) else None, s)
                 text = texture.image.name if texture and texture.image else 'None'
                 if not map_supported(material, channel):
                     text = 'Stored only: ' + text
-                _control(host, width*.46, y, width*.54-39*s, 22*s, text,
+                _control(host, width*.55, y, width*.45-12*s, 22*s, text,
                          _invoke('max.mtl_load_map', channel=channel), s)
-                _control(host, width-32*s, y, 23*s, 22*s, 'x', _invoke('max.mtl_clear_map', channel=channel), s)
-                if texture and texture.image:
-                    y -= 25*s
-                    _label(32*s, y+5*s, 'Amount:', round(11*s))
-                    _control(host, width*.46, y, 65*s, 22*s, str(texture.get('max_amount', 100)),
-                             ('AMOUNT', material, channel), s)
             y -= 12*s
         host.material_scroll_max = max(0, math.ceil((host.scroll*26*s-y)/max(1, 26*s)))
     finally:
@@ -1272,7 +1367,18 @@ def _write_edit(edit, value):
 
 def host_event(host, context, event):
     """Handle slot drag origins and inline fields before the host's generic buttons."""
+    if getattr(host, 'material_scene', None) != context.scene:
+        close_host(host)
+        host.sample_press = None
+        host.scroll = 0
+        prepare_host(host, context)
     edit = getattr(host, 'material_edit', None)
+    if edit:
+        try:
+            edit['material'].name
+        except ReferenceError:
+            host.material_edit = None
+            edit = None
     if edit:
         if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
             _write_edit(edit, edit['original'])
@@ -1313,6 +1419,13 @@ def host_event(host, context, event):
         return True
     if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
         host.sample_press = None
+    if event.type == 'RIGHTMOUSE' and event.value == 'PRESS':
+        for bounds, action in reversed(host.hits):
+            x1, y1, x2, y2 = bounds
+            if (x1 <= event.mouse_region_x <= x2 and y1 <= event.mouse_region_y <= y2
+                    and getattr(action, 'operator', '') == 'max.mtl_load_map'):
+                bpy.ops.max.mtl_map_actions('INVOKE_DEFAULT', channel=action.properties['channel'])
+                return True
     if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
         for bounds, action in reversed(host.hits):
             x1, y1, x2, y2 = bounds
@@ -1326,7 +1439,9 @@ def host_event(host, context, event):
                     material, path = action[1:3]
                     kind = 'amount' if action[0] == 'AMOUNT' else action[3]
                     data = material.max_std if path.startswith('std.') else material
-                    value = map_node(material, path).get('max_amount', 100.) if kind == 'amount' else getattr(data, path.removeprefix('std.'))
+                    value = (material.max_std.bump_amount if kind == 'amount' and path == 'BUMP' else
+                             map_node(material, path).get('max_amount', 100.) if kind == 'amount' else
+                             getattr(data, path.removeprefix('std.')))
                     host.material_edit = dict(material=material, path=path, kind=kind, original=value,
                         text=str(value), replace=True, start_y=event.mouse_y, dragging=True)
                 host.area.tag_redraw()
@@ -1340,15 +1455,18 @@ def host_event(host, context, event):
 
 
 def prepare_host(host, context):
+    host.material_scene = context.scene
     ensure_slots(context.scene)
+    _preview_hosts.add(host.area_pointer)
     for slot in state(context).slots:
         if slot.material:
             slot.material.preview_ensure()
             if not bpy.app.background:
-                slot.material.asset_generate_preview()
+                invalidate_preview(slot.material)
 
 
 def close_host(host):
+    _preview_hosts.discard(host.area_pointer)
     edit = getattr(host, 'material_edit', None)
     if edit:
         try:
@@ -1357,6 +1475,10 @@ def close_host(host):
             pass
         host.material_edit = None
     invalidate_preview()
+    if not _preview_hosts:
+        _preview_requests.clear()
+        if bpy.app.timers.is_registered(_render_previews):
+            bpy.app.timers.unregister(_render_previews)
 
 
 @persistent
@@ -1365,6 +1487,10 @@ def clear_runtime(*_):
     _generation += 1
     for picker in list(_pickers):
         picker._end()
+    _preview_hosts.clear()
+    _preview_requests.clear()
+    if bpy.app.timers.is_registered(_render_previews):
+        bpy.app.timers.unregister(_render_previews)
     invalidate_preview()
 
 
@@ -1404,7 +1530,7 @@ def unregister_props():
 classes = (MaxStdMaterial, MaxMtlSlot, MaxMtlEditorState,
     MAX_OT_mtl_slot, MAX_OT_mtl_get, MAX_OT_mtl_assign, MAX_OT_mtl_reset, MAX_OT_mtl_make_unique,
     MAX_OT_mtl_put_library, MAX_OT_mtl_select_by, MAX_OT_mtl_show_in_viewport, MAX_OT_mtl_set_type,
-    MAX_OT_mtl_load_map, MAX_OT_mtl_clear_map, MAX_OT_mtl_pick, MAX_OT_mtl_reset_slots,
+    MAX_OT_mtl_load_map, MAX_OT_mtl_clear_map, MAX_OT_mtl_map_actions, MAX_OT_mtl_pick, MAX_OT_mtl_reset_slots,
     MAX_OT_mtl_add_slot, MAX_OT_mtl_get_scene, MAX_OT_mtl_drop, MAX_OT_mtl_drag, MAX_OT_mtl_pointer_relay, MAX_OT_mtl_value,
     MAX_MT_mtl_material, MAX_MT_mtl_modes, MAX_MT_mtl_navigation, MAX_MT_mtl_options, MAX_MT_mtl_utilities, MAX_MT_mtl_extensions,
     MAX_PT_mtl_editor, MAX_PT_mtl_shader_basic, MAX_PT_mtl_blinn, MAX_PT_mtl_vray,

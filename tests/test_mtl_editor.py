@@ -142,6 +142,43 @@ class MaterialTests(unittest.TestCase):
         self.assertEqual(result, {'CANCELLED'})
         self.assertEqual(mtl.map_node(self.material, 'DIFFUSE').image, image)
 
+    def test_deferred_actions_keep_original_material_and_reject_scene_change(self):
+        operator = SimpleNamespace()
+        mtl._capture_target(operator, self.context)
+        mtl.state(self.context).active = 3
+        self.assertEqual(mtl._resolve_target(operator, self.context), self.material)
+        other_scene = bpy.data.scenes.new('Deferred material scene')
+        self.assertIsNone(mtl._resolve_target(operator, SimpleNamespace(scene=other_scene)))
+        bpy.data.materials.remove(self.material, do_unlink=True)
+        self.assertIsNone(mtl._resolve_target(operator, self.context))
+
+    def test_get_material_popup_keeps_original_slot(self):
+        editor = mtl.state(self.context)
+        original = editor.slots[3].material
+        operator = SimpleNamespace(material=self.material.name,
+            _source_scene=self.context.scene, _source_slot=0)
+        editor.active = 3
+        self.assertEqual(mtl.MAX_OT_mtl_get.execute(operator, self.context), {'FINISHED'})
+        self.assertEqual(editor.slots[3].material, original)
+        self.assertEqual(editor.slots[0].material, self.material)
+
+    def test_deferred_type_dialog_does_not_edit_the_new_active_slot(self):
+        operator = SimpleNamespace(kind='PHYSICAL')
+        mtl._capture_target(operator, self.context)
+        editor = mtl.state(self.context)
+        editor.active = 3
+        other = editor.slots[3].material
+        self.assertEqual(mtl.MAX_OT_mtl_set_type.execute(operator, self.context), {'FINISHED'})
+        self.assertEqual(self.material['max_type'], 'PHYSICAL')
+        self.assertEqual(other['max_type'], 'STANDARD')
+
+    def test_bump_amount_uses_the_saved_bump_parameter(self):
+        image = bpy.data.images.new('Bump amount fixture', width=4, height=4)
+        mtl.set_map(self.material, 'BUMP', image)
+        mtl.set_map_amount(self.material, 'BUMP', 120)
+        self.assertAlmostEqual(self.material.max_std.bump_amount, 120)
+        self.assertAlmostEqual(self.material.node_tree.nodes['MaxMap_BUMP_Bump'].inputs['Distance'].default_value, 1.2)
+
     def test_missing_on_disk_image_remains_in_saved_material(self):
         image = bpy.data.images.new('Missing on disk', width=4, height=4)
         image.filepath = 'Z:/missing-w2e/map.png'
@@ -205,6 +242,15 @@ class MaterialTests(unittest.TestCase):
         self.assertTrue(picker._done)
         self.assertFalse(mtl._pickers)
         self.assertEqual(mtl._generation, before+1)
+
+    def test_disable_cancels_debounced_preview_work(self):
+        mtl._preview_hosts.add(123)
+        mtl._preview_requests.add(self.material.as_pointer())
+        bpy.app.timers.register(mtl._render_previews, first_interval=10)
+        mtl.clear_runtime()
+        self.assertFalse(mtl._preview_hosts)
+        self.assertFalse(mtl._preview_requests)
+        self.assertFalse(bpy.app.timers.is_registered(mtl._render_previews))
 
     def test_public_identifiers_and_toolbar_policy(self):
         self.assertEqual(set(mtl.MAP_INFO), {'AMBIENT', 'DIFFUSE', 'SPECULAR_COLOR', 'SPECULAR_LEVEL',
