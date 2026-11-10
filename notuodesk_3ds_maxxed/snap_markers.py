@@ -5,8 +5,9 @@ viewport crosshair. Other shapes follow max-ui-reference/snap-markers.md:
 the 2023 Standard Snaps dialog and flylib-fig8-17 show Grid Lines (box),
 Bounding Box (upright triangle), Perpendicular (inverted triangle), Tangent
 (small box), Edge/Segment (corner brackets), Midpoint (extended right angle),
-Face (ring/top bar) and Center Face (plus). Pivot's Y comes from pivot-2023.png.
-Endpoint uses the table's open angle and the endpoint glyph's sloping arms.
+Face (ring/top bar) and Center Face (plus). Pivot is the dialog's square with
+a diagonal and Endpoint is the dialog's Y (stem and two lower arms). The
+toolbar's Pivot Y is not used, so Pivot and Endpoint stay distinct as in Max.
 The per-type dialog crops supply proportions, without the checkbox or yellow
 toolbar overlay. These glyph sources do not prove current viewport pixels.
 """
@@ -18,14 +19,15 @@ REFERENCED_TYPES = frozenset({'grid_points', 'vertex'})
 # Coordinates are fractions of half the Size setting, in viewport Y-up space.
 # Open boxes mean unfilled outlines. Tangent is smaller than Grid Lines.
 _GLYPHS = {
-    'pivot': (((0, 1), (0, 0)), ((0, 0), (-1, -1)), ((0, 0), (1, -1))),
+    'pivot': (((-1, -1), (1, -1)), ((1, -1), (1, 1)),
+              ((1, 1), (-1, 1)), ((-1, 1), (-1, -1)), ((-1, -1), (1, 1))),
     'bounding_box': (((-1, -1), (0, 1)), ((0, 1), (1, -1)),
                      ((1, -1), (-1, -1))),
     'perpendicular': (((-1, 1), (1, 1)), ((1, 1), (0, -1)),
                       ((0, -1), (-1, 1))),
     'tangent': (((-.6, -.6), (.6, -.6)), ((.6, -.6), (.6, .6)),
                 ((.6, .6), (-.6, .6)), ((-.6, .6), (-.6, -.6))),
-    'endpoint': (((-1, -1), (0, 1)), ((0, 1), (1, -1))),
+    'endpoint': (((0, 1), (0, 0)), ((0, 0), (-1, -1)), ((0, 0), (1, -1))),
     'edge': (((-1, .4), (-1, 1)), ((-1, 1), (-.4, 1)),
              ((.4, 1), (1, 1)), ((1, 1), (1, .4)),
              ((1, -.4), (1, -1)), ((1, -1), (.4, -1)),
