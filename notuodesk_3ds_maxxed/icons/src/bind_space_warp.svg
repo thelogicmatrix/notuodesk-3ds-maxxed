@@ -1,9 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<!-- Original drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <title>bind_space_warp</title>
-<desc>Wavy space-warp bands with a binding link</desc>
-<g stroke-linecap="square" stroke-linejoin="miter">
-<path d="M1 5 Q3 7 5 5 T9 5 T13 5" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M1 9 Q3 11 5 9 T9 9 T13 9" fill="none" stroke="#d2d4d5" stroke-width="1"/><path d="M1 13 Q3 15 5 13 T9 13 T13 13" fill="none" stroke="#d2d4d5" stroke-width="1"/><g transform="translate(5 -1) scale(.65)"><path d="M8 5 10 3 C13 0 16 3 13 6 L10 9 C8 11 6 10 6 8" fill="none" stroke="#d2d4d5" stroke-width="2"/><path d="M8 11 6 13 C3 16 0 13 3 10 L6 7 C8 5 10 6 10 8" fill="none" stroke="#d2d4d5" stroke-width="2"/></g>
-</g>
+<g stroke-linecap="butt" stroke-linejoin="miter"><path d="M1.2 12 C2.5 8 4 8 5.2 11 S8 14 9 10 S12 6 14.5 8" fill="none" stroke="#efb83d" stroke-width="1" /><path d="M6.5 3.8 8.6 1.7 C10.5 -.2 13.3 2.6 11.4 4.5 L9.3 6.6 M5.7 5.4 3.6 7.5 C1.7 9.4 4.5 12.2 6.4 10.3 L8.5 8.2" fill="none" stroke="#d2d4d5" stroke-width="1.1" /><path d="M5.4 8.4 9.6 4.2" fill="none" stroke="#d2d4d5" stroke-width="1.1" /></g>
 </svg>

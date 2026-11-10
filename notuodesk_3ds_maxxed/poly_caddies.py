@@ -868,6 +868,9 @@ class Caddy:
             box(x,y,w,h,(.10,.10,.10,1) if pressed else (.15,.15,.15,1))
             lower = (.47,.47,.47,1) if pressed else (.63,.63,.63,1)
             upper = (.60,.60,.60,1) if pressed else (.73,.73,.73,1) if hot else (.69,.69,.69,1)
+            if action in {'CONNECT', 'BRIDGE', 'INSET'}:
+                lower = (.77,.77,.77,1) if pressed else (.84,.84,.84,1)
+                upper = (.87,.87,.87,1) if pressed else (.97,.97,.97,1)
             if key in {'pick1', 'pick2'}:
                 lower, upper = (.46,.46,.46,1), (.53,.53,.53,1)
             box(x+self.scale,y+self.scale,w-2*self.scale,h-2*self.scale,lower,upper=upper)
@@ -922,15 +925,29 @@ class Caddy:
             cx,cy=x+(11+29*i)*self.scale,y+h/2
             if self.hover == kind:
                 box(cx-11*self.scale,cy-11*self.scale,22*self.scale,22*self.scale,(.78,.78,.78,1))
-            if not max_icons.draw('caddy_'+kind.lower(),cx,cy,28*self.scale):
-                box(cx-11*self.scale,cy-11*self.scale,22*self.scale,22*self.scale,(.64,.64,.64,1))
-                if kind == 'OK':
-                    tick(cx,cy,True)
-                else:
-                    s=5*self.scale
-                    points = ([(cx-s,cy),(cx+s,cy),(cx,cy-s),(cx,cy+s)] if kind == 'APPLY' else
-                              [(cx-s,cy-s),(cx+s,cy+s),(cx-s,cy+s),(cx+s,cy-s)])
-                    lines(points,(.34,.61,.62,1))
+            if action not in {'CONNECT', 'BRIDGE', 'INSET'}:
+                if max_icons.draw('caddy_'+kind.lower(),cx,cy,28*self.scale):
+                    continue
+            # The supplied caddies use one pale disc with green accept/apply
+            # and red cancel strokes. Keep the approved compact hit geometry.
+            r = 10*self.scale
+            box(cx-r,cy-r,2*r,2*r,(.34,.34,.34,1))
+            box(cx-r+self.scale,cy-r+self.scale,2*r-2*self.scale,2*r-2*self.scale,
+                (.77,.77,.77,1),upper=(.97,.97,.97,1))
+            s=5*self.scale
+            color = (.72,.29,.29,1) if kind == 'CANCEL' else (.30,.52,.30,1)
+            points = ([(cx-s,cy),(cx-1*self.scale,cy-4*self.scale),
+                       (cx-1*self.scale,cy-4*self.scale),(cx+s,cy+4*self.scale)] if kind == 'OK' else
+                      [(cx-s,cy),(cx+s,cy),(cx,cy-s),(cx,cy+s)] if kind == 'APPLY' else
+                      [(cx-s,cy-s),(cx+s,cy+s),(cx-s,cy+s),(cx+s,cy-s)])
+            # Native wide GPU lines grow differently across display densities.
+            # Explicit quads keep each stroke proportional to the same disc.
+            for a, b in zip(points[::2], points[1::2]):
+                dx, dy = b[0]-a[0], b[1]-a[1]
+                length = (dx*dx+dy*dy)**.5
+                nx, ny = -dy/length*.85*self.scale, dx/length*.85*self.scale
+                polygon([(a[0]+nx,a[1]+ny), (b[0]+nx,b[1]+ny),
+                         (b[0]-nx,b[1]-ny), (a[0]-nx,a[1]-ny)],color)
         tip = tooltip(self.session,self.hover) if self.hover in self.keys else ''
         if tip:
             text(x,y-16*self.scale,tip,size=10)

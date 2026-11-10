@@ -305,7 +305,7 @@ def draw_parameters(layout, context, mod=None, *, extensions=False, advanced=Fal
         _draw_ts(layout, ob, mod)
     elif gn_mods.identify(mod):
         kind = gn_mods.identify(mod)
-        parameters = w.group(layout, 'Parameters')
+        parameters = w.compact(layout.column(align=True))
         names = [item[0] for item in gn_mods.PARAMETERS[kind]]
         if kind == 'Melt':
             names = ['Amount', '% of Melt Spread']
@@ -320,39 +320,41 @@ def draw_parameters(layout, context, mod=None, *, extensions=False, advanced=Fal
         if kind == 'Melt' and extensions:
             _named(w.group(layout, 'Maxxed Extensions'), mod, ['Irregularity', 'Drip Size', 'Seed'])
     elif mod.type == 'SIMPLE_DEFORM' and mod.deform_method == 'BEND':
-        params = w.group(layout, 'Parameters')
+        params = w.compact(layout.column(align=True))
         w.spinner(params, mod, 'angle', 'Angle')
         _unavailable(params, 'Direction')
         params.label(text='Bend Axis')
         w.radios(params, mod, 'deform_axis', tuple((a, a) for a in 'XYZ'))
         _unavailable(params, 'Limits')
     elif mod.type == 'SOLIDIFY':
-        params = w.group(layout, 'Parameters')
+        params = w.compact(layout.column(align=True))
         for prop, label in (('shell_inner', 'Inner Amount'), ('shell_outer', 'Outer Amount')):
             w.spinner(params, ob.max_modifier_parameters, prop, label)
         _unavailable(params, 'Bevel Edges')
     elif mod.type == 'BEVEL':
-        params = w.group(layout, 'Parameters')
+        params = w.compact(layout.column(align=True))
         w.spinner(params, mod, 'width', 'Amount')
         w.spinner(params, mod, 'segments', 'Segments', step=1)
         _unavailable(params, 'Quad Chamfer')
     elif mod.type == 'ARRAY' and mod.use_constant_offset and not mod.use_relative_offset:
-        params = w.group(layout, 'Parameters')
+        params = w.compact(layout.column(align=True))
         w.spinner(params, mod, 'count', '1D Count', step=1)
         for index, axis in enumerate('XYZ'):
             w.spinner(params, mod, 'constant_offset_displace', axis, index=index)
         _unavailable(params, 'Rotation')
         _unavailable(params, 'Scale')
     elif mod.type == 'BOOLEAN':
-        params = w.group(layout, 'Parameters')
-        w.radios(params, mod, 'operation', (('UNION', 'Union'), ('INTERSECT', 'Intersection'), ('DIFFERENCE', 'Subtraction')))
+        params = w.compact(layout.column(align=True))
+        for identifier, label in (('UNION', 'Union'), ('INTERSECT', 'Intersection'), ('DIFFERENCE', 'Subtraction')):
+            w.radios(params, mod, 'operation', ((identifier, label),))
         params.prop(mod, 'object', text='Operand')
     elif mod.type == 'UV_PROJECT':
-        params = w.group(layout, 'Parameters')
+        params = w.compact(layout.column(align=True))
         params.label(text='Mapping: Planar')
         if mod.projectors:
             params.prop(mod.projectors[0], 'object', text='Gizmo')
-        params.prop_search(mod, 'uv_layer', ob.data, 'uv_layers', text='Map Channel')
+        params.label(text='Map Channel:')
+        params.prop_search(mod, 'uv_layer', ob.data, 'uv_layers', text='')
         for label in ('Box', 'Cylindrical', 'Spherical'):
             _unavailable(params, label)
     else:

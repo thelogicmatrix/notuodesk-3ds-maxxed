@@ -1,9 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Original NotuoDesk drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
+<!-- Original drawing. SPDX-License-Identifier: GPL-3.0-or-later -->
 <title>time_config</title>
-<desc>Clock and gold settings wheel</desc>
-<g stroke-linecap="square" stroke-linejoin="miter">
-<circle cx="6.5" cy="6.5" r="5" fill="#d2d4d5" stroke="none" stroke-width="1"/><path d="M6.5 3 V6.5 H10" fill="none" stroke="#656b6e" stroke-width="1"/><circle cx="12" cy="12" r="3" fill="none" stroke="#efb83d" stroke-width="2"/><path d="M12 8 V10 M12 14 V16 M8 12 H10 M14 12 H16" fill="none" stroke="#efb83d" stroke-width="1"/>
-</g>
+<g stroke-linecap="butt" stroke-linejoin="miter"><circle cx="6" cy="6" r="5" fill="#d2d4d5" stroke="#555" stroke-width="0.6"/><path d="M6 2 V6 H9" fill="none" stroke="#555" stroke-width="1" /><circle cx="11" cy="11" r="3" fill="#efb83d" stroke="#816122" stroke-width="1"/><circle cx="11" cy="11" r="1.2" fill="#555" stroke="none" stroke-width="1"/><path d="M11 6 V8 M11 14 V16 M6 11 H8 M14 11 H16 M7.5 7.5 9 9 M13 13 14.5 14.5 M14.5 7.5 13 9 M9 13 7.5 14.5" fill="none" stroke="#efb83d" stroke-width="1.4" /></g>
 </svg>

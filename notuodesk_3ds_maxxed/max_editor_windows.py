@@ -374,53 +374,10 @@ def _button(host, x, y, width, text, callback, selected=False, scale=1):
 
 
 def _draw_explorer(host, context, width, height, scale):
-    s = scale
-    narrow = width < 700*s
-    y = height - 78*s
-    search = context.window_manager.max_explorer_search
-    search_width = min(230*s, max(35*s, width-150*s))
-    _button(host, 10*s, y, search_width, "Search: " + (search or "All objects"), _op("max.explorer_action", action="SEARCH"), scale=s)
-    _button(host, search_width+15*s, y, 55*s, "Clear", _op("max.explorer_action", action="CLEAR"), scale=s)
-    _button(host, search_width+75*s, y, 65*s, "Layers", _op("max.layer_dialog"), scale=s)
-    y -= 30*s
-    _text(14*s, y, "Name / Hierarchy", round(12*s))
-    _text(max(85*s, width-105*s) if narrow else max(240*s, width-310*s), y, "Hide    Freeze" if narrow else "Layer        Hide     Freeze     Rename", round(12*s))
-    rows = scene_explorer.scene_rows(context, search)
-    capacity = max(1, int((height-240*s)/(29*s)))
-    host.scroll = min(host.scroll, max(0, len(rows)-capacity))
-    for entry in rows[host.scroll:host.scroll+capacity]:
-        y -= 29*s
-        obj = entry.obj
-        collapsed = bool(obj.get("max_explorer_collapsed"))
-        x = 10*s + (min(entry.depth, 1)*10*s if narrow else entry.depth*16*s)
-        _button(host, x, y, 22*s, "+" if collapsed else "-", _op("max.explorer_action", action="EXPAND", object_name=obj.name, value=collapsed), scale=s)
-        name_width = max(20*s, max(85*s, width-105*s)-x-29*s) if narrow else max(70*s, width-350*s-x)
-        _button(host, x+24*s, y, name_width, obj.name, _op("max.explorer_action", action="SELECT", object_name=obj.name), obj.select_get(), s)
-        x = max(85*s, width-105*s) if narrow else max(240*s, width-310*s)
-        layer = max_layers.membership(context.scene, obj)
-        if not narrow:
-            _text(x, y+7*s, max_layers.label(layer)[:12], round(12*s))
-        _button(host, x+(0 if narrow else 85)*s, y, 42*s if narrow else 52*s, "Hide", _op("max.explorer_action", action="HIDE", object_name=obj.name, value=not obj.hide_get()), obj.hide_get(), s)
-        _button(host, x+(45 if narrow else 140)*s, y, 55*s if narrow else 60*s, "Freeze", _op("max.explorer_action", action="FREEZE", object_name=obj.name, value=not obj.max_frozen), obj.max_frozen, s)
-        if not narrow:
-            _button(host, x+205*s, y, 74*s, "Rename", _op("max.explorer_action", action="RENAME", object_name=obj.name), scale=s)
-    y = 90*s
-    _text(14*s, y+36*s, "Layers (separate from groups and hierarchy)", round(12*s))
-    for layer in ([] if narrow else max_layers.catalogue(context.scene)[:2]):
-        _text(14*s, y+7*s, max_layers.label(layer), round(12*s))
-        x = 180*s
-        for action, label, value in (("HIDE", "Hide", not layer.get("max_layer_hidden", False)),
-                                     ("FREEZE", "Freeze", not layer.get("max_layer_frozen", False)),
-                                     ("ASSIGN", "Move Selection", True), ("REMOVE", "Delete", True)):
-            _button(host, x, y, 110*s, label, _op("max.layer_action", action=action, layer_id=layer[max_layers.MARKER], value=value), scale=s)
-            x += 115*s
-        y -= 28*s
-    footer_width = max(60*s, (width-30*s)/2) if narrow else 140*s
-    _button(host, 10*s, 20*s, footer_width, "Select From Scene", _op("max.scene_selection_dialog"), scale=s)
-    _button(host, footer_width+15*s, 20*s, footer_width if narrow else 120*s, "Hide by Name", _op("max.scene_selection_dialog", hide=True), scale=s)
-    _button(host, 10*s if narrow else 310*s, 52*s if narrow else 20*s, 150*s, "Move to Layer 0", _op("max.layer_action", action="ASSIGN"), scale=s)
-    if narrow and context.active_object:
-        _button(host, 165*s, 52*s, 95*s, "Rename", _op("max.explorer_action", action="RENAME", object_name=context.active_object.name), scale=s)
+    # Scene model and action routes stay in scene_explorer. This adapter owns
+    # only the dock's paint and hit rectangles.
+    scene_explorer.draw_docked(host, context, width, height, scale,
+                               _rect, _text, _line, _op)
 
 
 def _draw_schematic(host, context, width, height, scale):
@@ -514,7 +471,13 @@ def _draw():
             _text(14*scale, height-25*scale, TITLES[host.kind], round(15*scale))
             close = (lambda c, e: detach_explorer(host.area)) if host.original_type else (lambda c, e: close_editor(host.window))
             small = width < 300*scale
-            _button(host, width-(35 if small else 90)*scale, height-32*scale, (25 if small else 78)*scale, "X" if small else "Close", close, scale=scale)
+            if host.kind == 'SCENE_EXPLORER':
+                x, y, size = width-25*scale, height-29*scale, 18*scale
+                _line((x+5*scale, y+5*scale), (x+13*scale, y+13*scale), (.8, .8, .8, 1))
+                _line((x+5*scale, y+13*scale), (x+13*scale, y+5*scale), (.8, .8, .8, 1))
+                host.hits.append(((x, y, x+size, y+size), close))
+            else:
+                _button(host, width-(35 if small else 90)*scale, height-32*scale, (25 if small else 78)*scale, "X" if small else "Close", close, scale=scale)
         if host.kind == "SCENE_EXPLORER":
             _draw_explorer(host, context, width, height, scale)
         elif host.kind == "MATERIAL":
